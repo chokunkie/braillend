@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
+    <title>BraillLens 3D & Optical OCR System - Tactical Braille Hardware Simulator</title>
+    <!-- Three.js and OrbitControls from reliable CDNs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome for high-tech tactical icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Prompt & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tesseract.js v5 for Client-Side Optical Character Recognition -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Top Header -->
+    <header>
+        <div class="brand">
+            <div class="brand-logo"><i class="fa-solid fa-braille"></i></div>
+            <div class="brand-title">BraillLens 3D</div>
+            <div class="brand-badge">14 CELLS / 84 PINS</div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-cyan" id="xrayBtn" onclick="toggleXRay()">
+                <i class="fa-solid fa-eye"></i> 👁️ โหมดกล่องโปร่งใส (X-Ray Cutaway)
+            </button>
+            <button class="btn btn-cyan" id="explodedBtn" onclick="toggleExplodedView()">
+                <i class="fa-solid fa-layer-group"></i> 🧩 โหมดแยกชิ้นส่วน (Exploded View)
+            </button>
+            <button class="btn btn-magenta" onclick="openMechanismModal()">
+                <i class="fa-solid fa-gear"></i> ⚙️ ดูการทำงานภายใน (Mechanism Modal)
+            </button>
+            <button class="btn" id="presentBtn" onclick="togglePresentation()">
+                <i class="fa-solid fa-play"></i> 🎬 Presentation Mode
+            </button>
+            <button class="btn" id="lightModeBtn" onclick="toggleLightMode()">
+                <i class="fa-solid fa-sun"></i> ☀️ โหมดสว่าง (Light Mode)
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="app-container">
+        <!-- 3D Canvas Viewport -->
+        <div class="viewport-section">
+            <div class="viewport-overlay">
+                <button class="cam-btn active" id="btnViewFront" onclick="setCameraView('front')"><i class="fa-solid fa-mobile-screen"></i> ด้านหน้า (หน้าจอ + ปุ่มเบรลล์)</button>
+                <button class="cam-btn" id="btnViewBack" onclick="setCameraView('back')"><i class="fa-solid fa-camera"></i> ด้านหลัง (กล้องถ่ายภาพหลัง)</button>
+                <button class="cam-btn" id="btnView3D" onclick="setCameraView('3d')"><i class="fa-solid fa-cube"></i> มุมมอง 3D</button>
+                <button class="cam-btn" id="btnViewXray" onclick="toggleXRay()"><i class="fa-solid fa-eye"></i> โหมดกล่องโปร่งใส (X-Ray)</button>
+                <button class="cam-btn" onclick="resetCamera()"><i class="fa-solid fa-arrows-rotate"></i> รีเซ็ต</button>
+            </div>
+
+            <div id="webgl-container"></div>
+
+            <!-- Exploded View Labels & Leader Lines Overlay -->
+            <svg id="explodedLinesSvg" class="exploded-lines-svg"></svg>
+            <div id="explodedLabelsLayer" class="exploded-labels-layer"></div>
+
+            <!-- Exploded View Depth Slider -->
+            <div class="exploded-slider-wrap" id="explodedSliderWrap" style="display:none;">
+                <label for="explodedSlider"><i class="fa-solid fa-arrows-up-down"></i> ระยะแยกชิ้นส่วน (Explode Depth)</label>
+                <input type="range" id="explodedSlider" min="0" max="100" value="100" oninput="setExplodedAmount(this.value)">
+                <span id="explodedSliderVal" style="font-family:'JetBrains Mono', monospace; color:var(--accent-cyan);">100%</span>
+            </div>
+
+            <div class="status-overlay">
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <div>HARDWARE: <span class="status-val">READY (14 CELLS / 84 PINS)</span></div>
+                </div>
+                <div class="status-item">
+                    <div>LATENCY: <span class="status-val">4 ms</span></div>
+                </div>
+                <div class="status-item">
+                    <div>POWER MODE: <span class="status-val" id="powerStatus">0W (IDLE BISTABLE LATCH)</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Control Panel -->
+        <div class="control-panel">
+            <!-- OCR Ingestion & Camera Scanner Section -->
+            <div class="panel-section ocr-section">
+                <div class="ocr-header-row">
+                    <div class="section-title"><i class="fa-solid fa-camera-retro"></i> OPTICAL OCR SCANNER</div>
+                    <div class="ocr-lang-wrap">
+                        <label for="ocrLangSelect"><i class="fa-solid fa-globe"></i> LANG:</label>
+                        <select id="ocrLangSelect" class="ocr-lang-select">
+                            <option value="eng" selected>English Only (A-Z, 0-9)</option>
+                            <option value="tha">ภาษาไทย (tha)</option>
+                            <option value="tha+eng">ไทย + ENG (tha+eng)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Drag & Drop Zone -->
+                <div class="dropzone" id="ocrDropzone">
+                    <i class="fa-solid fa-cloud-arrow-up dropzone-icon"></i>
+                    <div class="dropzone-text">ลากวางรูปภาพ หรือคลิกเพื่ออัปโหลด</div>
+                    <div class="dropzone-subtext">JPG, PNG, WebP, BMP (ประมวลผลข้อความอัตโนมัติ)</div>
+                    <input type="file" id="imageFileInput" accept="image/*" style="display:none;" />
+                    
+                    <!-- File Preview Card (Hidden initially) -->
+                    <div class="dropzone-preview" id="dropzonePreview">
+                        <div class="preview-info">
+                            <img id="previewThumbnail" class="preview-thumb" src="" alt="Thumbnail" />
+                            <span id="previewFilename" class="preview-name">image.png</span>
+                        </div>
+                        <button type="button" class="preview-remove-btn" id="btnRemoveImage" title="ลบภาพ"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+
+                <!-- Action Buttons: Live Camera Scan & Browse Files -->
+                <div class="ocr-actions-row">
+                    <button class="ocr-btn" id="btnOpenLiveCamera">
+                        <i class="fa-solid fa-camera"></i> สแกนกล้องสด (Live Camera)
+                    </button>
+                    <button class="ocr-btn ocr-btn-emerald" id="btnTriggerFileBrowse">
+                        <i class="fa-solid fa-folder-open"></i> เลือกไฟล์ภาพ
+                    </button>
+                </div>
+
+                <!-- OCR Progress HUD & Telemetry Status Bar -->
+                <div class="ocr-progress-container" id="ocrProgressContainer">
+                    <div class="ocr-status-row">
+                        <span class="ocr-status-text" id="ocrStatusText">
+                            <i class="fa-solid fa-spinner fa-spin"></i> กำลังเตรียมการประมวลผล OCR...
+                        </span>
+                        <span class="confidence-badge" id="ocrConfidenceScore">CONF: 0%</span>
+                    </div>
+                    <div class="ocr-progress-bar">
+                        <div class="ocr-progress-fill" id="ocrProgressBar" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Translator Section -->
+            <div class="panel-section">
+                <div class="section-title"><i class="fa-solid fa-language"></i> THAI / ENG BRAILLE ENGINE</div>
+                <div class="input-group">
+                    <textarea id="thaiInput" oninput="updateBrailleDisplay(this.value)" onchange="updateBrailleDisplay(this.value)" onkeyup="updateBrailleDisplay(this.value)" placeholder="Enter English text or select a preset... (e.g. HELLO WORLD)">HELLO WORLD</textarea>
+                    
+                    <div class="preset-container" id="presetContainer">
+                        <div class="preset-chip" onclick="setPreset('HELLO WORLD')">HELLO WORLD</div>
+                        <div class="preset-chip" onclick="setPreset('WELCOME TO BRAILLLENS')">WELCOME TO BRAILLLENS</div>
+                        <div class="preset-chip" onclick="setPreset('TACTILE 84 PINS')">TACTILE 84 PINS</div>
+                        <div class="preset-chip" onclick="setPreset('INNOVATION')">INNOVATION</div>
+                    </div>
+
+                    <button class="translate-btn" onclick="processTranslation()">
+                        <i class="fa-solid fa-microchip"></i> แปลงเป็นอักษรเบรลล์ (Actuate 84 Pins)
+                    </button>
+
+                    <!-- Tactile Navigation & Mode Controls -->
+                    <div class="tactical-control-bar">
+                        <button class="tactical-btn" id="btnPrevPage" onclick="prevBraillePage()" title="หน้าก่อนหน้า (Arrow Left)">
+                            <i class="fa-solid fa-backward-step"></i> ◄ PREV
+                        </button>
+                        <div class="page-indicator-badge" id="pageIndicator">PAGE 1/1</div>
+                        <button class="tactical-btn" id="btnNextPage" onclick="nextBraillePage()" title="หน้าถัดไป (Arrow Right)">
+                            NEXT ► <i class="fa-solid fa-forward-step"></i>
+                        </button>
+                        <button class="tactical-mode-btn mode-eng" id="btnToggleLanguageMode" onclick="toggleLanguageMode()" title="สลับโหมดภาษา (ENG / THAI)">
+                            <i class="fa-solid fa-right-left"></i> MODE: ENG [A-Z]
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 14 Cells Visual Display -->
+            <div class="panel-section" style="flex:1;">
+                <div class="section-title"><i class="fa-solid fa-grip"></i> 14 BRAILLE CELL MATRIX</div>
+                <div class="cells-grid" id="cellsGrid">
+                    <!-- 14 Cell Cards populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3D Mechanism Cutaway Modal -->
+    <div class="modal-backdrop" id="mechanismModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fa-solid fa-microchip"></i> ⚙️ กลไกทำงานระดับวิศวกรรม 1 หมุดเบรลล์ (Bistable Electro-Cam Actuator)
+                </div>
+                <button class="close-btn" onclick="closeMechanismModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="mech-canvas-container">
+                    <canvas id="mech-canvas"></canvas>
+                </div>
+                <div class="mech-controls">
+                    <div style="font-size:13px; font-weight:600; color:var(--accent-cyan);">เลือกสถานะการทำงาน (Interactive State Selector):</div>
+                    <div class="state-buttons">
+                        <button class="state-btn active" id="stBtn1" onclick="setMechState(1)">⚪ State 1: สภาวะพัก (No Power)</button>
+                        <button class="state-btn" id="stBtn2" onclick="setMechState(2)">⚡ State 2: จ่ายไฟพัลส์ (Coil ON)</button>
+                        <button class="state-btn" id="stBtn3" onclick="setMechState(3)">🌱 State 3: ตัดไฟ (Power OFF Latch)</button>
+                        <button class="state-btn" id="stBtn4" onclick="setMechState(4)">🔄 State 4: สลับขั้ว (Reverse Polarity)</button>
+                    </div>
+
+                    <div class="mech-params">
+                        <div><span class="param-label">กำลังไฟฟ้า:</span> <span class="param-val" id="prmPower">0.0 W</span></div>
+                        <div><span class="param-label">กระแสไฟฟ้า:</span> <span class="param-val" id="prmCurrent">0.00 A</span></div>
+                        <div><span class="param-label">สนามแม่เหล็ก:</span> <span class="param-val" id="prmFlux">0.00 T</span></div>
+                        <div><span class="param-label">มุมลูกเบี้ยว:</span> <span class="param-val" id="prmCam">0°</span></div>
+                        <div><span class="param-label">ระดับหมุด (Pin):</span> <span class="param-val" id="prmPin">DOWN (0.0mm)</span></div>
+                        <div><span class="param-label">สถานะล็อก:</span> <span class="param-val" id="prmLatch">UNLOCKED</span></div>
+                    </div>
+
+                    <div class="mech-desc-box" id="mechDesc">
+                        <!-- Dynamic Thai text populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Camera Viewfinder Modal -->
+    <div class="modal-backdrop camera-modal" id="cameraModal" data-modal="ocrCameraModal">
+        <div class="camera-modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fa-solid fa-camera"></i> 📷 กล้องเล็งตรวจจับอักษร (Live Optical Viewfinder)
+                </div>
+                <button class="close-btn" id="btnCloseCameraModal" onclick="if(typeof closeCameraModal==='function')closeCameraModal();"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="viewfinder-box" id="viewfinderBox">
+                <video id="cameraVideo" autoplay playsinline muted></video>
+                <!-- Hidden Canvas for frame snapshot capture -->
+                <canvas id="cameraCaptureCanvas" style="display:none;"></canvas>
+                
+                <!-- Tactical Framing Overlay -->
+                <div class="viewfinder-frame">
+                    <div class="viewfinder-corner top-left"></div>
+                    <div class="viewfinder-corner top-right"></div>
+                    <div class="viewfinder-corner bottom-left"></div>
+                    <div class="viewfinder-corner bottom-right"></div>
+                    <div class="viewfinder-scanline"></div>
+                </div>
+
+                <div class="viewfinder-guide-text">
+                    <i class="fa-solid fa-crop-simple"></i> จัดวางตัวอักษรให้อยู่ภายในกรอบเล็ง แล้วกดปุ่มชัตเตอร์
+                </div>
+            </div>
+
+            <div class="camera-controls-bar">
+                <button class="cam-ctrl-btn" id="btnSwitchCamera" title="สลับกล้องหน้า/หลัง">
+                    <i class="fa-solid fa-camera-rotate"></i> สลับกล้อง (Flip)
+                </button>
+                
+                <button class="shutter-btn" id="btnCaptureSnapshot" title="ถ่ายภาพและถอดรหัสข้อความ (Capture)">
+                    <i class="fa-solid fa-camera"></i>
+                </button>
+
+                <button class="cam-ctrl-btn" id="btnCancelCamera" onclick="if(typeof closeCameraModal==='function')closeCameraModal();">
+                    <i class="fa-solid fa-ban"></i> ยกเลิก
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modular JavaScript Applications -->
+    <script src="js/braille-engine.js"></script>
+    <script src="js/three-scene.js"></script>
+    <script src="js/ocr-engine.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
