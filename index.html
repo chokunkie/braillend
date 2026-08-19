@@ -115,7 +115,10 @@
                             <img id="previewThumbnail" class="preview-thumb" src="" alt="Thumbnail" />
                             <span id="previewFilename" class="preview-name">image.png</span>
                         </div>
-                        <button type="button" class="preview-remove-btn" id="btnRemoveImage" title="ลบภาพ"><i class="fa-solid fa-trash-can"></i></button>
+                        <div class="preview-actions">
+                            <button type="button" class="preview-inspector-btn" id="btnPreviewInspector" onclick="if(typeof openOCRInspector==='function')openOCRInspector();" title="🔍 ดูตำแหน่งตัวอักษรที่ถอดได้ (Visual Inspector)"><i class="fa-solid fa-magnifying-glass-chart"></i></button>
+                            <button type="button" class="preview-remove-btn" id="btnRemoveImage" title="ลบภาพ"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
                     </div>
                 </div>
 
@@ -126,6 +129,11 @@
                     </button>
                     <button class="ocr-btn ocr-btn-emerald" id="btnTriggerFileBrowse">
                         <i class="fa-solid fa-folder-open"></i> เลือกไฟล์ภาพ
+                    </button>
+                </div>
+                <div class="ocr-inspector-btn-row">
+                    <button class="ocr-btn ocr-btn-inspector" id="btnOpenOcrInspector" onclick="if(typeof openOCRInspector==='function')openOCRInspector();">
+                        <i class="fa-solid fa-magnifying-glass-chart"></i> 🔍 ดูตำแหน่งตัวอักษรที่ถอดได้ (Visual Inspector)
                     </button>
                 </div>
 
@@ -232,7 +240,15 @@
                 <div class="modal-title">
                     <i class="fa-solid fa-camera"></i> 📷 กล้องเล็งตรวจจับอักษร (Live Optical Viewfinder)
                 </div>
-                <button class="close-btn" id="btnCloseCameraModal" onclick="if(typeof closeCameraModal==='function')closeCameraModal();"><i class="fa-solid fa-xmark"></i></button>
+                <div class="camera-modal-header-actions">
+                    <button class="cam-toggle-btn active" id="btnToggleVoiceGuidance" title="เปิด/ปิด เสียงแนะนำภาษาไทยสำหรับคนตาบอด">
+                        <i class="fa-solid fa-volume-high"></i> <span id="voiceGuidanceText">Voice: ON</span>
+                    </button>
+                    <button class="cam-toggle-btn active" id="btnToggleAutoCapture" title="เปิด/ปิด ถ่ายภาพอัตโนมัติเมื่อหนังสือนิ่ง">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> <span id="autoCaptureText">Auto-Capture: ON</span>
+                    </button>
+                    <button class="close-btn" id="btnCloseCameraModal" onclick="if(typeof closeCameraModal==='function')closeCameraModal();"><i class="fa-solid fa-xmark"></i></button>
+                </div>
             </div>
             
             <div class="viewfinder-box" id="viewfinderBox">
@@ -241,16 +257,39 @@
                 <canvas id="cameraCaptureCanvas" style="display:none;"></canvas>
                 
                 <!-- Tactical Framing Overlay -->
-                <div class="viewfinder-frame">
-                    <div class="viewfinder-corner top-left"></div>
-                    <div class="viewfinder-corner top-right"></div>
-                    <div class="viewfinder-corner bottom-left"></div>
-                    <div class="viewfinder-corner bottom-right"></div>
+                <div class="viewfinder-frame" id="viewfinderFrame">
+                    <div class="viewfinder-corner top-left" id="cornerTL">
+                        <span class="corner-label" id="labelTL">TL: SEARCHING</span>
+                    </div>
+                    <div class="viewfinder-corner top-right" id="cornerTR">
+                        <span class="corner-label" id="labelTR">TR: SEARCHING</span>
+                    </div>
+                    <div class="viewfinder-corner bottom-left" id="cornerBL">
+                        <span class="corner-label" id="labelBL">BL: SEARCHING</span>
+                    </div>
+                    <div class="viewfinder-corner bottom-right" id="cornerBR">
+                        <span class="corner-label" id="labelBR">BR: SEARCHING</span>
+                    </div>
                     <div class="viewfinder-scanline"></div>
                 </div>
 
+                <!-- Real-time 4-Corner Status Overlay Panel -->
+                <div class="corner-status-overlay" id="cornerStatusOverlay">
+                    <span class="corner-alignment-text" id="cornerAlignmentText">4-CORNER ALIGNMENT: 0% (0/4 CORNERS LOCKED)</span>
+                </div>
+
+                <!-- Real-time Focus Status HUD Overlay (Laplacian Variance Focus Detector) -->
+                <div class="focus-status-hud" id="focusStatusHud">
+                    <span class="focus-status-text" id="focusStatusText">[ 🔴 FOCUS: BLURRY (Score 0) ]</span>
+                </div>
+
+                <!-- Voice Status HUD Overlay -->
+                <div class="voice-status-hud" id="voiceStatusHud">
+                    <i class="fa-solid fa-ear-listen fa-beat"></i> <span id="voiceStatusMsg">กำลังสแกนหาเอกสาร...</span>
+                </div>
+
                 <div class="viewfinder-guide-text">
-                    <i class="fa-solid fa-crop-simple"></i> จัดวางตัวอักษรให้อยู่ภายในกรอบเล็ง แล้วกดปุ่มชัตเตอร์
+                    <i class="fa-solid fa-crosshairs"></i> วางเอกสารให้ตรงกรอบ 4 มุม ระบบจะล็อกเป้าและถ่ายภาพอัตโนมัติ
                 </div>
             </div>
 
@@ -270,9 +309,33 @@
         </div>
     </div>
 
+    <!-- Visual OCR Bounding Box Inspector Modal -->
+    <div class="modal-backdrop ocr-inspector-modal" id="ocrInspectorModal" data-modal="ocrInspectorModal">
+        <div class="ocr-inspector-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fa-solid fa-magnifying-glass-chart"></i> 🔍 OCR Bounding Box Inspector (ภาพสแกน & กรอบตำแหน่งตัวอักษร)
+                </div>
+                <div class="ocr-inspector-header-actions">
+                    <span class="inspector-badge" id="inspectorWordCount">0 Words Detected</span>
+                    <button class="close-btn" id="btnCloseOcrInspector" onclick="if(typeof closeOCRInspector==='function')closeOCRInspector();"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            <div class="ocr-inspector-body">
+                <div class="inspector-canvas-wrap">
+                    <canvas id="ocrResultCanvasInspector"></canvas>
+                </div>
+                <div class="inspector-details-bar" id="inspectorDetailsBar">
+                    <div class="inspector-empty-msg"><i class="fa-solid fa-circle-info"></i> ยังไม่มีข้อมูลภาพสแกน กรุณาอัปโหลดหรือสแกนภาพเอกสารก่อน</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modular JavaScript Applications -->
     <script src="js/braille-engine.js"></script>
     <script src="js/three-scene.js"></script>
+    <script src="js/voice-guidance.js"></script>
     <script src="js/ocr-engine.js"></script>
     <script src="js/app.js"></script>
 </body>

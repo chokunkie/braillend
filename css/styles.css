@@ -880,6 +880,30 @@ textarea:focus {
     font-family: 'JetBrains Mono', monospace;
 }
 
+.preview-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.preview-inspector-btn {
+    background: none;
+    border: none;
+    color: var(--accent-cyan);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.preview-inspector-btn:hover {
+    color: var(--accent-emerald);
+    transform: scale(1.15);
+}
+
 .preview-remove-btn {
     background: none;
     border: none;
@@ -999,12 +1023,12 @@ textarea:focus {
     box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
 }
 
-/* Live Camera Viewfinder Modal */
+/* Live Camera Viewfinder Modal (Portrait Mode 9:16 / Book Format) */
 .camera-modal-card {
-    width: 720px;
+    width: 480px;
     max-width: 95vw;
-    height: 560px;
-    max-height: 90vh;
+    height: 80vh;
+    max-height: 820px;
     background: var(--bg-panel);
     border: 1px solid var(--accent-cyan);
     border-radius: 14px;
@@ -1028,64 +1052,164 @@ textarea:focus {
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    aspect-ratio: 9 / 16;
+    max-height: 100%;
 }
 
 #cameraVideo {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     background: #000;
 }
 
-/* Tactical Viewfinder Overlay & Framing Corners */
+/* Tactical Viewfinder Overlay & Framing Corners (Portrait / Book Shape) */
 .viewfinder-frame {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 75%;
-    height: 65%;
-    border: 1px solid rgba(0, 240, 255, 0.3);
+    width: 82%;
+    height: 78%;
+    border: 1px solid rgba(0, 240, 255, 0.35);
     pointer-events: none;
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
-    border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.48);
+    border-radius: 10px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.viewfinder-frame.all-locked {
+    border-color: rgba(0, 255, 136, 0.7);
+    box-shadow: 0 0 35px rgba(0, 255, 136, 0.4), 0 0 0 9999px rgba(0, 0, 0, 0.48);
 }
 
 .viewfinder-corner {
     position: absolute;
-    width: 18px;
-    height: 18px;
-    border-color: var(--accent-cyan);
+    width: 28px;
+    height: 28px;
+    border-color: var(--accent-cyan, #00E5FF);
     border-style: solid;
     pointer-events: none;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.5);
+    transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 5;
 }
 
-.viewfinder-corner.top-left {
-    top: -2px;
-    left: -2px;
-    border-width: 3px 0 0 3px;
-    border-top-left-radius: 6px;
+.viewfinder-corner.top-left,
+#cornerTL {
+    top: -3px;
+    left: -3px;
+    border-width: 4px 0 0 4px;
+    border-top-left-radius: 8px;
+    transform-origin: top left;
 }
 
-.viewfinder-corner.top-right {
-    top: -2px;
-    right: -2px;
-    border-width: 3px 3px 0 0;
-    border-top-right-radius: 6px;
+.viewfinder-corner.top-right,
+#cornerTR {
+    top: -3px;
+    right: -3px;
+    border-width: 4px 4px 0 0;
+    border-top-right-radius: 8px;
+    transform-origin: top right;
 }
 
-.viewfinder-corner.bottom-left {
-    bottom: -2px;
-    left: -2px;
-    border-width: 0 0 3px 3px;
-    border-bottom-left-radius: 6px;
+.viewfinder-corner.bottom-left,
+#cornerBL {
+    bottom: -3px;
+    left: -3px;
+    border-width: 0 0 4px 4px;
+    border-bottom-left-radius: 8px;
+    transform-origin: bottom left;
 }
 
-.viewfinder-corner.bottom-right {
-    bottom: -2px;
-    right: -2px;
-    border-width: 0 3px 3px 0;
-    border-bottom-right-radius: 6px;
+.viewfinder-corner.bottom-right,
+#cornerBR {
+    bottom: -3px;
+    right: -3px;
+    border-width: 0 4px 4px 0;
+    border-bottom-right-radius: 8px;
+    transform-origin: bottom right;
+}
+
+/* 4-Corner Target Locked Neon Green & Pulse State */
+.viewfinder-corner.locked {
+    border-color: var(--accent-emerald, #00FF88) !important;
+    box-shadow: 0 0 18px rgba(0, 255, 136, 0.95), inset 0 0 8px rgba(0, 255, 136, 0.5) !important;
+    animation: targetLockPulse 1.1s ease-in-out infinite alternate;
+}
+
+.viewfinder-corner.missed {
+    border-color: var(--accent-magenta, #FF0055) !important;
+    box-shadow: 0 0 12px rgba(255, 0, 85, 0.6) !important;
+}
+
+/* 4-Corner Status Label Tags */
+.corner-label {
+    position: absolute;
+    background: rgba(4, 7, 14, 0.88);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 0 6px rgba(0, 240, 255, 0.25);
+    transition: all 0.2s ease;
+    letter-spacing: 0.5px;
+}
+
+#cornerTL .corner-label {
+    top: -24px;
+    left: 0;
+}
+
+#cornerTR .corner-label {
+    top: -24px;
+    right: 0;
+}
+
+#cornerBL .corner-label {
+    bottom: -24px;
+    left: 0;
+}
+
+#cornerBR .corner-label {
+    bottom: -24px;
+    right: 0;
+}
+
+.viewfinder-corner.locked .corner-label {
+    color: #00FF88;
+    border-color: #00FF88;
+    background: rgba(0, 40, 20, 0.92);
+    box-shadow: 0 0 10px rgba(0, 255, 136, 0.6);
+}
+
+.viewfinder-corner.missed .corner-label {
+    color: var(--accent-magenta, #FF0055);
+    border-color: rgba(255, 0, 85, 0.6);
+    background: rgba(40, 4, 15, 0.92);
+    box-shadow: 0 0 8px rgba(255, 0, 85, 0.4);
+}
+
+@keyframes targetLockPulse {
+    0% {
+        box-shadow: 0 0 10px rgba(0, 255, 136, 0.8), inset 0 0 4px rgba(0, 255, 136, 0.4);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 24px #00FF88, 0 0 36px rgba(0, 255, 136, 0.7), inset 0 0 12px rgba(0, 255, 136, 0.7);
+        transform: scale(1.1);
+    }
+    100% {
+        box-shadow: 0 0 14px rgba(0, 255, 136, 0.85), inset 0 0 6px rgba(0, 255, 136, 0.5);
+        transform: scale(1);
+    }
 }
 
 /* Laser Scanning Line Animation */
@@ -1111,16 +1235,194 @@ textarea:focus {
     bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     color: #FFF;
-    background: rgba(0, 0, 0, 0.65);
-    padding: 4px 12px;
+    background: rgba(0, 0, 0, 0.75);
+    padding: 4px 10px;
     border-radius: 12px;
     border: 1px solid rgba(0, 240, 255, 0.4);
     font-family: 'Prompt', sans-serif;
     pointer-events: none;
     text-align: center;
+    white-space: nowrap;
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Real-time 4-Corner Status Overlay Panel */
+.corner-status-overlay {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(4, 7, 14, 0.90);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-family: 'JetBrains Mono', 'Prompt', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    box-shadow: 0 0 18px rgba(0, 240, 255, 0.35);
+    pointer-events: none;
+    z-index: 12;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    max-width: 92%;
+}
+
+.corner-status-overlay.locked-100 {
+    border-color: #00FF88;
+    color: #00FF88;
+    background: rgba(4, 25, 15, 0.95);
+    box-shadow: 0 0 25px rgba(0, 255, 136, 0.7);
+    font-size: 12px;
+    animation: targetLockedPulseOverlay 1s ease-in-out infinite alternate;
+}
+
+@keyframes targetLockedPulseOverlay {
+    0% {
+        box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        transform: translateX(-50%) scale(1);
+    }
+    100% {
+        box-shadow: 0 0 30px #00FF88, 0 0 45px rgba(0, 255, 136, 0.6);
+        transform: translateX(-50%) scale(1.03);
+    }
+}
+
+/* Real-time Focus Status HUD Overlay (Laplacian Variance Focus Detector) */
+.focus-status-hud {
+    position: absolute;
+    top: 42px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(4, 7, 14, 0.90);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    box-shadow: 0 0 14px rgba(0, 240, 255, 0.3);
+    pointer-events: none;
+    z-index: 11;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    max-width: 92%;
+}
+
+.focus-status-hud.focus-blurry {
+    border-color: var(--accent-magenta, #FF0055);
+    color: var(--accent-magenta, #FF0055);
+    background: rgba(40, 4, 15, 0.92);
+    box-shadow: 0 0 14px rgba(255, 0, 85, 0.5);
+}
+
+.focus-status-hud.focus-adjusting {
+    border-color: var(--accent-amber, #F59E0B);
+    color: var(--accent-amber, #F59E0B);
+    background: rgba(40, 25, 4, 0.92);
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.5);
+}
+
+.focus-status-hud.focus-sharp {
+    border-color: var(--accent-emerald, #00FF88);
+    color: var(--accent-emerald, #00FF88);
+    background: rgba(4, 30, 15, 0.92);
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+    animation: targetLockPulse 1.2s ease-in-out infinite alternate;
+}
+
+/* Voice Guidance Status HUD Overlay */
+.voice-status-hud {
+    position: absolute;
+    top: 74px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(4, 7, 14, 0.85);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 20px;
+    padding: 4px 12px;
+    color: var(--accent-cyan);
+    font-family: 'Prompt', 'JetBrains Mono', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 0 16px rgba(0, 240, 255, 0.35);
+    pointer-events: none;
+    z-index: 10;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+    max-width: 90%;
+}
+
+.voice-status-hud.status-success {
+    border-color: var(--accent-emerald);
+    color: var(--accent-emerald);
+    box-shadow: 0 0 16px rgba(0, 255, 136, 0.4);
+}
+
+.voice-status-hud.status-warning {
+    border-color: var(--accent-amber);
+    color: var(--accent-amber);
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.4);
+}
+
+.voice-status-hud.status-alert {
+    border-color: var(--accent-magenta);
+    color: var(--accent-magenta);
+    box-shadow: 0 0 16px rgba(255, 0, 85, 0.4);
+}
+
+/* Camera Modal Header Action Toggles */
+.camera-modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cam-toggle-btn {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(var(--overlay-rgb), 0.2);
+    background: rgba(var(--overlay-rgb), 0.05);
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', 'Prompt', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.cam-toggle-btn:hover {
+    border-color: var(--accent-cyan);
+    color: var(--text-main);
+}
+
+.cam-toggle-btn.active {
+    border-color: var(--accent-emerald);
+    background: rgba(0, 255, 136, 0.15);
+    color: var(--accent-emerald);
+    box-shadow: 0 0 10px rgba(0, 255, 136, 0.25);
 }
 
 /* Camera Controls Footer */
@@ -1218,6 +1520,39 @@ body.light-mode .dropzone-preview {
 
 body.light-mode .camera-controls-bar {
     background: #F8FAFC;
+}
+
+body.light-mode .cam-toggle-btn {
+    background: #F1F5F9;
+    border-color: rgba(0, 0, 0, 0.15);
+    color: var(--text-muted);
+}
+
+body.light-mode .cam-toggle-btn.active {
+    background: #ECFDF5;
+    border-color: var(--accent-emerald);
+    color: var(--accent-emerald);
+}
+
+body.light-mode .voice-status-hud {
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+body.light-mode .corner-status-overlay {
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+body.light-mode .corner-status-overlay.locked-100 {
+    background: #ECFDF5;
+    border-color: var(--accent-emerald);
+    color: var(--accent-emerald);
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+}
+
+body.light-mode .corner-label {
+    background: rgba(255, 255, 255, 0.92);
 }
 
 /* Tactile Navigation & Mode Controls */
@@ -1352,3 +1687,181 @@ body.light-mode .page-indicator-badge {
     border-color: var(--accent-emerald);
     color: var(--accent-emerald);
 }
+
+/* =========================================================================
+   Visual OCR Bounding Box Inspector Styles
+   ========================================================================= */
+.ocr-inspector-btn-row {
+    margin-top: 6px;
+    width: 100%;
+}
+
+.ocr-btn-inspector {
+    width: 100%;
+    background: linear-gradient(180deg, rgba(0, 240, 255, 0.12), rgba(0, 240, 255, 0.04));
+    border: 1px solid rgba(0, 240, 255, 0.4);
+    color: var(--accent-cyan);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.ocr-btn-inspector:hover {
+    background: linear-gradient(180deg, rgba(0, 240, 255, 0.25), rgba(0, 240, 255, 0.12));
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 14px rgba(0, 240, 255, 0.35);
+    color: #FFF;
+    transform: translateY(-1px);
+}
+
+.ocr-inspector-card {
+    width: 840px;
+    max-width: 96vw;
+    height: 640px;
+    max-height: 92vh;
+    background: var(--bg-panel);
+    border: 1px solid var(--accent-emerald);
+    border-radius: 14px;
+    box-shadow: 0 0 45px rgba(0, 255, 136, 0.25);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+.modal-backdrop.active .ocr-inspector-card {
+    transform: scale(1);
+}
+
+.ocr-inspector-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.inspector-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(0, 255, 136, 0.15);
+    color: var(--accent-emerald);
+    border: 1px solid rgba(0, 255, 136, 0.35);
+}
+
+.ocr-inspector-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-dark);
+}
+
+.inspector-canvas-wrap {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: radial-gradient(circle at center, #111a2e 0%, #070a13 100%);
+}
+
+#ocrResultCanvasInspector {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 0 25px rgba(0, 255, 136, 0.2);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.inspector-details-bar {
+    max-height: 120px;
+    overflow-y: auto;
+    padding: 10px 16px;
+    background: var(--bg-card);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.inspector-empty-msg {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.inspector-word-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(0, 240, 255, 0.1);
+    color: var(--accent-cyan);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.inspector-word-tag .conf {
+    color: var(--accent-emerald);
+    font-size: 10px;
+    font-weight: bold;
+}
+
+body.light-mode .ocr-inspector-card {
+    background: #FFFFFF;
+    border-color: var(--accent-emerald);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+body.light-mode .ocr-inspector-body {
+    background: #F8FAFC;
+}
+
+body.light-mode .inspector-canvas-wrap {
+    background: radial-gradient(circle at center, #F1F5F9 0%, #E2E8F0 100%);
+}
+
+body.light-mode .inspector-details-bar {
+    background: #F1F5F9;
+    border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Mobile Smartphone Full Viewport Native Camera Feed */
+@media (max-width: 640px) {
+    .camera-modal-card {
+        width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+        border: none;
+    }
+
+    .viewfinder-box {
+        aspect-ratio: unset;
+        width: 100%;
+        height: 100%;
+    }
+
+    #cameraVideo {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+}
+
+
