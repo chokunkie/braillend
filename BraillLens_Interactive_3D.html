@@ -14,6 +14,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tesseract.js v5 for Client-Side Optical Character Recognition -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <style>
         /* CSS STYLES */
@@ -742,6 +744,632 @@
             width: 100%;
             accent-color: var(--accent-emerald);
         }
+
+        /* =========================================================
+           OCR INGESTION & LIVE CAMERA VIEWFINDER STYLES (PHASE 1)
+           ========================================================= */
+        .ocr-section, .ocr-panel {
+            background: rgba(var(--inset-rgb), 0.4);
+            border-bottom: 1px solid rgba(var(--overlay-rgb), 0.08);
+            padding: 16px 20px;
+        }
+
+        .ocr-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .ocr-header-row .section-title {
+            margin-bottom: 0;
+        }
+
+        .ocr-lang-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ocr-lang-wrap label {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .ocr-lang-select {
+            background: rgba(var(--inset-rgb), 0.9);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 6px;
+            padding: 4px 8px;
+            color: var(--accent-cyan);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .ocr-lang-select:focus, .ocr-lang-select:hover {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+        }
+
+        .ocr-lang-select option {
+            background: var(--bg-panel);
+            color: var(--text-main);
+        }
+
+        /* Drag & Drop Zone */
+        .dropzone {
+            position: relative;
+            border: 2px dashed rgba(0, 240, 255, 0.35);
+            border-radius: 10px;
+            padding: 16px 12px;
+            text-align: center;
+            background: rgba(var(--inset-rgb), 0.5);
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .dropzone:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 240, 255, 0.06);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .dropzone.dragover {
+            border-color: var(--accent-emerald);
+            background: rgba(0, 255, 136, 0.12);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.35);
+            transform: scale(1.02);
+        }
+
+        .dropzone-icon {
+            font-size: 24px;
+            color: var(--accent-cyan);
+            margin-bottom: 2px;
+            transition: transform 0.25s ease;
+        }
+
+        .dropzone:hover .dropzone-icon {
+            transform: scale(1.15);
+            color: var(--accent-emerald);
+        }
+
+        .dropzone-text {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .dropzone-subtext {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .dropzone-preview {
+            display: none;
+            width: 100%;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(var(--well-rgb), 0.6);
+            border-radius: 6px;
+            padding: 6px 10px;
+            margin-top: 4px;
+        }
+
+        .dropzone-preview.active {
+            display: flex;
+        }
+
+        .preview-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow: hidden;
+        }
+
+        .preview-thumb {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            object-fit: cover;
+            border: 1px solid var(--accent-cyan);
+        }
+
+        .preview-name {
+            font-size: 11px;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 180px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .preview-remove-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px;
+            transition: color 0.2s;
+        }
+
+        .preview-remove-btn:hover {
+            color: var(--accent-magenta);
+        }
+
+        /* Action Buttons Row */
+        .ocr-actions-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .ocr-btn {
+            flex: 1;
+            padding: 9px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            background: rgba(0, 240, 255, 0.08);
+            color: var(--accent-cyan);
+            font-family: 'Prompt', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .ocr-btn:hover {
+            background: var(--accent-cyan);
+            color: var(--on-accent-text);
+            box-shadow: 0 0 14px rgba(0, 240, 255, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .ocr-btn-emerald {
+            border-color: rgba(0, 255, 136, 0.3);
+            background: rgba(0, 255, 136, 0.08);
+            color: var(--accent-emerald);
+        }
+
+        .ocr-btn-emerald:hover {
+            background: var(--accent-emerald);
+            color: var(--on-accent-text);
+            box-shadow: 0 0 14px rgba(0, 255, 136, 0.4);
+        }
+
+        /* OCR Progress HUD & Telemetry Status */
+        .ocr-progress-container {
+            display: none;
+            margin-top: 12px;
+            padding: 10px;
+            background: rgba(var(--well-rgb), 0.5);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            flex-direction: column;
+            gap: 6px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .ocr-progress-container.active {
+            display: flex;
+        }
+
+        .ocr-status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .ocr-status-text {
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .confidence-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(0, 255, 136, 0.15);
+            color: var(--accent-emerald);
+            border: 1px solid var(--accent-emerald);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+
+        .ocr-progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(var(--overlay-rgb), 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .ocr-progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-emerald));
+            border-radius: 3px;
+            transition: width 0.2s ease;
+            box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+        }
+
+        /* Live Camera Viewfinder Modal */
+        .camera-modal-card {
+            width: 720px;
+            max-width: 95vw;
+            height: 560px;
+            max-height: 90vh;
+            background: var(--bg-panel);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 14px;
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.35);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-backdrop.active .camera-modal-card {
+            transform: scale(1);
+        }
+
+        .viewfinder-box {
+            position: relative;
+            flex: 1;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #cameraVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #000;
+        }
+
+        /* Tactical Viewfinder Overlay & Framing Corners */
+        .viewfinder-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 75%;
+            height: 65%;
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            pointer-events: none;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+            border-radius: 8px;
+        }
+
+        .viewfinder-corner {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-color: var(--accent-cyan);
+            border-style: solid;
+            pointer-events: none;
+        }
+
+        .viewfinder-corner.top-left {
+            top: -2px;
+            left: -2px;
+            border-width: 3px 0 0 3px;
+            border-top-left-radius: 6px;
+        }
+
+        .viewfinder-corner.top-right {
+            top: -2px;
+            right: -2px;
+            border-width: 3px 3px 0 0;
+            border-top-right-radius: 6px;
+        }
+
+        .viewfinder-corner.bottom-left {
+            bottom: -2px;
+            left: -2px;
+            border-width: 0 0 3px 3px;
+            border-bottom-left-radius: 6px;
+        }
+
+        .viewfinder-corner.bottom-right {
+            bottom: -2px;
+            right: -2px;
+            border-width: 0 3px 3px 0;
+            border-bottom-right-radius: 6px;
+        }
+
+        /* Laser Scanning Line Animation */
+        .viewfinder-scanline {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-emerald), transparent);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            opacity: 0.8;
+            animation: scanlineMove 2.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes scanlineMove {
+            0% { top: 5%; }
+            100% { top: 95%; }
+        }
+
+        .viewfinder-guide-text {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: 500;
+            color: #FFF;
+            background: rgba(0, 0, 0, 0.65);
+            padding: 4px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 240, 255, 0.4);
+            font-family: 'Prompt', sans-serif;
+            pointer-events: none;
+            text-align: center;
+        }
+
+        /* Camera Controls Footer */
+        .camera-controls-bar {
+            padding: 14px 24px;
+            background: rgba(var(--inset-rgb), 0.95);
+            border-top: 1px solid rgba(0, 240, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .cam-ctrl-btn {
+            background: rgba(var(--overlay-rgb), 0.08);
+            border: 1px solid rgba(var(--overlay-rgb), 0.15);
+            color: var(--text-main);
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-family: 'Prompt', sans-serif;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .cam-ctrl-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            background: rgba(0, 240, 255, 0.1);
+        }
+
+        .shutter-btn {
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-emerald));
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--on-accent-text);
+            font-size: 22px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .shutter-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.8);
+        }
+
+        .shutter-btn:active {
+            transform: scale(0.92);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.8);
+        }
+
+        /* Light Mode Overrides for OCR & Camera */
+        body.light-mode .ocr-section, body.light-mode .ocr-panel {
+            background: rgba(240, 242, 245, 0.7);
+        }
+
+        body.light-mode .dropzone {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(8, 145, 178, 0.4);
+        }
+
+        body.light-mode .dropzone:hover {
+            background: rgba(8, 145, 178, 0.08);
+            border-color: var(--accent-cyan);
+        }
+
+        body.light-mode .dropzone.dragover {
+            background: rgba(5, 150, 105, 0.12);
+            border-color: var(--accent-emerald);
+        }
+
+        body.light-mode .ocr-lang-select {
+            background: #FFFFFF;
+            border-color: rgba(8, 145, 178, 0.4);
+            color: var(--accent-cyan);
+        }
+
+        body.light-mode .ocr-progress-container {
+            background: #FFFFFF;
+            border-color: rgba(8, 145, 178, 0.3);
+        }
+
+        body.light-mode .dropzone-preview {
+            background: #E2E8F0;
+        }
+
+        body.light-mode .camera-controls-bar {
+            background: #F8FAFC;
+        }
+
+        /* Tactile Navigation & Mode Controls */
+        .tactical-control-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(var(--inset-rgb), 0.7);
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-top: 10px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4);
+        }
+
+        .tactical-btn {
+            font-family: 'JetBrains Mono', 'Prompt', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            padding: 7px 12px;
+            border-radius: 5px;
+            border: 1px solid rgba(0, 240, 255, 0.35);
+            background: linear-gradient(180deg, rgba(0, 240, 255, 0.15), rgba(0, 240, 255, 0.05));
+            color: var(--accent-cyan);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .tactical-btn:hover:not(:disabled) {
+            background: linear-gradient(180deg, rgba(0, 240, 255, 0.3), rgba(0, 240, 255, 0.15));
+            border-color: var(--accent-cyan);
+            color: #FFF;
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .tactical-btn:active:not(:disabled) {
+            transform: translateY(1px);
+            box-shadow: 0 0 6px rgba(0, 240, 255, 0.3);
+        }
+
+        .tactical-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            border-color: rgba(var(--overlay-rgb), 0.15);
+            background: rgba(var(--overlay-rgb), 0.05);
+            color: var(--text-muted);
+            box-shadow: none;
+            transform: none;
+        }
+
+        .page-indicator-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 10px;
+            background: rgba(0, 255, 136, 0.12);
+            border: 1px solid var(--accent-emerald);
+            border-radius: 5px;
+            color: var(--accent-emerald);
+            text-align: center;
+            white-space: nowrap;
+            min-width: 84px;
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.2);
+        }
+
+        .tactical-mode-btn {
+            flex: 1;
+            font-family: 'JetBrains Mono', 'Prompt', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 7px 10px;
+            border-radius: 5px;
+            border: 1px solid rgba(255, 184, 0, 0.4);
+            background: linear-gradient(180deg, rgba(255, 184, 0, 0.15), rgba(255, 184, 0, 0.05));
+            color: var(--accent-amber);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .tactical-mode-btn:hover {
+            background: linear-gradient(180deg, rgba(255, 184, 0, 0.3), rgba(255, 184, 0, 0.15));
+            border-color: var(--accent-amber);
+            color: #FFF;
+            box-shadow: 0 0 12px rgba(255, 184, 0, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .tactical-mode-btn.mode-eng {
+            border-color: var(--accent-cyan);
+            background: linear-gradient(180deg, rgba(0, 240, 255, 0.2), rgba(0, 240, 255, 0.08));
+            color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+        }
+
+        .tactical-mode-btn.mode-thai {
+            border-color: var(--accent-emerald);
+            background: linear-gradient(180deg, rgba(0, 255, 136, 0.2), rgba(0, 255, 136, 0.08));
+            color: var(--accent-emerald);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.25);
+        }
+
+        body.light-mode .tactical-control-bar {
+            background: #FFFFFF;
+            border-color: rgba(0, 0, 0, 0.12);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        body.light-mode .tactical-btn {
+            background: #F1F5F9;
+            border-color: rgba(2, 132, 199, 0.3);
+            color: var(--accent-cyan);
+        }
+
+        body.light-mode .tactical-btn:hover:not(:disabled) {
+            background: #E2E8F0;
+        }
+
+        body.light-mode .page-indicator-badge {
+            background: #ECFDF5;
+            border-color: var(--accent-emerald);
+            color: var(--accent-emerald);
+        }
     </style>
 </head>
 <body>
@@ -812,13 +1440,68 @@
 
         <!-- Right Control Panel -->
         <div class="control-panel">
+            <!-- OCR Ingestion & Camera Scanner Section -->
+            <div class="panel-section ocr-section">
+                <div class="ocr-header-row">
+                    <div class="section-title"><i class="fa-solid fa-camera-retro"></i> OPTICAL OCR SCANNER</div>
+                    <div class="ocr-lang-wrap">
+                        <label for="ocrLangSelect"><i class="fa-solid fa-globe"></i> LANG:</label>
+                        <select id="ocrLangSelect" class="ocr-lang-select">
+                            <option value="tha+eng" selected>ไทย + ENG (tha+eng)</option>
+                            <option value="tha">ภาษาไทย (tha)</option>
+                            <option value="eng">English (eng)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Drag & Drop Zone -->
+                <div class="dropzone" id="ocrDropzone">
+                    <i class="fa-solid fa-cloud-arrow-up dropzone-icon"></i>
+                    <div class="dropzone-text">ลากวางรูปภาพ หรือคลิกเพื่ออัปโหลด</div>
+                    <div class="dropzone-subtext">JPG, PNG, WebP, BMP (ประมวลผลข้อความอัตโนมัติ)</div>
+                    <input type="file" id="imageFileInput" accept="image/*" style="display:none;" />
+                    
+                    <!-- File Preview Card (Hidden initially) -->
+                    <div class="dropzone-preview" id="dropzonePreview">
+                        <div class="preview-info">
+                            <img id="previewThumbnail" class="preview-thumb" src="" alt="Thumbnail" />
+                            <span id="previewFilename" class="preview-name">image.png</span>
+                        </div>
+                        <button type="button" class="preview-remove-btn" id="btnRemoveImage" title="ลบภาพ"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+
+                <!-- Action Buttons: Live Camera Scan & Browse Files -->
+                <div class="ocr-actions-row">
+                    <button class="ocr-btn" id="btnOpenLiveCamera">
+                        <i class="fa-solid fa-camera"></i> สแกนกล้องสด (Live Camera)
+                    </button>
+                    <button class="ocr-btn ocr-btn-emerald" id="btnTriggerFileBrowse">
+                        <i class="fa-solid fa-folder-open"></i> เลือกไฟล์ภาพ
+                    </button>
+                </div>
+
+                <!-- OCR Progress HUD & Telemetry Status Bar -->
+                <div class="ocr-progress-container" id="ocrProgressContainer">
+                    <div class="ocr-status-row">
+                        <span class="ocr-status-text" id="ocrStatusText">
+                            <i class="fa-solid fa-spinner fa-spin"></i> กำลังเตรียมการประมวลผล OCR...
+                        </span>
+                        <span class="confidence-badge" id="ocrConfidenceScore">CONF: 0%</span>
+                    </div>
+                    <div class="ocr-progress-bar">
+                        <div class="ocr-progress-fill" id="ocrProgressBar" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Translator Section -->
             <div class="panel-section">
-                <div class="section-title"><i class="fa-solid fa-language"></i> THAI BRAILLE ENGINE</div>
+                <div class="section-title"><i class="fa-solid fa-language"></i> THAI / ENG BRAILLE ENGINE</div>
                 <div class="input-group">
                     <textarea id="thaiInput" oninput="updateBrailleDisplay(this.value)" onchange="updateBrailleDisplay(this.value)" onkeyup="updateBrailleDisplay(this.value)" placeholder="ป้อนข้อความภาษาไทย หรือเลือกข้อความสำเร็จรูป...">สวัสดีครับ</textarea>
                     
-                    <div class="preset-container">
+                    <div class="preset-container" id="presetContainer">
                         <div class="preset-chip" onclick="setPreset('สวัสดีครับ')">สวัสดีครับ</div>
                         <div class="preset-chip" onclick="setPreset('ยินดีต้อนรับ')">ยินดีต้อนรับ</div>
                         <div class="preset-chip" onclick="setPreset('BraillLens')">BraillLens</div>
@@ -828,6 +1511,20 @@
                     <button class="translate-btn" onclick="processTranslation()">
                         <i class="fa-solid fa-microchip"></i> แปลงเป็นอักษรเบรลล์ (Actuate 84 Pins)
                     </button>
+
+                    <!-- Tactile Navigation & Mode Controls -->
+                    <div class="tactical-control-bar">
+                        <button class="tactical-btn" id="btnPrevPage" onclick="prevBraillePage()" title="หน้าก่อนหน้า (Arrow Left)">
+                            <i class="fa-solid fa-backward-step"></i> ◄ PREV
+                        </button>
+                        <div class="page-indicator-badge" id="pageIndicator">PAGE 1/1</div>
+                        <button class="tactical-btn" id="btnNextPage" onclick="nextBraillePage()" title="หน้าถัดไป (Arrow Right)">
+                            NEXT ► <i class="fa-solid fa-forward-step"></i>
+                        </button>
+                        <button class="tactical-mode-btn mode-thai" id="btnToggleLanguageMode" onclick="toggleLanguageMode()" title="สลับโหมดภาษา (ENG / THAI)">
+                            <i class="fa-solid fa-right-left"></i> MODE: THAI [ก-ฮ]
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -880,6 +1577,51 @@
         </div>
     </div>
 
+    <!-- Live Camera Viewfinder Modal (Phase 2) -->
+    <div class="modal-backdrop camera-modal" id="cameraModal" data-modal="ocrCameraModal">
+        <div class="camera-modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fa-solid fa-camera"></i> 📷 กล้องเล็งตรวจจับอักษร (Live Optical Viewfinder)
+                </div>
+                <button class="close-btn" id="btnCloseCameraModal" onclick="if(typeof closeCameraModal==='function')closeCameraModal();"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="viewfinder-box" id="viewfinderBox">
+                <video id="cameraVideo" autoplay playsinline muted></video>
+                <!-- Hidden Canvas for frame snapshot capture -->
+                <canvas id="cameraCaptureCanvas" style="display:none;"></canvas>
+                
+                <!-- Tactical Framing Overlay -->
+                <div class="viewfinder-frame">
+                    <div class="viewfinder-corner top-left"></div>
+                    <div class="viewfinder-corner top-right"></div>
+                    <div class="viewfinder-corner bottom-left"></div>
+                    <div class="viewfinder-corner bottom-right"></div>
+                    <div class="viewfinder-scanline"></div>
+                </div>
+
+                <div class="viewfinder-guide-text">
+                    <i class="fa-solid fa-crop-simple"></i> จัดวางตัวอักษรให้อยู่ภายในกรอบเล็ง แล้วกดปุ่มชัตเตอร์
+                </div>
+            </div>
+
+            <div class="camera-controls-bar">
+                <button class="cam-ctrl-btn" id="btnSwitchCamera" title="สลับกล้องหน้า/หลัง">
+                    <i class="fa-solid fa-camera-rotate"></i> สลับกล้อง (Flip)
+                </button>
+                
+                <button class="shutter-btn" id="btnCaptureSnapshot" title="ถ่ายภาพและถอดรหัสข้อความ (Capture)">
+                    <i class="fa-solid fa-camera"></i>
+                </button>
+
+                <button class="cam-ctrl-btn" id="btnCancelCamera" onclick="if(typeof closeCameraModal==='function')closeCameraModal();">
+                    <i class="fa-solid fa-ban"></i> ยกเลิก
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Application Script -->
     <script>
         /* THAI BRAILLE DICTIONARY & TRANSLATION ENGINE */
@@ -924,6 +1666,10 @@
         let screenCanvas, ctx, screenCtx, screenTexture, screenMesh;
         let oledCanvas, oledCtx, oledTexture, oledMesh;
         let currentText = 'สวัสดีครับ';
+        let currentBrailleChunks = ['สวัสดีครับ'];
+        let currentBraillePageIndex = 0;
+        let currentBrailleFullText = 'สวัสดีครับ';
+        let currentLanguageMode = 'tha';
         let ledDataMesh, ledPwrMesh, ledFlashMesh;
         let pcbMesh, internalGroup;
         let tftPcbMesh, bezelRim, oledGlass, rearGroup;
@@ -1058,7 +1804,7 @@
             // Calculate active pins count
             let activePinCount = 0;
             for (let i = 0; i < pinTargetY.length; i++) {
-                if (pinTargetY[i] > 0.1) activePinCount++;
+                if (pinTargetY[i] > 0.05) activePinCount++;
             }
 
             const w = 1024;
@@ -1096,16 +1842,20 @@
             ctx.fillText('Waveshare 3.5" TFT LCD • Raspberry Pi Zero 2 W', 32, headY + 36);
             ctx.shadowBlur = 0;
 
-            // 3. TELEMETRY BAR (#00ff88 emerald): "● CPU: 18% | TEMP: 42°C | 5G ONLINE" (bold 28px)
+            // 3. TELEMETRY BAR (#00ff88 emerald): "● CPU: 18% | TEMP: 42°C | 5G ONLINE | MODE: THAI | PAGE 1/1"
             const telemY = 78;
             const telemH = 44;
             drawRoundRect(ctx, 16, telemY, w - 32, telemH, 8, 'rgba(0, 255, 136, 0.08)', '#00ff88', 1.5);
 
-            ctx.font = "bold 28px Prompt, sans-serif";
+            const totalPages = (typeof currentBrailleChunks !== 'undefined' && currentBrailleChunks && currentBrailleChunks.length > 0) ? currentBrailleChunks.length : 1;
+            const currentPage = (typeof currentBraillePageIndex !== 'undefined') ? currentBraillePageIndex + 1 : 1;
+            const langLabel = (typeof currentLanguageMode !== 'undefined' && currentLanguageMode === 'eng') ? 'ENG' : 'THAI';
+
+            ctx.font = "bold 26px Prompt, sans-serif";
             ctx.fillStyle = '#00ff88';
             ctx.shadowColor = '#00ff88';
             ctx.shadowBlur = 8;
-            ctx.fillText('● CPU: 18% | TEMP: 42°C | 5G ONLINE', 32, telemY + 32);
+            ctx.fillText(`● CPU: 18% | TEMP: 42°C | 5G ONLINE | MODE: ${langLabel} | PAGE ${currentPage}/${totalPages}`, 32, telemY + 31);
             ctx.shadowBlur = 0;
 
             // 4. MAIN TEXT FRAME: background #131e3a, cyan border #00f0ff, bold 64px white Thai text
@@ -1120,9 +1870,14 @@
             ctx.shadowBlur = 0;
 
             // Inner label inside main box
+            const totalChars = (typeof currentBrailleFullText !== 'undefined' && currentBrailleFullText) ? Array.from(currentBrailleFullText).length : Array.from(displayStr).length;
+            const startCharIdx = totalChars === 0 ? 0 : (currentPage - 1) * 14 + 1;
+            const endCharIdx = totalChars === 0 ? 0 : Math.min(currentPage * 14, totalChars);
+            const rangeStr = totalPages > 1 ? ` • PAGE ${currentPage}/${totalPages} [${startCharIdx}-${endCharIdx}]` : '';
+
             ctx.font = "bold 18px 'JetBrains Mono', Prompt, monospace";
             ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
-            ctx.fillText('📷 LIVE SCAN & BRAILLE INPUT READOUT (THAI HD)', boxX + 18, boxY + 26);
+            ctx.fillText(`📷 LIVE SCAN & BRAILLE INPUT READOUT (${langLabel}${rangeStr})`, boxX + 18, boxY + 26);
 
             // Horizontal scan lines inside main text box
             ctx.strokeStyle = 'rgba(0, 240, 255, 0.04)';
@@ -1166,7 +1921,7 @@
             drawRoundRect(ctx, 16, badgeY, badge1W, badgeH, 8, '#ff6b00', '#ff6b00', 1);
             ctx.font = "bold 22px Prompt, sans-serif";
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillText('⚡ BRAILLE OUTPUT', 30, badgeY + 31);
+            ctx.fillText(`⚡ BRAILLE [PG ${currentPage}/${totalPages}]`, 30, badgeY + 31);
 
             // Blue Badge: #2563eb "84 PINS ACTIVE"
             const displayPinText = (activePinCount > 0) ? `${activePinCount} PINS ACTIVE` : '84 PINS ACTIVE';
@@ -1796,7 +2551,7 @@
                 const targetY = (pinTargetY[i] !== undefined) ? pinTargetY[i] : p.targetY;
                 const targetCam = (pinTargetCamAngle[i] !== undefined) ? pinTargetCamAngle[i] : p.targetCamAngle;
 
-                // Lerp Pin Y Height (UP = 0.35, DOWN = 0.0 FLUSH WITH TOP PLATE)
+                // Lerp Pin Y Height (UP = 0.21, DOWN = 0.0 FLUSH WITH TOP PLATE)
                 p.currentY += (targetY - p.currentY) * 0.15;
                 p.pinGroup.position.y = p.currentY;
 
@@ -1808,14 +2563,14 @@
 
                 // Lerp Micro Magnet Position & Rotation
                 if (p.magnetGroup) {
-                    const targetMagY = -0.56 + (targetY > 0.1 ? 0.06 : 0);
+                    const targetMagY = -0.56 + (targetY > 0.05 ? 0.04 : 0);
                     p.magnetGroup.position.y += (targetMagY - p.magnetGroup.position.y) * 0.15;
                     p.magnetGroup.rotation.x = p.currentCamAngle;
                 }
 
                 // Magnetic Field Emissive Glow on Active Coils
                 if (p.coilMat && p.fieldGlowRing) {
-                    if (targetY > 0.1) {
+                    if (targetY > 0.05) {
                         p.coilMat.emissive.setHex(0x00f0ff);
                         p.coilMat.emissiveIntensity = 0.7;
                         p.fieldGlowRing.material.opacity = 0.8;
@@ -2204,13 +2959,22 @@
             setCameraView('3d');
         }
 
-        /* THAI TRANSLATION ENGINE & UI BUILDER */
+        /* THAI & ENG TRANSLATION ENGINE & UI BUILDER */
         function convertThaiToBraille(text) {
             const chars = Array.from(text || '');
             const cells = [];
             for (let c = 0; c < 14; c++) {
                 const char = chars[c] || ' ';
-                const activeDots = THAI_BRAILLE_MAP[char] || [];
+                let activeDots = THAI_BRAILLE_MAP[char];
+                if (!activeDots) {
+                    if (char.toUpperCase() in THAI_BRAILLE_MAP) {
+                        activeDots = THAI_BRAILLE_MAP[char.toUpperCase()];
+                    } else if (char.toLowerCase() in THAI_BRAILLE_MAP) {
+                        activeDots = THAI_BRAILLE_MAP[char.toLowerCase()];
+                    } else {
+                        activeDots = [];
+                    }
+                }
                 const dotsBool = [1, 2, 3, 4, 5, 6].map(dot => activeDots.includes(dot));
                 cells.push({
                     char: char,
@@ -2221,21 +2985,58 @@
             return cells;
         }
 
-        function updateBrailleDisplay(text) {
-            if (text === undefined || text === null) {
-                const inputEl = document.getElementById('thaiInput');
-                text = inputEl ? inputEl.value : '';
+        /* 14-CELL PAGINATION LOGIC */
+        function chunkTextForBraille(text) {
+            const chars = Array.from(text || '');
+            if (chars.length === 0) return [''];
+            const chunks = [];
+            const CHUNK_SIZE = 14;
+            for (let i = 0; i < chars.length; i += CHUNK_SIZE) {
+                chunks.push(chars.slice(i, i + CHUNK_SIZE).join(''));
+            }
+            return chunks;
+        }
+
+        function updatePaginationDisplay() {
+            if (!currentBrailleChunks || currentBrailleChunks.length === 0) {
+                currentBrailleChunks = [''];
             }
 
-            // Realtime 100% Update 3D OLED Display & Flash DATA LED
-            drawScreenTexture(text);
+            const totalPages = Math.max(1, currentBrailleChunks.length);
+            if (currentBraillePageIndex < 0) currentBraillePageIndex = 0;
+            if (currentBraillePageIndex >= totalPages) currentBraillePageIndex = totalPages - 1;
+
+            const currentPage = currentBraillePageIndex + 1;
+            const currentChunk = currentBrailleChunks[currentBraillePageIndex] || '';
+            const totalChars = Array.from(currentBrailleFullText || '').length;
+            const startCharIdx = totalChars === 0 ? 0 : currentBraillePageIndex * 14 + 1;
+            const endCharIdx = totalChars === 0 ? 0 : Math.min((currentBraillePageIndex + 1) * 14, totalChars);
+
+            // 1. Update UI Elements (Page indicator & Prev/Next button states)
+            const pageIndicator = document.getElementById('pageIndicator');
+            if (pageIndicator) {
+                pageIndicator.innerText = `PAGE ${currentPage}/${totalPages}`;
+            }
+
+            const btnPrev = document.getElementById('btnPrevPage');
+            if (btnPrev) {
+                btnPrev.disabled = (currentBraillePageIndex === 0);
+            }
+
+            const btnNext = document.getElementById('btnNextPage');
+            if (btnNext) {
+                btnNext.disabled = (currentBraillePageIndex >= totalPages - 1);
+            }
+
+            // 2. Realtime 100% Update 3D OLED Display & Flash DATA LED
+            drawScreenTexture(currentChunk);
             flashDataLED();
 
-            // Convert Thai text to 14 cells
-            const cellsData = convertThaiToBraille(text);
+            // 3. Convert current 14-char chunk to Braille cells data
+            const cellsData = convertThaiToBraille(currentChunk);
             const dotOrder = [1, 4, 2, 5, 3, 6];
 
-            // Update 3D target array for 84 pins
+            // 4. Update 3D target array for 84 pins
             for (let c = 0; c < 14; c++) {
                 const cell = cellsData[c];
                 for (let k = 0; k < 6; k++) {
@@ -2243,7 +3044,7 @@
                     const isActive = cell.activeDots.includes(dotNum);
                     const globalPinIdx = c * 6 + k;
 
-                    const targetY = isActive ? 0.35 : 0.0;
+                    const targetY = isActive ? 0.13 : 0.0;
                     const targetCamAngle = isActive ? Math.PI : 0.0;
 
                     pinTargetY[globalPinIdx] = targetY;
@@ -2260,7 +3061,7 @@
                 }
             }
 
-            // Update 2D Braille matrix preview on web page
+            // 5. Update 2D Braille matrix preview on web page
             const gridContainer = document.getElementById('cellsGrid');
             if (gridContainer) {
                 gridContainer.innerHTML = '';
@@ -2277,9 +3078,11 @@
                         dotsHTML += `<div class="dot-pin ${act}"></div>`;
                     }
 
+                    const charNumberLabel = (totalChars > 0 && c < currentChunk.length) ? `CELL #${c + 1} [${startCharIdx + c}]` : `CELL #${c + 1}`;
+
                     card.innerHTML = `
                         <div class="cell-info">
-                            <div class="cell-idx">CELL #${c + 1}</div>
+                            <div class="cell-idx">${charNumberLabel}</div>
                             <div class="cell-char">${cell.char === ' ' ? '&nbsp;' : cell.char}</div>
                         </div>
                         <div class="cell-dots-grid">
@@ -2290,16 +3093,109 @@
                 }
             }
 
-            // Power pulse status update simulation
+            // 6. Power pulse status update simulation
             const pwr = document.getElementById('powerStatus');
             if (pwr) {
                 pwr.innerText = '2.4W (ACTUATING PULSE)';
                 pwr.style.color = '#00FF88';
                 setTimeout(() => {
-                    pwr.innerText = '0W (IDLE BISTABLE LATCH)';
-                    pwr.style.color = '#00F0FF';
+                    if (pwr) {
+                        pwr.innerText = '0W (IDLE BISTABLE LATCH)';
+                        pwr.style.color = '#00F0FF';
+                    }
                 }, 600);
             }
+        }
+
+        function nextBraillePage() {
+            if (currentBrailleChunks && currentBraillePageIndex < currentBrailleChunks.length - 1) {
+                currentBraillePageIndex++;
+                updatePaginationDisplay();
+            }
+        }
+
+        function prevBraillePage() {
+            if (currentBrailleChunks && currentBraillePageIndex > 0) {
+                currentBraillePageIndex--;
+                updatePaginationDisplay();
+            }
+        }
+
+        function updateBrailleDisplay(text) {
+            if (text === undefined || text === null) {
+                const inputEl = document.getElementById('thaiInput');
+                text = inputEl ? inputEl.value : '';
+            }
+
+            currentBrailleFullText = text;
+            currentBrailleChunks = chunkTextForBraille(text);
+
+            if (currentBraillePageIndex >= currentBrailleChunks.length) {
+                currentBraillePageIndex = 0;
+            }
+
+            updatePaginationDisplay();
+        }
+
+        /* SINGLE-LANGUAGE MODE SWITCHER (ENG / THAI) */
+        function toggleLanguageMode(forcedMode) {
+            if (forcedMode === 'tha' || forcedMode === 'eng') {
+                currentLanguageMode = forcedMode;
+            } else {
+                currentLanguageMode = (currentLanguageMode === 'tha') ? 'eng' : 'tha';
+            }
+
+            // 1. Update Dropdown #ocrLangSelect
+            const langSelect = document.getElementById('ocrLangSelect');
+            if (langSelect) {
+                langSelect.value = currentLanguageMode;
+            }
+
+            // 2. Update Mode Button Text & Badge / Class
+            const modeBtn = document.getElementById('btnToggleLanguageMode');
+            if (modeBtn) {
+                if (currentLanguageMode === 'eng') {
+                    modeBtn.className = 'tactical-mode-btn mode-eng';
+                    modeBtn.innerHTML = '<i class="fa-solid fa-right-left"></i> MODE: ENG [A-Z]';
+                    modeBtn.title = 'โหมดปัจจุบัน: English (eng) - คลิกเพื่อสลับเป็น ภาษาไทย';
+                } else {
+                    modeBtn.className = 'tactical-mode-btn mode-thai';
+                    modeBtn.innerHTML = '<i class="fa-solid fa-right-left"></i> MODE: THAI [ก-ฮ]';
+                    modeBtn.title = 'โหมดปัจจุบัน: ภาษาไทย (tha) - คลิกเพื่อสลับเป็น English';
+                }
+            }
+
+            // 3. Update Textarea Placeholder & Presets
+            const inputEl = document.getElementById('thaiInput');
+            const presetContainer = document.getElementById('presetContainer');
+            if (inputEl) {
+                if (currentLanguageMode === 'eng') {
+                    inputEl.placeholder = 'Enter English text or select a preset... (e.g. HELLO WORLD)';
+                } else {
+                    inputEl.placeholder = 'ป้อนข้อความภาษาไทย หรือเลือกข้อความสำเร็จรูป...';
+                }
+            }
+
+            if (presetContainer) {
+                if (currentLanguageMode === 'eng') {
+                    presetContainer.innerHTML = `
+                        <div class="preset-chip" onclick="setPreset('HELLO WORLD')">HELLO WORLD</div>
+                        <div class="preset-chip" onclick="setPreset('WELCOME TO BRAILLLENS')">WELCOME TO BRAILLLENS</div>
+                        <div class="preset-chip" onclick="setPreset('TACTILE 84 PINS')">TACTILE 84 PINS</div>
+                        <div class="preset-chip" onclick="setPreset('INNOVATION')">INNOVATION</div>
+                    `;
+                } else {
+                    presetContainer.innerHTML = `
+                        <div class="preset-chip" onclick="setPreset('สวัสดีครับ')">สวัสดีครับ</div>
+                        <div class="preset-chip" onclick="setPreset('ยินดีต้อนรับ')">ยินดีต้อนรับ</div>
+                        <div class="preset-chip" onclick="setPreset('BraillLens')">BraillLens</div>
+                        <div class="preset-chip" onclick="setPreset('การเรียนรู้อักษรเบรลล์')">การเรียนรู้อักษรเบรลล์</div>
+                    `;
+                }
+            }
+
+            // 4. Update display and flash feedback
+            updatePaginationDisplay();
         }
 
         function processTranslation() {
@@ -2564,7 +3460,7 @@
                     pCurrent.innerText = '0.48 A';
                     pFlux.innerText = '0.85 T';
                     pCam.innerText = '180°';
-                    pPin.innerText = 'UP (3.5mm)';
+                    pPin.innerText = 'UP (2.1mm)';
                     pLatch.innerText = 'LATCHING...';
 
                     mechFieldGroup.children.forEach(r => {
@@ -2574,11 +3470,11 @@
 
                     mechMagnetMesh.position.y = -0.9;
                     mechCamMesh.rotation.x = Math.PI;
-                    mechPinMesh.position.y = 1.35;
+                    mechPinMesh.position.y = 1.07;
 
                     desc.innerHTML = `
                         ⚡ <b style="color:var(--accent-emerald)">สถานะ 2: จ่ายไฟพัลส์ (Coil ON - Actuation Pulse)</b><br>
-                        จ่ายกระแสไฟพัลส์สั้นๆ (50ms) ผ่านขดลวดทองแดง เกิดสนามแม่เหล็กผลักแม่เหล็กถาวรดันลูกเบี้ยว (Eccentric Cam) หมุน 180° ผลักหมุดเบรลล์ขึ้นสู่ตำแหน่งใช้งาน (UP - 3.5mm)
+                        จ่ายกระแสไฟพัลส์สั้นๆ (50ms) ผ่านขดลวดทองแดง เกิดสนามแม่เหล็กผลักแม่เหล็กถาวรดันลูกเบี้ยว (Eccentric Cam) หมุน 180° ผลักหมุดเบรลล์ขึ้นสู่ตำแหน่งใช้งาน (UP - 2.1mm)
                     `;
                     break;
 
@@ -2587,12 +3483,12 @@
                     pCurrent.innerText = '0.00 A';
                     pFlux.innerText = '0.00 T';
                     pCam.innerText = '180° (Locked)';
-                    pPin.innerText = 'UP (3.5mm)';
+                    pPin.innerText = 'UP (2.1mm)';
                     pLatch.innerText = 'MECHANICAL LATCHED';
 
                     mechMagnetMesh.position.y = -0.9;
                     mechCamMesh.rotation.x = Math.PI;
-                    mechPinMesh.position.y = 1.35;
+                    mechPinMesh.position.y = 1.07;
 
                     desc.innerHTML = `
                         🌱 <b style="color:var(--accent-emerald)">สถานะ 3: ตัดไฟ (Power OFF - Bistable Zero-Hold Power)</b><br>
@@ -2634,6 +3530,630 @@
             }
         }
 
+        /* =========================================================================
+           PHASE 3 & PHASE 4: OPTICAL OCR ENGINE, CAMERA & BRAILLE INTEGRATION
+           ========================================================================= */
+
+        let cameraStream = null;
+        let currentFacingMode = 'environment';
+        let isOCROngoing = false;
+
+        /**
+         * Task 3.1: Enhanced Canvas 2D Image Preprocessor
+         * 1. 2x/3x Resolution Upscaling with High-Quality Interpolation
+         * 2. 3x3 Convolution Sharpening Matrix [0,-1,0; -1,5,-1; 0,-1,0] for Thai vowels/tone marks
+         * 3. Contrast Normalization (Min-Max Dynamic Stretching)
+         * 4. Bradley Adaptive Integral Local Binarization
+         */
+        async function preprocessImageForOCR(imageSource, options = {}) {
+            return new Promise((resolve, reject) => {
+                const processCanvas = (sourceImg, width, height) => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        
+                        // 1. Resolution Upscaling Strategy (2x or 3x for Thai vowel/tone mark detail preservation)
+                        let scaleFactor = options.scale || 2.0;
+                        if (width < 600 || height < 600) {
+                            scaleFactor = 3.0; // 3x upscaling for low-res or cropped inputs
+                        } else if (width >= 1600 || height >= 1600) {
+                            scaleFactor = 1.0; // Preserve native resolution for large inputs
+                        }
+
+                        // Prevent exceeding safe WebGL / Canvas texture limits (max ~3200px)
+                        if (width * scaleFactor > 3200 || height * scaleFactor > 3200) {
+                            scaleFactor = Math.min(2.0, 3200 / Math.max(width, height));
+                        }
+
+                        const targetWidth = Math.max(1, Math.round(width * scaleFactor));
+                        const targetHeight = Math.max(1, Math.round(height * scaleFactor));
+
+                        canvas.width = targetWidth;
+                        canvas.height = targetHeight;
+                        const pctx = canvas.getContext('2d', { willReadFrequently: true });
+                        
+                        // Fill white background for transparent PNG/WebP assets
+                        pctx.fillStyle = '#FFFFFF';
+                        pctx.fillRect(0, 0, targetWidth, targetHeight);
+
+                        // High quality image smoothing during upscaling
+                        pctx.imageSmoothingEnabled = true;
+                        pctx.imageSmoothingQuality = 'high';
+                        pctx.drawImage(sourceImg, 0, 0, targetWidth, targetHeight);
+
+                        const imgData = pctx.getImageData(0, 0, targetWidth, targetHeight);
+                        const data = imgData.data;
+                        const totalPixels = targetWidth * targetHeight;
+                        const gray = new Uint8Array(totalPixels);
+
+                        // Step 1: Standard Luminance Grayscale (BT.601 standard)
+                        for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                            const r = data[i];
+                            const g = data[i + 1];
+                            const b = data[i + 2];
+                            gray[p] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+                        }
+
+                        // Step 2: 3x3 Convolution Sharpening Filter ([0, -1, 0], [-1, 5, -1], [0, -1, 0])
+                        // Accentuates delicate Thai character loops, upper vowels (ิ, ี, ึ, ื), and tone marks (่, ้, ๊, ๋)
+                        const sharpened = new Uint8Array(totalPixels);
+                        let minVal = 255;
+                        let maxVal = 0;
+
+                        for (let y = 0; y < targetHeight; y++) {
+                            const rowOffset = y * targetWidth;
+                            for (let x = 0; x < targetWidth; x++) {
+                                if (x === 0 || y === 0 || x === targetWidth - 1 || y === targetHeight - 1) {
+                                    const edgeVal = gray[rowOffset + x];
+                                    sharpened[rowOffset + x] = edgeVal;
+                                    if (edgeVal < minVal) minVal = edgeVal;
+                                    if (edgeVal > maxVal) maxVal = edgeVal;
+                                    continue;
+                                }
+
+                                const sharpVal = (
+                                    -gray[(y - 1) * targetWidth + x]
+                                    -gray[rowOffset + (x - 1)]
+                                    + 5 * gray[rowOffset + x]
+                                    -gray[rowOffset + (x + 1)]
+                                    -gray[(y + 1) * targetWidth + x]
+                                );
+
+                                const clamped = sharpVal < 0 ? 0 : (sharpVal > 255 ? 255 : sharpVal);
+                                sharpened[rowOffset + x] = clamped;
+                                if (clamped < minVal) minVal = clamped;
+                                if (clamped > maxVal) maxVal = clamped;
+                            }
+                        }
+
+                        // Step 3: Contrast Normalization / Min-Max Dynamic Stretching
+                        const range = maxVal - minVal;
+                        if (range > 15 && (minVal > 10 || maxVal < 245)) {
+                            const factor = 255.0 / range;
+                            for (let p = 0; p < totalPixels; p++) {
+                                let normalized = (sharpened[p] - minVal) * factor;
+                                sharpened[p] = normalized < 0 ? 0 : (normalized > 255 ? 255 : Math.round(normalized));
+                            }
+                        }
+
+                        // Step 4: Fast Bradley Adaptive Local Thresholding (Integral Image)
+                        // Builds integral image (summed-area table) for O(1) local mean calculations
+                        const integral = new Float64Array(totalPixels);
+                        for (let y = 0; y < targetHeight; y++) {
+                            let sum = 0;
+                            const rowOffset = y * targetWidth;
+                            for (let x = 0; x < targetWidth; x++) {
+                                sum += sharpened[rowOffset + x];
+                                if (y === 0) {
+                                    integral[rowOffset + x] = sum;
+                                } else {
+                                    integral[rowOffset + x] = integral[(y - 1) * targetWidth + x] + sum;
+                                }
+                            }
+                        }
+
+                        const S = Math.max(16, Math.floor(targetWidth / 32)); // Local window size
+                        const s2 = Math.floor(S / 2);
+                        const T = 0.15; // 15% threshold below local mean for crisp character binarization
+
+                        for (let y = 0; y < targetHeight; y++) {
+                            const y1 = Math.max(0, y - s2);
+                            const y2 = Math.min(targetHeight - 1, y + s2);
+                            const rowOffset = y * targetWidth;
+
+                            for (let x = 0; x < targetWidth; x++) {
+                                const x1 = Math.max(0, x - s2);
+                                const x2 = Math.min(targetWidth - 1, x + s2);
+                                const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+
+                                const botRight = integral[y2 * targetWidth + x2];
+                                const botLeft = (x1 > 0) ? integral[y2 * targetWidth + (x1 - 1)] : 0;
+                                const topRight = (y1 > 0) ? integral[(y1 - 1) * targetWidth + x2] : 0;
+                                const topLeft = (x1 > 0 && y1 > 0) ? integral[(y1 - 1) * targetWidth + (x1 - 1)] : 0;
+
+                                const sum = botRight - botLeft - topRight + topLeft;
+                                const mean = sum / count;
+
+                                const idx = (rowOffset + x) * 4;
+                                const pixelVal = (sharpened[rowOffset + x] < mean * (1.0 - T)) ? 0 : 255;
+
+                                data[idx] = pixelVal;
+                                data[idx + 1] = pixelVal;
+                                data[idx + 2] = pixelVal;
+                                data[idx + 3] = 255;
+                            }
+                        }
+
+                        pctx.putImageData(imgData, 0, 0);
+                        resolve(canvas);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+
+                // Handle diverse input types: HTMLCanvasElement, HTMLImageElement, HTMLVideoElement, File, Blob, Image URL
+                if (imageSource instanceof HTMLCanvasElement) {
+                    processCanvas(imageSource, imageSource.width, imageSource.height);
+                } else if (imageSource instanceof HTMLImageElement) {
+                    if (imageSource.complete && imageSource.naturalWidth > 0) {
+                        processCanvas(imageSource, imageSource.naturalWidth, imageSource.naturalHeight);
+                    } else {
+                        imageSource.onload = () => processCanvas(imageSource, imageSource.naturalWidth, imageSource.naturalHeight);
+                        imageSource.onerror = reject;
+                    }
+                } else if (imageSource instanceof HTMLVideoElement) {
+                    processCanvas(imageSource, imageSource.videoWidth || 640, imageSource.videoHeight || 480);
+                } else if (imageSource instanceof Blob || imageSource instanceof File) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => processCanvas(img, img.naturalWidth, img.naturalHeight);
+                        img.onerror = reject;
+                        img.src = e.target.result;
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(imageSource);
+                } else if (typeof imageSource === 'string') {
+                    const img = new Image();
+                    img.crossOrigin = 'Anonymous';
+                    img.onload = () => processCanvas(img, img.naturalWidth, img.naturalHeight);
+                    img.onerror = reject;
+                    img.src = imageSource;
+                } else {
+                    reject(new Error('Unsupported image source type for OCR preprocessing.'));
+                }
+            });
+        }
+
+        /**
+         * Helper: Update OCR Progress HUD & Confidence Badge
+         */
+        function updateOCRProgress(progress01, statusHtml, confidence = null) {
+            const container = document.getElementById('ocrProgressContainer');
+            const fill = document.getElementById('ocrProgressBar');
+            const status = document.getElementById('ocrStatusText');
+            const confBadge = document.getElementById('ocrConfidenceScore');
+
+            if (container && !container.classList.contains('active')) {
+                container.classList.add('active');
+            }
+
+            const pct = Math.min(100, Math.max(0, Math.round(progress01 * 100)));
+            if (fill) {
+                fill.style.width = `${pct}%`;
+            }
+
+            if (status && statusHtml) {
+                status.innerHTML = statusHtml;
+            }
+
+            if (confBadge && confidence !== null && confidence !== undefined) {
+                confBadge.innerText = `CONF: ${Math.round(confidence)}%`;
+                if (confidence >= 80) {
+                    confBadge.style.background = 'rgba(0, 255, 136, 0.15)';
+                    confBadge.style.color = 'var(--accent-emerald)';
+                    confBadge.style.borderColor = 'rgba(0, 255, 136, 0.4)';
+                } else if (confidence >= 50) {
+                    confBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+                    confBadge.style.color = 'var(--accent-amber)';
+                    confBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+                } else {
+                    confBadge.style.background = 'rgba(255, 0, 85, 0.15)';
+                    confBadge.style.color = 'var(--accent-magenta)';
+                    confBadge.style.borderColor = 'rgba(255, 0, 85, 0.4)';
+                }
+            }
+        }
+
+        /**
+         * Task 3.2: Tesseract.js Worker Engine & Extraction Dispatcher
+         * Executes client-side recognition using Tesseract.js with chosen language.
+         */
+        async function runOCRExtraction(imageSource, langOverride = null) {
+            if (isOCROngoing) return;
+            isOCROngoing = true;
+
+            const langSelect = document.getElementById('ocrLangSelect');
+            const lang = langOverride || (langSelect ? langSelect.value : 'tha+eng');
+
+            try {
+                updateOCRProgress(0.08, '<i class="fa-solid fa-wand-magic-sparkles fa-spin"></i> กำลังประมวลผลและเพิ่มคอนทราสต์ภาพ (Canvas Preprocessor)...', 0);
+
+                // Step 1: Preprocess Image (Upscaling, Sharpening & Adaptive Binarization)
+                const preprocessedCanvas = await preprocessImageForOCR(imageSource);
+
+                updateOCRProgress(0.2, `<i class="fa-solid fa-microchip fa-spin"></i> กำลังโหลดโมเดล OCR (${lang})...`);
+
+                // Check Tesseract availability
+                if (typeof Tesseract === 'undefined') {
+                    throw new Error('ไม่พบไลบรารี Tesseract.js ในระบบ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต');
+                }
+
+                // Step 2: Run Tesseract.recognize with real-time logger and PSM 6 optimization
+                const result = await Tesseract.recognize(
+                    preprocessedCanvas,
+                    lang,
+                    {
+                        tessedit_pageseg_mode: '6',
+                        logger: (m) => {
+                            if (m.status === 'loading tesseract core') {
+                                updateOCRProgress(0.15 + (m.progress || 0) * 0.15, '<i class="fa-solid fa-download fa-spin"></i> กำลังโหลด Tesseract Core...');
+                            } else if (m.status === 'loading language traineddata') {
+                                updateOCRProgress(0.30 + (m.progress || 0) * 0.25, `<i class="fa-solid fa-book-open-reader fa-spin"></i> กำลังโหลดพจนานุกรม (${lang}) ${Math.round((m.progress || 0) * 100)}%...`);
+                            } else if (m.status === 'initializing api') {
+                                updateOCRProgress(0.58, '<i class="fa-solid fa-gears fa-spin"></i> กำลังเริ่มต้นโมเดลโครงข่ายประสาท (Neural Network)...');
+                            } else if (m.status === 'recognizing text') {
+                                const subProgress = 0.60 + (m.progress || 0) * 0.38;
+                                updateOCRProgress(subProgress, `<i class="fa-solid fa-magnifying-glass fa-spin"></i> กำลังถอดรหัสตัวอักษร (${Math.round((m.progress || 0) * 100)}%)...`);
+                            }
+                        }
+                    }
+                );
+
+                // Step 3: Extract and sanitize recognized text
+                const rawText = (result && result.data && result.data.text) ? result.data.text : '';
+                const confidence = (result && result.data && typeof result.data.confidence === 'number') ? result.data.confidence : 90;
+                
+                // Clean text: strip special control chars, normalize whitespace while preserving meaningful words
+                let cleanedText = rawText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+                if (!cleanedText) {
+                    updateOCRProgress(1.0, '<i class="fa-solid fa-circle-exclamation" style="color:var(--accent-amber);"></i> ไม่พบตัวอักษรในภาพ กรุณาถ่ายภาพใหม่หรือปรับมุมกล้อง', 0);
+                    setTimeout(() => {
+                        const container = document.getElementById('ocrProgressContainer');
+                        if (container) container.classList.remove('active');
+                    }, 4000);
+                } else {
+                    const previewSnippet = cleanedText.length > 22 ? cleanedText.substring(0, 22) + '...' : cleanedText;
+                    updateOCRProgress(1.0, `<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> สแกนสำเร็จ: "${previewSnippet}"`, confidence);
+
+                    // Phase 4: Integrate with Braille Display & Actuator Hardware Simulation
+                    applyOCRResultToSystem(cleanedText, confidence);
+                }
+
+                return { text: cleanedText, confidence: confidence, rawResult: result };
+            } catch (err) {
+                console.error('[BraillLens OCR Error]:', err);
+                updateOCRProgress(1.0, `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-magenta);"></i> ผิดพลาด: ${err.message || err}`, 0);
+                return null;
+            } finally {
+                isOCROngoing = false;
+            }
+        }
+
+        /**
+         * Task 4.1 & 4.2: Integration with Braille Display System & Actuator Feedback
+         * Feeds OCR extracted text into Thai Braille Engine, drives 14-cell / 84-pin 3D actuators,
+         * refreshes OLED texture, and simulates 2.4W actuation power pulse and LED telemetry.
+         */
+        function applyOCRResultToSystem(extractedText, confidence = 95) {
+            if (!extractedText) return;
+
+            // 1. Update Thai Input Textarea
+            const inputEl = document.getElementById('thaiInput');
+            if (inputEl) {
+                inputEl.value = extractedText;
+            }
+
+            // 2. Drive 14 Cells / 84 Pins in Three.js and OLED Canvas Texture
+            updateBrailleDisplay(extractedText);
+
+            // 3. Hardware Tactical Signals & Telemetry Feedback
+            flashDataLED();
+            updatePowerTelemetry(2.4, 600);
+        }
+
+        /**
+         * Task 4.2: Telemetry Power Consumption Pulse Simulator
+         */
+        function updatePowerTelemetry(pulseWatts = 2.4, durationMs = 600) {
+            const pwr = document.getElementById('powerStatus');
+            if (pwr) {
+                pwr.innerText = `${pulseWatts.toFixed(1)}W (OCR ACTUATING PULSE)`;
+                pwr.style.color = 'var(--accent-emerald)';
+                setTimeout(() => {
+                    if (pwr) {
+                        pwr.innerText = '0W (IDLE BISTABLE LATCH)';
+                        pwr.style.color = 'var(--accent-cyan)';
+                    }
+                }, durationMs);
+            }
+        }
+
+        /**
+         * Task 3.3: Image Upload & Drag-and-Drop Event Handlers
+         */
+        function handleImageFileSelect(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                alert('กรุณาเลือกไฟล์ภาพที่ถูกต้อง (PNG, JPG, WebP, BMP)');
+                return;
+            }
+
+            // Display preview thumbnail in dropzone
+            const previewCard = document.getElementById('dropzonePreview');
+            const previewThumb = document.getElementById('previewThumbnail');
+            const previewName = document.getElementById('previewFilename');
+
+            if (previewCard && previewThumb && previewName) {
+                const objectUrl = URL.createObjectURL(file);
+                previewThumb.src = objectUrl;
+                previewName.innerText = file.name || 'image.png';
+                previewCard.classList.add('active');
+            }
+
+            // Trigger OCR Extraction
+            runOCRExtraction(file);
+        }
+
+        function clearImagePreview() {
+            const previewCard = document.getElementById('dropzonePreview');
+            const previewThumb = document.getElementById('previewThumbnail');
+            const fileInput = document.getElementById('imageFileInput');
+
+            if (previewCard) previewCard.classList.remove('active');
+            if (previewThumb) previewThumb.src = '';
+            if (fileInput) fileInput.value = '';
+
+            const container = document.getElementById('ocrProgressContainer');
+            if (container) container.classList.remove('active');
+        }
+
+        /**
+         * Task 3.4: WebRTC Camera Controller & Snapshot Capture
+         */
+        async function openCameraModal() {
+            const modal = document.getElementById('cameraModal');
+            if (modal) {
+                modal.classList.add('active');
+                await startCameraStream(currentFacingMode);
+            }
+        }
+
+        function closeCameraModal() {
+            stopCameraStream();
+            const modal = document.getElementById('cameraModal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        }
+
+        async function startCameraStream(facingMode = 'environment') {
+            currentFacingMode = facingMode;
+            stopCameraStream();
+
+            const video = document.getElementById('cameraVideo');
+            if (!video) return;
+
+            try {
+                // Request camera with high resolution and specified facingMode
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: facingMode },
+                        width: { ideal: 1280, min: 640 },
+                        height: { ideal: 720, min: 480 }
+                    },
+                    audio: false
+                };
+
+                let stream;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (e) {
+                    // Fallback to generic video if facingMode constraint fails
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                }
+
+                cameraStream = stream;
+                video.srcObject = stream;
+                await video.play();
+            } catch (err) {
+                console.error('[WebRTC Camera Error]:', err);
+                alert(`ไม่สามารถเปิดใช้งานกล้องได้: ${err.message || 'กรุณาอนุญาตการเข้าถึงกล้องบนเบราว์เซอร์'}`);
+                closeCameraModal();
+            }
+        }
+
+        function stopCameraStream() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            const video = document.getElementById('cameraVideo');
+            if (video) {
+                video.srcObject = null;
+            }
+        }
+
+        async function switchCamera() {
+            currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+            await startCameraStream(currentFacingMode);
+        }
+
+        function captureCameraSnapshot() {
+            const video = document.getElementById('cameraVideo');
+            const canvas = document.getElementById('cameraCaptureCanvas');
+            if (!video || !canvas) return;
+
+            const vw = video.videoWidth || 1280;
+            const vh = video.videoHeight || 720;
+
+            canvas.width = vw;
+            canvas.height = vh;
+            const cctx = canvas.getContext('2d');
+            cctx.drawImage(video, 0, 0, vw, vh);
+
+            // Set preview thumbnail in dropzone
+            const previewCard = document.getElementById('dropzonePreview');
+            const previewThumb = document.getElementById('previewThumbnail');
+            const previewName = document.getElementById('previewFilename');
+
+            if (previewCard && previewThumb && previewName) {
+                previewThumb.src = canvas.toDataURL('image/jpeg', 0.85);
+                previewName.innerText = `Camera_Snapshot_${new Date().toLocaleTimeString().replace(/:/g, '-')}.jpg`;
+                previewCard.classList.add('active');
+            }
+
+            // Close camera modal and trigger OCR extraction
+            closeCameraModal();
+            runOCRExtraction(canvas);
+        }
+
+        /**
+         * Initialize all OCR & Camera UI Event Listeners
+         */
+        function initOCRHandlers() {
+            const dropzone = document.getElementById('ocrDropzone');
+            const fileInput = document.getElementById('imageFileInput');
+            const btnBrowse = document.getElementById('btnTriggerFileBrowse');
+            const btnRemove = document.getElementById('btnRemoveImage');
+            const btnOpenCam = document.getElementById('btnOpenLiveCamera');
+            const btnCloseCam = document.getElementById('btnCloseCameraModal');
+            const btnCancelCam = document.getElementById('btnCancelCamera');
+            const btnSwitchCam = document.getElementById('btnSwitchCamera');
+            const btnCapture = document.getElementById('btnCaptureSnapshot');
+
+            // 1. File Input Trigger
+            if (btnBrowse && fileInput) {
+                btnBrowse.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    fileInput.click();
+                });
+            }
+
+            // 2. Dropzone Click to Browse
+            if (dropzone && fileInput) {
+                dropzone.addEventListener('click', (e) => {
+                    if (e.target.closest('#btnRemoveImage') || e.target.closest('.dropzone-preview.active')) {
+                        return;
+                    }
+                    fileInput.click();
+                });
+            }
+
+            // 3. File Input Change Event
+            if (fileInput) {
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                        handleImageFileSelect(e.target.files[0]);
+                    }
+                });
+            }
+
+            // 4. Remove Preview Image Button
+            if (btnRemove) {
+                btnRemove.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    clearImagePreview();
+                });
+            }
+
+            // 5. Drag and Drop Events
+            if (dropzone) {
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    dropzone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropzone.classList.add('dragover');
+                    });
+                });
+
+                ['dragleave', 'dragend'].forEach(eventName => {
+                    dropzone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropzone.classList.remove('dragover');
+                    });
+                });
+
+                dropzone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('dragover');
+
+                    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        handleImageFileSelect(e.dataTransfer.files[0]);
+                    }
+                });
+            }
+
+            // 6. Live Camera Modal Controls
+            if (btnOpenCam) {
+                btnOpenCam.addEventListener('click', openCameraModal);
+            }
+            if (btnCloseCam) {
+                btnCloseCam.addEventListener('click', closeCameraModal);
+            }
+            if (btnCancelCam) {
+                btnCancelCam.addEventListener('click', closeCameraModal);
+            }
+            if (btnSwitchCam) {
+                btnSwitchCam.addEventListener('click', switchCamera);
+            }
+            if (btnCapture) {
+                btnCapture.addEventListener('click', captureCameraSnapshot);
+            }
+
+            // 7. Tactile Navigation & Mode Switcher Controls
+            const btnPrev = document.getElementById('btnPrevPage');
+            const btnNext = document.getElementById('btnNextPage');
+            const btnMode = document.getElementById('btnToggleLanguageMode');
+            const langSelect = document.getElementById('ocrLangSelect');
+
+            if (btnPrev) {
+                btnPrev.addEventListener('click', prevBraillePage);
+            }
+            if (btnNext) {
+                btnNext.addEventListener('click', nextBraillePage);
+            }
+            if (btnMode) {
+                btnMode.addEventListener('click', () => toggleLanguageMode());
+            }
+            if (langSelect) {
+                langSelect.addEventListener('change', (e) => {
+                    const val = e.target.value;
+                    if (val === 'eng') {
+                        toggleLanguageMode('eng');
+                    } else if (val === 'tha') {
+                        toggleLanguageMode('tha');
+                    }
+                });
+            }
+
+            // 8. Global Keyboard Navigation (ArrowLeft / ArrowRight)
+            window.addEventListener('keydown', (e) => {
+                const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+                if (activeTag === 'textarea' || activeTag === 'input') {
+                    return;
+                }
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    prevBraillePage();
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    nextBraillePage();
+                }
+            });
+        }
+
         // Initialize on DOM load
         window.addEventListener('DOMContentLoaded', () => {
             initMain3D();
@@ -2646,6 +4166,7 @@
                 });
             }
             updateBrailleDisplay(); // Initial translation & 3D display update
+            initOCRHandlers(); // Bind OCR event listeners & camera buttons
         });
     </script>
 </body>
