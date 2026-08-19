@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+easyocr
+python-multipart
+pillow
+opencv-python

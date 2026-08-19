@@ -6,7 +6,7 @@
 
 ## 📌 1. ภาพรวมโปรเจกต์ (Project Overview)
 
-**BrailleLens 3D & Optical OCR System** เป็นระบบจำลองฮาร์ดแวร์อักษรเบรลล์ระดับวิศวกรรมแบบ Interactive 3D (WebGL / Three.js) ผสานกับระบบรู้จำอักขระด้วยแสง (Optical Character Recognition - OCR) ที่ประมวลผลบน Client-Side 100% ด้วย Web Workers (Tesseract.js v5) โดยไม่ต้องพึ่งพาเซิร์ฟเวอร์ภายนอก
+**BrailleLens 3D & Optical OCR System** เป็นระบบจำลองฮาร์ดแวร์อักษรเบรลล์ระดับวิศวกรรมแบบ Interactive 3D (WebGL / Three.js) ผสานกับระบบรู้จำอักขระด้วยแสง (Optical Character Recognition - OCR) ที่เน้นความแม่นยำภาษาไทยเป็นหลัก โดยส่วนหน้า (frontend) เป็น Vanilla HTML/JS แบบ Zero-Build และส่งภาพไปประมวลผลที่ Backend แยกต่างหาก (FastAPI + EasyOCR รองรับ `th` + `en`) ผ่าน HTTP - ดูวิธีติดตั้งและรัน Backend ได้ที่ [`backend/README.md`](backend/README.md)
 
 ระบบรองรับการแปลงข้อความภาษาไทย (Thai), ภาษาอังกฤษ (English Grade 1 / Alphabetic), และตัวเลข (Numeric 0-9) ให้เป็นตำแหน่งการยกตัวของหมุดเบรลล์ 6 จุดต่อเซลล์ รวม 14 เซลล์ (84 หมุด) แบบ Real-Time พร้อมระบบหน้าจอแสดงผลเสมือน (Virtual OLED/LCD HUD), โหมดผ่าโครงสร้างภายใน (X-Ray Cutaway), โหมดแยกชิ้นส่วน (Exploded View), โมเดลจำลองกลไก Bistable Electro-Cam Actuator 0W Power Latch, และ**ระบบเสียงนำทางภาษาไทย (Voice Guidance) พร้อมระบบชัตเตอร์อัตโนมัติ (Auto-Capture on Stability) สำหรับผู้พิการทางสายตา**
 
@@ -25,7 +25,7 @@
 | **📸 1.0s Rapid Auto-Capture Shutter** | เมื่อมุมทั้ง 4 เข้าสู่กรอบเป้าหมายครบถ้วนและภาพนิ่งต่อเนื่อง 1.0 วินาที ระบบจะส่งเสียง *"เข้ามุมทั้ง 4 เรียบร้อยแล้ว ถือค้างไว้นะครับ..."* พร้อมสัญญาณปี๊บและสั่งลั่นชัตเตอร์ถ่ายภาพอัตโนมัติ |
 | **🔍 Visual OCR Bounding Box Inspector** | แสดงภาพสแกนจริงบน Canvas พร้อมวาดกรอบเรืองแสงนีออน (Glowing Neon Bounding Boxes) ล้อมรอบคำทุกคำที่สแกนได้ (`result.data.words`) และพ่นป้ายข้อความกำกับบนกรอบ พร้อมปุ่มกดดูย้อนหลังได้อย่างชัดเจน |
 | **🎯 Viewfinder Crop Engine** | อัลกอริทึมตัดพิกเซลภาพเฉพาะบริเวณภายในกรอบเล็ง `.viewfinder-box` เท่านั้น ตัดขอบและพื้นหลังที่รบกวนทิ้ง 100% ทำให้ OCR แม่นยำสูงสุด |
-| **⚡ Grayscale High-Contrast Preprocessing** | กระบวนการ BT.601 Luminance, 3x3 Gaussian Noise Reduction, 3x3 Sharpening Convolution, Min-Max Dynamic Contrast Stretching, และ Auto Polarity Inversion โดยรักษา Subpixel Anti-Aliasing สำหรับ Tesseract v5 LSTM |
+| **⚡ Thai-Focused EasyOCR Backend** | ส่งภาพ (จากอัปโหลดหรือกล้อง) ไปยัง Backend (FastAPI + EasyOCR `['th','en']`, `decoder='beamsearch'`) ที่ทำ Resize, CLAHE Contrast Enhancement, Adaptive Threshold (เมื่อแสงไม่สม่ำเสมอ), และ Denoise (ปรับความแรงตามแหล่งภาพ อัปโหลด vs กล้อง) ก่อนถอดข้อความ |
 | **📑 14-Cell Tactical Pagination** | ระบบหั่นแบ่งข้อความยาวเป็นชุดละ 14 ตัวอักษร (`PAGE X/Y [start-end]`) รองรับการเปลี่ยนหน้าด้วยปุ่ม PREV / NEXT และคีย์ลัดคีย์บอร์ด `ArrowLeft` / `ArrowRight` |
 | **🌐 Single-Language Mode Switcher** | ปุ่มสลับโหมดภาษา ENG / THAI ได้ในคลิกเดียว อัปเดตทั้งพจนานุกรมเบรลล์, ตัวเลือกภาษา OCR, และข้อความตัวอย่าง Preset ทันที |
 | **⚙️ Bistable Electro-Cam Actuator Modal** | โมดูล 3D ผ่าดูการทำงานระดับกลไก 1 หมุดเบรลล์ แสดงการทำงาน 4 สถานะ (สภาวะพัก 0W, พัลส์ดันหมุด 2.4W, ตัดไฟล็อกตำแหน่ง 0W Bistable Latch, และสลับขั้วรีเซ็ต) |
@@ -48,8 +48,18 @@ braillend/
 │   ├── app.js                           # `js/app.js` Entry Point: เริ่มต้นระบบและผูก Event Listeners
 │   ├── braille-engine.js                # `js/braille-engine.js` พจนานุกรมเบรลล์, 14-Cell Chunking, และ Pagination
 │   ├── voice-guidance.js                # `js/voice-guidance.js` ระบบเสียงแนะนำภาษาไทยและการตรวจจับเป้าหมาย 4 มุม
-│   ├── ocr-engine.js                    # `js/ocr-engine.js` Viewfinder Crop, Grayscale Preprocessor, และ Tesseract.js
+│   ├── camera.js                        # `js/camera.js` Camera Stream Lifecycle, Viewfinder Crop, Frame Capture (Client-only)
+│   ├── ocr.js                           # `js/ocr.js` OCR Module - ONLY place that calls the backend `/ocr` endpoint
+│   ├── textProcessor.js                 # `js/textProcessor.js` NFC Normalize & Thai-Preserving Text Cleanup
+│   ├── demoMode.js                      # `js/demoMode.js` Hardcoded Thai Demo Sample (no network)
+│   ├── ocr-engine.js                    # `js/ocr-engine.js` OCR Orchestration & UI Glue (Dropzone, Camera Modal, Inspector)
 │   └── three-scene.js                   # `js/three-scene.js` Three.js Scene, 84-Pin Actuation, OLED, และ Exploded View
+├── backend/
+│   ├── main.py                          # FastAPI app, `POST /ocr` endpoint
+│   ├── preprocessing.py                 # OpenCV/Pillow preprocessing (resize, CLAHE, threshold, denoise)
+│   ├── ocr_engine.py                    # EasyOCR (`th`+`en`) wrapper
+│   ├── requirements.txt                 # Backend Python dependencies
+│   └── README.md                        # Backend setup & run instructions
 └── tests/
     └── test_braille_ocr_pipeline.js     # `tests/test_braille_ocr_pipeline.js` Autonomous QA Test Suite
 ```
@@ -65,10 +75,11 @@ graph TD
     Viewfinder --> CornerLock{"ตรวจจับมุมทั้ง 4 (TL, TR, BL, BR)"}
     CornerLock -- "บางมุมหลุดกรอบ" --> VoiceGuide["🗣️ เสียงแนะนำภาษาไทย\n(บอกมุมที่หลุดกรอบให้ขยับง่าย)"]
     CornerLock -- "เข้ามุมทั้ง 4 ครบ & ภาพนิ่ง 1.0s" --> AutoShutter["📸 Auto-Capture Shutter\n+ 🔔 Web Audio Beep"]
-    AutoShutter --> Crop["Viewfinder Crop Engine\n(ตัดเฉพาะพื้นที่กรอบเล็ง)"]
-    Crop --> Preprocess["Grayscale High-Contrast Preprocessing\n(BT.601 + 3x3 Denoise + Sharpen + Stretch)"]
-    Preprocess --> Tesseract["Tesseract.js v5 LSTM Worker\n(PSM 3 Auto Layout)"]
-    Tesseract --> Braille["Braille Engine & 3D Tactile Matrix\n(14 Cells / 84 Actuator Pins)"]
+    AutoShutter --> Crop["js/camera.js: captureFrameToFile()\n(Crop to Viewfinder, JPEG q=0.92)"]
+    Crop --> OcrModule["js/ocr.js: recognize()\nfetch POST /ocr (multipart)"]
+    OcrModule --> Backend["FastAPI Backend\nResize + CLAHE + Adaptive Threshold + Denoise\n-> EasyOCR ['th','en'] (beamsearch)"]
+    Backend --> TextProc["js/textProcessor.js\nNFC Normalize + Thai-Preserving Cleanup"]
+    TextProc --> Braille["Braille Engine & 3D Tactile Matrix\n(14 Cells / 84 Actuator Pins)"]
 ```
 
 ### 4.2 กลไก Bistable Electro-Cam 0W Power Latch
@@ -84,6 +95,7 @@ graph TD
 ### 1) การเปิดใช้งานโปรแกรม (Getting Started)
 - ดับเบิลคลิกเปิดไฟล์ `index.html` บนเว็บเบราว์เซอร์สมัยใหม่ (Google Chrome, Microsoft Edge, Firefox, หรือ Safari)
 - ระบบจะโหลดโมเดล 3D, จอแสดงผล OLED, และปุ่มกด Interactive 3D Buttons บนตัวเครื่องขึ้นมาโดยอัตโนมัติ
+- **สำหรับฟีเจอร์ OCR (อัปโหลดภาพ / กล้องสด)** ต้องรัน Backend ก่อน: ดูวิธีติดตั้งที่ [`backend/README.md`](backend/README.md) แล้วรัน `uvicorn main:app --port 8000` (ค้างไว้ที่ `http://localhost:8000`) - ถ้ายังไม่ได้รัน Backend ให้ลองใช้ปุ่ม `DEMO MODE` แทน ซึ่งใช้ข้อความไทยตัวอย่างที่กำหนดไว้ล่วงหน้า ไม่ต้องเชื่อมต่อ Backend
 
 ### 2) การสแกนผ่านกล้องสด, ระบบ Visual HUD 4 มุม และ Focus Gating ตรวจจับความคมชัด (Live Camera, 4-Corner HUD & Focus Gating)
 1. กดปุ่ม `สแกนกล้องสด (Live Camera)` เพื่อเปิดหน้าต่างเล็งกล้อง
@@ -115,7 +127,7 @@ node ./tests/test_braille_ocr_pipeline.js
 2. **CSS3 Stylesheet & Theme Consistency**: ตรวจสอบการปิดบล็อก Braces, CSS Variables ทั้งโหมด Dark และ Light, คลาส OCR, Voice HUD, และปุ่ม Toggle ทั้งหมด
 3. **DOM Structure & Elements ID**: ตรวจสอบ ID สำคัญครบทุกจุด (Dropzone, Camera, Viewfinder, Voice Guidance, Auto-Capture, Pagination, Language Toggle)
 4. **JavaScript VM Syntax & Sandboxing**: คอมไพล์ไฟล์ JS ทั้งหมดผ่าน Node `vm.Script` รับประกันว่าปราศจาก Syntax Error 100%
-5. **Logic & Algorithms QA**: ทดสอบ Viewfinder Crop, Grayscale High-Contrast Preprocessing, PSM 3 Configuration, Voice Guidance Phrases, Auto-Capture Timer Math, 14-Cell Chunking, และพจนานุกรมเบรลล์
+5. **Logic & Algorithms QA**: ทดสอบ Viewfinder Crop, OCR Module Separation (`js/ocr.js` / `js/camera.js` / `js/textProcessor.js` / `js/demoMode.js`), Backend Preprocessing Pipeline (`backend/preprocessing.py`), Voice Guidance Phrases, Auto-Capture Timer Math, 14-Cell Chunking, และพจนานุกรมเบรลล์
 
 ---
 

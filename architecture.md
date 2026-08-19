@@ -24,7 +24,9 @@ Version: 3.1.0 (Modular Codebase Standard)
 | **3D Graphics Engine** | Three.js & OrbitControls | r128 | Interactive 3D WebGL rendering, shaders, lighting, exploded view |
 | **Styling & UI Design** | CSS3 Custom Properties (Dark/Light Mode) | Modern CSS | Cyber-tactical UI, glassmorphism, responsive control panel (`css/styles.css`) |
 | **Icons & Typography** | FontAwesome 6, Google Fonts (Prompt, JetBrains Mono) | 6.4.0 CDN | Tactical icons, monospace telemetry fonts, Thai glyph support |
-| **Client-Side OCR Engine** | Tesseract.js | v5 (CDN) | In-browser multi-language OCR (`tha`, `eng`, `tha+eng`) via Web Workers |
+| **OCR Engine (Backend)** | EasyOCR (Python) | 1.7.x | Thai + English OCR (`['th','en']`, `decoder='beamsearch'`, `paragraph=False`) served via FastAPI over HTTP |
+| **OCR Backend Framework** | FastAPI + Uvicorn | latest | `POST /ocr` multipart endpoint, CORS-enabled for local frontend |
+| **Server-Side Preprocessing** | OpenCV / Pillow | latest | Resize, CLAHE contrast enhancement, adaptive threshold, source-aware denoise |
 | **Image Preprocessing** | HTML5 Canvas 2D Context | Native API | 2x/3x upscaling, 3x3 convolution sharpening, adaptive binarization |
 | **Live Video Capture** | WebRTC `navigator.mediaDevices.getUserMedia` | Native API | Live camera stream, facing mode toggle, shutter capture |
 
@@ -44,8 +46,17 @@ braillend/
 ├── js/
 │   ├── app.js                           # Entry Point & Event Dispatcher
 │   ├── braille-engine.js                # Braille Mapping, 14-Cell Chunking, & Pagination
-│   ├── ocr-engine.js                    # Canvas Preprocessor, Tesseract Worker, & Camera
+│   ├── camera.js                        # Camera Stream Lifecycle, Viewfinder Crop, Frame Capture (client-only)
+│   ├── ocr.js                           # OCR Module - only place that calls the backend /ocr endpoint
+│   ├── textProcessor.js                 # NFC Normalization & Thai-Preserving Text Cleanup
+│   ├── demoMode.js                      # Hardcoded Thai Demo Sample (no network)
+│   ├── ocr-engine.js                    # OCR Orchestration & UI Glue (Dropzone, Camera Modal, Inspector)
 │   └── three-scene.js                   # Three.js 3D Viewport, Actuator Array, & OLED Texture
+├── backend/
+│   ├── main.py                          # FastAPI app, POST /ocr endpoint
+│   ├── preprocessing.py                 # OpenCV/Pillow preprocessing pipeline
+│   ├── ocr_engine.py                    # EasyOCR (th+en) wrapper
+│   └── requirements.txt                 # Backend Python dependencies
 └── tests/
     └── test_braille_ocr_pipeline.js     # Sandboxed QA Verification Suite
 ```
@@ -62,10 +73,12 @@ graph TD
         LiveCamera["Live Camera Feed\n(WebRTC Stream)"]
     end
 
-    subgraph "OCR & Vision Processing Subsystem (js/ocr-engine.js)"
-        ImagePreprocessor["Canvas 2D Preprocessor\n- 2x/3x Upscaling\n- 3x3 Convolution Sharpening\n- Bradley Adaptive Binarization"]
-        TesseractEngine["Tesseract.js Engine\n(Web Worker / tha + eng / PSM 6)"]
-        OCRFeedback["OCR Progress HUD &\nConfidence Indicator"]
+    subgraph "OCR & Vision Processing Subsystem"
+        CameraModule["js/camera.js\nCapture Frame -> JPEG File (q=0.92)"]
+        OcrModule["js/ocr.js\nrecognize(): fetch POST /ocr"]
+        Backend["FastAPI Backend\nResize + CLAHE + Adaptive Threshold + Denoise\n-> EasyOCR ['th','en'] (beamsearch)"]
+        TextProcessor["js/textProcessor.js\nNFC Normalize + Thai-Preserving Cleanup"]
+        OCRFeedback["OCR Progress HUD &\nConfidence Indicator (js/ocr-engine.js)"]
     end
 
     subgraph "Translation & Dispatcher Core (js/braille-engine.js)"
@@ -81,11 +94,12 @@ graph TD
     end
 
     ManualInput --> TextSanitizer
-    ImageUpload --> ImagePreprocessor
-    LiveCamera --> ImagePreprocessor
-    ImagePreprocessor --> TesseractEngine
-    TesseractEngine --> OCRFeedback
-    TesseractEngine --> TextSanitizer
+    ImageUpload --> OcrModule
+    LiveCamera --> CameraModule --> OcrModule
+    OcrModule --> Backend
+    Backend --> OCRFeedback
+    Backend --> TextProcessor
+    TextProcessor --> TextSanitizer
     TextSanitizer --> BrailleEngine
     BrailleEngine --> OLEDDisplay
     BrailleEngine --> ThreeJSScene
@@ -98,27 +112,29 @@ graph TD
 ## 5. Component Structure & Data Flow
 
 ### 5.1 OCR Subsystem Data Flow
-1. **Source Acquisition (`js/ocr-engine.js`)**:
-   - **Upload**: User drops or selects an image file $\rightarrow$ `FileReader` converts to DataURL / `HTMLImageElement`.
-   - **Live Camera**: User opens Camera Modal $\rightarrow$ `navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })` streams video $\rightarrow$ User presses Capture $\rightarrow$ snapshot rendered to hidden canvas.
-2. **Image Preprocessing (`preprocessImageForOCR`)**:
-   - Grayscale conversion: $Y = 0.299R + 0.587G + 0.114B$
-   - 3x3 Convolution Sharpening Kernel $[0, -1, 0; -1, 5, -1; 0, -1, 0]$
-   - Min-Max Contrast Dynamic Stretching.
-   - Fast Bradley Adaptive Integral Local Thresholding.
-3. **Tesseract Worker Execution (`runOCRExtraction`)**:
-   - Tesseract.js Worker initialized with language configuration (`tha+eng` / `PSM 6`).
-   - Progress callbacks update real-time progress bar and state indicators on UI.
-   - Result string extracted, cleaned, and injected into `thaiInput` textarea.
-4. **Trigger Actuation (`applyOCRResultToSystem` & `updateBrailleDisplay`)**:
+1. **Source Acquisition**:
+   - **Upload**: User drops or selects an image file in `js/ocr-engine.js` (`handleImageFileSelect`) $\rightarrow$ File object passed directly into the unified pipeline.
+   - **Live Camera**: User opens Camera Modal $\rightarrow$ `js/camera.js`'s `startCameraStream()` runs `navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })` $\rightarrow$ User presses Capture (or auto-capture fires) $\rightarrow$ `captureFrameToFile()` crops the viewfinder region and exports a JPEG File (q=0.92).
+   - Both paths converge on the **same** `runOcrPipeline(file, documentSource)` in `js/ocr-engine.js` - `documentSource: 'upload' | 'camera'` is a UI label only, passed through to the backend purely to tune preprocessing intensity.
+2. **OCR Call (`js/ocr.js` - the only module that knows how OCR is performed)**:
+   - `recognize(file, documentSource)` POSTs multipart form data to the FastAPI backend's `POST /ocr`.
+3. **Server-Side Preprocessing & Recognition (`backend/preprocessing.py`, `backend/ocr_engine.py`)**:
+   - Resize so the shorter side is >= 640px, grayscale, CLAHE contrast enhancement (critical for small Thai tone/vowel marks), adaptive threshold when lighting looks uneven, and denoise (stronger for `documentSource: 'camera'`).
+   - `easyocr.Reader(['th', 'en'])` runs `readtext(decoder='beamsearch', paragraph=False)`, returning per-word text, axis-aligned bounding boxes, and confidence (0-100 scale).
+4. **Text Normalization (`js/textProcessor.js`)**:
+   - Unicode NFC normalization (required so Thai combining tone/vowel marks compose correctly), preserves the Thai Unicode block plus latin/digits/punctuation, collapses whitespace, and never forces uppercase (Thai has no case).
+   - If overall confidence is below ~50%, the pipeline surfaces an "image unclear, try again" message instead of passing text to the Braille engine.
+5. **Trigger Actuation (`applyOCRResultToSystem` & `updateBrailleDisplay`)**:
    - Updates 3D OLED screen texture.
    - Actuates 84 tactile pins in Three.js scene with smooth easing interpolation.
    - Pulses DATA LED and updates 2D Matrix HUD cards.
 
+**Demo Mode** (`js/demoMode.js`) bypasses this entire pipeline: it returns a hardcoded Thai sample string after an artificial delay, useful for showcasing the app without a camera or a running backend.
+
 ---
 
 ## 6. Security, Performance & Fallback Protocols
-- **Client-Side Privacy**: All OCR processing occurs locally in browser Web Workers. No images or camera streams are transmitted to external servers.
+- **OCR Backend Boundary**: Captured/uploaded images are sent over HTTP to the local OCR backend (`http://localhost:8000`) for processing - this is no longer a fully client-side pipeline. Run the backend on a trusted machine/network; it is intended for local development, not public exposure without additional hardening (auth, TLS, rate limiting).
 - **Hardware Acceleration**: Three.js WebGL and Canvas 2D pipelines utilize GPU acceleration for 60 FPS rendering.
 - **Resource Cleanup**: Camera video tracks are immediately stopped (`track.stop()`) when modal is closed to prevent battery drain and camera lock.
 - **Error Handling**: Graceful fallback when camera permission is denied, image cannot be parsed, or low OCR confidence is detected.

@@ -784,6 +784,19 @@ textarea:focus {
     color: var(--text-main);
 }
 
+.ocr-lang-badge {
+    background: rgba(var(--inset-rgb), 0.9);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: var(--accent-cyan);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: default;
+    user-select: none;
+}
+
 /* Drag & Drop Zone */
 .dropzone {
     position: relative;
@@ -960,6 +973,18 @@ textarea:focus {
     background: var(--accent-emerald);
     color: var(--on-accent-text);
     box-shadow: 0 0 14px rgba(0, 255, 136, 0.4);
+}
+
+.ocr-btn-demo {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.08);
+    color: var(--accent-amber);
+}
+
+.ocr-btn-demo:hover {
+    background: var(--accent-amber);
+    color: var(--on-accent-text);
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
 }
 
 /* OCR Progress HUD & Telemetry Status */
@@ -1503,7 +1528,8 @@ body.light-mode .dropzone.dragover {
     border-color: var(--accent-emerald);
 }
 
-body.light-mode .ocr-lang-select {
+body.light-mode .ocr-lang-select,
+body.light-mode .ocr-lang-badge {
     background: #FFFFFF;
     border-color: rgba(8, 145, 178, 0.4);
     color: var(--accent-cyan);
