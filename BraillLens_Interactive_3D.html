@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
     <title>BraillLens 3D - Tactical Braille Hardware Simulator</title>
     <!-- Three.js and OrbitControls from reliable CDNs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -27,6 +28,52 @@
             --accent-amber: #FFB800;
             --text-main: #E2E8F0;
             --text-muted: #94A3B8;
+
+            /* Translucent surface tokens (RGB channels only, so each rule keeps its own alpha) */
+            --overlay-rgb: 255, 255, 255;   /* subtle hairline borders / hover fills atop panels */
+            --panel-rgb: 14, 21, 38;        /* header / control-panel / cam-btn / status-overlay */
+            --inset-rgb: 7, 10, 19;         /* recessed inputs: textarea, cell-card, mech-controls */
+            --well-rgb: 0, 0, 0;            /* deepest recessed wells: mech-params, dot grid */
+            --on-accent-text: #000000;      /* text/icon color sitting on a solid accent-colored fill */
+
+            --label-bg: rgba(14, 21, 38, 0.92);
+            --label-glow: 0 0 12px rgba(0, 255, 136, 0.25);
+
+            --viewport-grad-1: #111A2E;
+            --viewport-grad-2: #070A13;
+            --mech-grad-1: #151F36;
+            --mech-grad-2: #080D1A;
+
+            color-scheme: dark;
+        }
+
+        /* LIGHT MODE THEME OVERRIDE — toggled via body.light-mode by toggleLightMode() */
+        body.light-mode {
+            --bg-dark: #F5F7FA;
+            --bg-panel: #FFFFFF;
+            --bg-card: #F0F2F5;
+            --accent-cyan: #0891B2;
+            --accent-emerald: #059669;
+            --accent-magenta: #DB2777;
+            --accent-amber: #B45309;
+            --text-main: #1A202C;
+            --text-muted: #64748B;
+
+            --overlay-rgb: 15, 23, 42;
+            --panel-rgb: 255, 255, 255;
+            --inset-rgb: 226, 232, 240;
+            --well-rgb: 203, 213, 225;
+            --on-accent-text: #FFFFFF;
+
+            --label-bg: rgba(255, 255, 255, 0.97);
+            --label-glow: 0 4px 16px rgba(15, 23, 42, 0.18);
+
+            --viewport-grad-1: #E2E8F0;
+            --viewport-grad-2: #F5F7FA;
+            --mech-grad-1: #E8ECF2;
+            --mech-grad-2: #FFFFFF;
+
+            color-scheme: light;
         }
 
         * {
@@ -34,6 +81,7 @@
             margin: 0;
             padding: 0;
             user-select: none;
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
         }
 
         body {
@@ -49,7 +97,7 @@
         /* Top Header Navigation */
         header {
             height: 60px;
-            background: rgba(14, 21, 38, 0.95);
+            background: rgba(var(--panel-rgb), 0.95);
             backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(0, 240, 255, 0.2);
             display: flex;
@@ -73,7 +121,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #000;
+            color: var(--on-accent-text);
             font-size: 20px;
             box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
         }
@@ -82,8 +130,9 @@
             font-size: 20px;
             font-weight: 700;
             letter-spacing: 0.5px;
-            background: linear-gradient(90deg, #FFFFFF, var(--accent-cyan));
+            background: linear-gradient(90deg, var(--text-main), var(--accent-cyan));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -106,8 +155,8 @@
             font-family: 'Prompt', sans-serif;
             padding: 8px 16px;
             border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(var(--overlay-rgb), 0.15);
+            background: rgba(var(--overlay-rgb), 0.05);
             color: var(--text-main);
             font-size: 13px;
             font-weight: 500;
@@ -122,7 +171,7 @@
             background: rgba(0, 240, 255, 0.15);
             border-color: var(--accent-cyan);
             box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
-            color: #FFF;
+            color: var(--text-main);
         }
 
         .btn-cyan {
@@ -133,7 +182,7 @@
 
         .btn-cyan.active, .btn-cyan:hover {
             background: var(--accent-cyan);
-            color: #000;
+            color: var(--on-accent-text);
             box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
         }
 
@@ -161,7 +210,7 @@
         .viewport-section {
             flex: 1;
             position: relative;
-            background: radial-gradient(circle at center, #111A2E 0%, #070A13 100%);
+            background: radial-gradient(circle at center, var(--viewport-grad-1) 0%, var(--viewport-grad-2) 100%);
             display: flex;
             flex-direction: column;
         }
@@ -187,8 +236,8 @@
         }
 
         .cam-btn {
-            background: rgba(14, 21, 38, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(var(--panel-rgb), 0.85);
+            border: 1px solid rgba(var(--overlay-rgb), 0.1);
             color: var(--text-muted);
             padding: 6px 12px;
             border-radius: 4px;
@@ -209,7 +258,7 @@
             position: absolute;
             bottom: 16px;
             left: 16px;
-            background: rgba(14, 21, 38, 0.85);
+            background: rgba(var(--panel-rgb), 0.85);
             border: 1px solid rgba(0, 240, 255, 0.2);
             border-radius: 8px;
             padding: 10px 16px;
@@ -243,7 +292,7 @@
         /* Right Control Panel */
         .control-panel {
             width: 440px;
-            background: rgba(14, 21, 38, 0.95);
+            background: rgba(var(--panel-rgb), 0.95);
             border-left: 1px solid rgba(0, 240, 255, 0.15);
             display: flex;
             flex-direction: column;
@@ -253,7 +302,7 @@
 
         .panel-section {
             padding: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid rgba(var(--overlay-rgb), 0.08);
         }
 
         .section-title {
@@ -278,11 +327,11 @@
         textarea {
             width: 100%;
             height: 80px;
-            background: rgba(7, 10, 19, 0.8);
+            background: rgba(var(--inset-rgb), 0.8);
             border: 1px solid rgba(0, 240, 255, 0.3);
             border-radius: 6px;
             padding: 10px;
-            color: #FFF;
+            color: var(--text-main);
             font-family: 'Prompt', sans-serif;
             font-size: 15px;
             resize: none;
@@ -302,8 +351,8 @@
         }
 
         .preset-chip {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(var(--overlay-rgb), 0.05);
+            border: 1px solid rgba(var(--overlay-rgb), 0.1);
             border-radius: 12px;
             padding: 4px 10px;
             font-size: 12px;
@@ -324,7 +373,7 @@
             background: linear-gradient(135deg, var(--accent-cyan), var(--accent-emerald));
             border: none;
             border-radius: 6px;
-            color: #000;
+            color: var(--on-accent-text);
             font-family: 'Prompt', sans-serif;
             font-size: 15px;
             font-weight: 700;
@@ -353,8 +402,8 @@
         }
 
         .cell-card {
-            background: rgba(7, 10, 19, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(var(--inset-rgb), 0.6);
+            border: 1px solid rgba(var(--overlay-rgb), 0.08);
             border-radius: 8px;
             padding: 10px;
             display: flex;
@@ -383,7 +432,7 @@
         .cell-char {
             font-size: 18px;
             font-weight: 700;
-            color: #FFF;
+            color: var(--text-main);
         }
 
         .cell-dots-grid {
@@ -391,7 +440,7 @@
             grid-template-columns: repeat(2, 12px);
             grid-template-rows: repeat(3, 12px);
             gap: 4px;
-            background: rgba(0, 0, 0, 0.4);
+            background: rgba(var(--well-rgb), 0.4);
             padding: 6px;
             border-radius: 6px;
         }
@@ -400,7 +449,7 @@
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(var(--overlay-rgb), 0.15);
             transition: all 0.2s;
         }
 
@@ -445,7 +494,7 @@
             flex-direction: column;
             overflow: hidden;
             transform: scale(0.95);
-            transition: transform 0.3s ease;
+            transition: transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
         }
 
         .modal-backdrop.active .modal-card {
@@ -454,7 +503,7 @@
 
         .modal-header {
             padding: 16px 24px;
-            background: rgba(7, 10, 19, 0.8);
+            background: rgba(var(--inset-rgb), 0.8);
             border-bottom: 1px solid rgba(0, 240, 255, 0.2);
             display: flex;
             justify-content: space-between;
@@ -492,7 +541,7 @@
         .mech-canvas-container {
             flex: 1.2;
             position: relative;
-            background: radial-gradient(circle at center, #151F36 0%, #080D1A 100%);
+            background: radial-gradient(circle at center, var(--mech-grad-1) 0%, var(--mech-grad-2) 100%);
         }
 
         #mech-canvas {
@@ -503,8 +552,8 @@
         .mech-controls {
             flex: 1;
             padding: 24px;
-            background: rgba(7, 10, 19, 0.5);
-            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(var(--inset-rgb), 0.5);
+            border-left: 1px solid rgba(var(--overlay-rgb), 0.08);
             display: flex;
             flex-direction: column;
             gap: 16px;
@@ -520,8 +569,8 @@
         .state-btn {
             padding: 10px 12px;
             border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(var(--overlay-rgb), 0.1);
+            background: rgba(var(--overlay-rgb), 0.04);
             color: var(--text-main);
             font-size: 12px;
             font-weight: 600;
@@ -541,7 +590,7 @@
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 10px;
-            background: rgba(0, 0, 0, 0.4);
+            background: rgba(var(--well-rgb), 0.4);
             padding: 12px;
             border-radius: 8px;
             font-family: 'JetBrains Mono', monospace;
@@ -572,6 +621,127 @@
             color: var(--accent-emerald);
             font-weight: 700;
         }
+
+        /* ===================== EXPLODED VIEW FEATURE ===================== */
+        .exploded-lines-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 6;
+            overflow: visible;
+        }
+
+        .exploded-labels-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 7;
+        }
+
+        .exploded-line {
+            stroke: var(--accent-emerald);
+            stroke-width: 1.4;
+            stroke-dasharray: 4 3;
+            opacity: 0;
+            transition: opacity 0.3s ease, stroke 0.3s ease;
+        }
+
+        .exploded-line.visible {
+            opacity: 0.85;
+        }
+
+        .exploded-label {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--label-bg);
+            border: 1px solid var(--accent-emerald);
+            border-radius: 20px;
+            padding: 5px 12px 5px 5px;
+            font-family: 'Prompt', sans-serif;
+            white-space: nowrap;
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0.9);
+            transition: opacity 0.3s ease, transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: var(--label-glow);
+        }
+
+        .exploded-label.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .exploded-label-num {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent-emerald);
+            color: var(--on-accent-text);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .exploded-label-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.25;
+        }
+
+        .exploded-label-th {
+            color: var(--text-main);
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .exploded-label-en {
+            color: var(--accent-cyan);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+        }
+
+        .exploded-slider-wrap {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: var(--label-bg);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 8px;
+            padding: 10px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-muted);
+            z-index: 8;
+            backdrop-filter: blur(5px);
+            width: 220px;
+        }
+
+        .exploded-slider-wrap label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--accent-emerald);
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .exploded-slider-wrap input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-emerald);
+        }
     </style>
 </head>
 <body>
@@ -586,11 +756,17 @@
             <button class="btn btn-cyan" id="xrayBtn" onclick="toggleXRay()">
                 <i class="fa-solid fa-eye"></i> 👁️ โหมดกล่องโปร่งใส (X-Ray Cutaway)
             </button>
+            <button class="btn btn-cyan" id="explodedBtn" onclick="toggleExplodedView()">
+                <i class="fa-solid fa-layer-group"></i> 🧩 โหมดแยกชิ้นส่วน (Exploded View)
+            </button>
             <button class="btn btn-magenta" onclick="openMechanismModal()">
                 <i class="fa-solid fa-gear"></i> ⚙️ ดูการทำงานภายใน (Mechanism Modal)
             </button>
             <button class="btn" id="presentBtn" onclick="togglePresentation()">
                 <i class="fa-solid fa-play"></i> 🎬 Presentation Mode
+            </button>
+            <button class="btn" id="lightModeBtn" onclick="toggleLightMode()">
+                <i class="fa-solid fa-sun"></i> ☀️ โหมดสว่าง (Light Mode)
             </button>
         </div>
     </header>
@@ -608,6 +784,17 @@
             </div>
 
             <div id="webgl-container"></div>
+
+            <!-- Exploded View Labels & Leader Lines Overlay -->
+            <svg id="explodedLinesSvg" class="exploded-lines-svg"></svg>
+            <div id="explodedLabelsLayer" class="exploded-labels-layer"></div>
+
+            <!-- Exploded View Depth Slider -->
+            <div class="exploded-slider-wrap" id="explodedSliderWrap" style="display:none;">
+                <label for="explodedSlider"><i class="fa-solid fa-arrows-up-down"></i> ระยะแยกชิ้นส่วน (Explode Depth)</label>
+                <input type="range" id="explodedSlider" min="0" max="100" value="100" oninput="setExplodedAmount(this.value)">
+                <span id="explodedSliderVal" style="font-family:'JetBrains Mono', monospace; color:var(--accent-cyan);">100%</span>
+            </div>
 
             <div class="status-overlay">
                 <div class="status-item">
@@ -739,9 +926,47 @@
         let currentText = 'สวัสดีครับ';
         let ledDataMesh, ledPwrMesh, ledFlashMesh;
         let pcbMesh, internalGroup;
+        let tftPcbMesh, bezelRim, oledGlass, rearGroup;
+        let ledFront, ledBack, dividerMesh, stripeMesh, pwrRing;
+        let ambientLightRef;
         let isXRay = false;
         let isPresenting = false;
         let presentInterval = null;
+
+        // Light/Dark Mode State
+        let isLightMode = false;
+
+        // Restore saved theme as early as possible (script runs at end of <body>, so
+        // the header/button markup above it already exists) to avoid a flash of the wrong theme.
+        (function restoreSavedTheme() {
+            let savedTheme = 'dark';
+            try {
+                savedTheme = localStorage.getItem('braillens-theme') || 'dark';
+            } catch (e) {
+                // localStorage unavailable (private browsing, etc.) — default to dark mode
+            }
+            if (savedTheme === 'light') {
+                isLightMode = true;
+                document.body.classList.add('light-mode');
+                const btn = document.getElementById('lightModeBtn');
+                if (btn) {
+                    btn.innerHTML = '<i class="fa-solid fa-moon"></i> 🌙 โหมดมืด (Dark Mode)';
+                }
+            }
+        })();
+
+        // Exploded View State
+        let isExploded = false;
+        let explodedLayers = [];
+        let explodedProgress = 0;      // current tweened 0..1 explode amount actually applied
+        let explodedAnimFrom = 0;
+        let explodedAnimTo = 0;
+        let explodedAnimStart = 0;
+        let explodedAnimDuration = 1000; // ms
+        let explodedAmount = 1.0;      // slider-controlled max amount (0..1)
+        let explodedLabelsVisible = false;
+        let explodedLabelsLayerEl = null;
+        let explodedLinesSvg = null;
 
         // Global Target Arrays for 84 pins (14 cells * 6 pins = 84 pins)
         const pinTargetY = new Array(84).fill(0.0);
@@ -1046,8 +1271,8 @@
             controls.target.set(0, 0, -0.5);
 
             // Lighting Setup
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
-            scene.add(ambientLight);
+            ambientLightRef = new THREE.AmbientLight(0xffffff, 0.75);
+            scene.add(ambientLightRef);
 
             const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.95);
             dirLight1.position.set(10, 15, 10);
@@ -1069,6 +1294,9 @@
 
             // Create 14 Braille Cells (84 Pins, Magnets, Cams & Coils)
             createBrailleCells();
+
+            // Setup Exploded View Layer Definitions & Label Overlay DOM
+            setupExplodedLayers();
 
             // Window Resize Handler
             window.addEventListener('resize', onWindowResize);
@@ -1133,11 +1361,11 @@
             // Glowing LED Side Strips
             const ledGeo = new THREE.BoxGeometry(14.3, 0.04, 0.04);
             const ledMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-            const ledFront = new THREE.Mesh(ledGeo, ledMat);
+            ledFront = new THREE.Mesh(ledGeo, ledMat);
             ledFront.position.set(0, -0.05, 4.72);
             scene.add(ledFront);
 
-            const ledBack = new THREE.Mesh(ledGeo, ledMat);
+            ledBack = new THREE.Mesh(ledGeo, ledMat);
             ledBack.position.set(0, -0.05, -4.72);
             scene.add(ledBack);
 
@@ -1152,13 +1380,13 @@
                 emissive: 0x00f0ff,
                 emissiveIntensity: 0.15
             });
-            const dividerMesh = new THREE.Mesh(dividerGeo, dividerMat);
+            dividerMesh = new THREE.Mesh(dividerGeo, dividerMat);
             dividerMesh.position.set(0, 0.01, -0.5);
             scene.add(dividerMesh);
 
             const stripeGeo = new THREE.BoxGeometry(13.8, 0.01, 0.05);
             const stripeMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-            const stripeMesh = new THREE.Mesh(stripeGeo, stripeMat);
+            stripeMesh = new THREE.Mesh(stripeGeo, stripeMat);
             stripeMesh.position.set(0, 0.041, -0.5);
             scene.add(stripeMesh);
 
@@ -1253,7 +1481,7 @@
             // 1. Black PCB Frame Base
             const tftPcbGeo = new THREE.BoxGeometry(6.8, 0.06, 3.2);
             const tftPcbMat = new THREE.MeshStandardMaterial({ color: 0x0f141d, metalness: 0.6, roughness: 0.3 });
-            const tftPcbMesh = new THREE.Mesh(tftPcbGeo, tftPcbMat);
+            tftPcbMesh = new THREE.Mesh(tftPcbGeo, tftPcbMat);
             tftPcbMesh.position.set(0, 0.78, -2.6);
             scene.add(tftPcbMesh);
 
@@ -1281,7 +1509,7 @@
             // 3. Metallic Bezel Border around 3.5" Glass
             const bezelRimGeo = new THREE.BoxGeometry(6.6, 0.02, 3.2);
             const bezelRimMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.2 });
-            const bezelRim = new THREE.Mesh(bezelRimGeo, bezelRimMat);
+            bezelRim = new THREE.Mesh(bezelRimGeo, bezelRimMat);
             bezelRim.position.set(0, 0.81, -2.6);
             scene.add(bezelRim);
 
@@ -1303,7 +1531,7 @@
                 roughness: 0.05,
                 transmission: 0.95
             });
-            const oledGlass = new THREE.Mesh(oledGlassGeo, oledGlassMat);
+            oledGlass = new THREE.Mesh(oledGlassGeo, oledGlassMat);
             oledGlass.rotation.x = -Math.PI / 2;
             oledGlass.position.set(0, 0.825, -2.6);
             scene.add(oledGlass);
@@ -1324,7 +1552,7 @@
 
             const pwrRingGeo = new THREE.TorusGeometry(0.28, 0.025, 16, 32);
             const pwrRingMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
-            const pwrRing = new THREE.Mesh(pwrRingGeo, pwrRingMat);
+            pwrRing = new THREE.Mesh(pwrRingGeo, pwrRingMat);
             pwrRing.rotation.x = Math.PI / 2;
             pwrRing.position.set(5.2, 0.845, -2.6);
             scene.add(pwrRing);
@@ -1363,7 +1591,7 @@
             // =========================================================================
             // REAR FACE: CAMERA ASSEMBLY (LENS, LASER SCANNER, FLASH)
             // =========================================================================
-            const rearGroup = new THREE.Group();
+            rearGroup = new THREE.Group();
             rearGroup.position.set(0, -1.2, -2.6);
 
             const camIslandGeo = new THREE.BoxGeometry(4.4, 0.08, 2.2);
@@ -1599,6 +1827,21 @@
                 }
             }
 
+            // Exploded View: Smooth Ease-In-Out Tween & Layer Position/Label Updates
+            if (explodedLayers.length) {
+                if (explodedAnimStart) {
+                    const elapsed = performance.now() - explodedAnimStart;
+                    const t = Math.min(elapsed / explodedAnimDuration, 1);
+                    explodedProgress = explodedAnimFrom + (explodedAnimTo - explodedAnimFrom) * easeInOutCubic(t);
+                    if (t >= 1) {
+                        explodedProgress = explodedAnimTo;
+                        explodedAnimStart = 0;
+                    }
+                }
+                applyExplodedLayerPositions();
+                if (explodedLabelsVisible) updateExplodedLabelPositions();
+            }
+
             if (renderer && scene && camera) {
                 renderer.render(scene, camera);
             }
@@ -1639,6 +1882,296 @@
                     btnOverlay.innerHTML = '<i class="fa-solid fa-eye"></i> โหมดกล่องโปร่งใส (X-Ray)';
                 }
             }
+        }
+
+        /* ===================== EXPLODED VIEW FEATURE ===================== */
+
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        /* Build the 6 hardware layers (bottom -> top) used for the exploded diagram,
+           record each object's resting Y so offsets can be added/removed non-destructively,
+           and build the matching HTML label / SVG leader-line overlay. */
+        function setupExplodedLayers() {
+            explodedLayers = [
+                {
+                    id: 1,
+                    nameTh: 'เคสล่าง / แบตเตอรี่',
+                    nameEn: 'Bottom Case / Battery',
+                    offset: 0,
+                    objects: [],
+                    anchor: new THREE.Vector3(0, -1.35, 3.6)
+                },
+                {
+                    id: 2,
+                    nameTh: 'แผงวงจรหลัก (PCB)',
+                    nameEn: 'Main PCB Board',
+                    offset: 1.5,
+                    objects: internalGroup ? [internalGroup] : []
+                },
+                {
+                    id: 3,
+                    nameTh: 'ชุดกล้องด้านหลัง',
+                    nameEn: 'Rear Camera Module',
+                    offset: 3.0,
+                    objects: rearGroup ? [rearGroup] : []
+                },
+                {
+                    id: 4,
+                    nameTh: 'แผงหมุดเบรลล์ 14 เซลล์',
+                    nameEn: '14-Cell Braille Pin Array',
+                    offset: 4.5,
+                    objects: cellGroups.slice()
+                },
+                {
+                    id: 5,
+                    nameTh: 'ชุดจอแสดงผล TFT',
+                    nameEn: 'TFT Display Assembly',
+                    offset: 6.0,
+                    objects: [tftPcbMesh, screenMesh, oledGlass, bezelRim].filter(Boolean)
+                },
+                {
+                    id: 6,
+                    nameTh: 'เคสบน / ฝาครอบ',
+                    nameEn: 'Top Case / Cover',
+                    offset: 7.5,
+                    objects: [chassisMesh, plateMesh].filter(Boolean)
+                }
+            ];
+
+            // Snapshot each object's resting Y position (explode offset is added on top of this)
+            explodedLayers.forEach(layer => {
+                layer.baseYs = layer.objects.map(o => o.position.y);
+                // Anchor object used for label screen-projection: pick the middle object of the layer
+                layer.anchorObj = layer.objects.length ? layer.objects[Math.floor(layer.objects.length / 2)] : null;
+            });
+
+            buildExplodedLabelDOM();
+        }
+
+        function buildExplodedLabelDOM() {
+            explodedLabelsLayerEl = document.getElementById('explodedLabelsLayer');
+            explodedLinesSvg = document.getElementById('explodedLinesSvg');
+            if (!explodedLabelsLayerEl || !explodedLinesSvg) return;
+
+            explodedLabelsLayerEl.innerHTML = '';
+            explodedLinesSvg.innerHTML = '';
+
+            // Staggered left/right screen-space offsets so labels fan out like the hardware breakdown slide
+            const sideOffsets = [
+                { dx: -180, dy: 75 },
+                { dx: 180, dy: 55 },
+                { dx: -200, dy: 15 },
+                { dx: 200, dy: -15 },
+                { dx: -180, dy: -55 },
+                { dx: 180, dy: -100 }
+            ];
+
+            explodedLayers.forEach((layer, idx) => {
+                const off = sideOffsets[idx % sideOffsets.length];
+                layer.labelDX = off.dx;
+                layer.labelDY = off.dy;
+
+                const lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                lineEl.setAttribute('class', 'exploded-line');
+                explodedLinesSvg.appendChild(lineEl);
+                layer.lineEl = lineEl;
+
+                const labelEl = document.createElement('div');
+                labelEl.className = 'exploded-label';
+                labelEl.innerHTML = `
+                    <div class="exploded-label-num">${layer.id}</div>
+                    <div class="exploded-label-text">
+                        <div class="exploded-label-th">${layer.nameTh}</div>
+                        <div class="exploded-label-en">${layer.nameEn}</div>
+                    </div>
+                `;
+                explodedLabelsLayerEl.appendChild(labelEl);
+                layer.labelEl = labelEl;
+            });
+        }
+
+        function startExplodedTween(target, duration) {
+            explodedAnimFrom = explodedProgress;
+            explodedAnimTo = target;
+            explodedAnimDuration = duration || 1000;
+            explodedAnimStart = performance.now();
+        }
+
+        /* Applies the current explodedProgress (0..1) as a Y offset added on top of each
+           object's original resting position, so nothing else about the scene graph changes. */
+        function applyExplodedLayerPositions() {
+            explodedLayers.forEach(layer => {
+                layer.objects.forEach((obj, idx) => {
+                    if (!obj) return;
+                    obj.position.y = layer.baseYs[idx] + layer.offset * explodedProgress;
+                });
+            });
+        }
+
+        function worldToScreen(vector3, container) {
+            const v = vector3.clone();
+            v.project(camera);
+            const halfW = container.clientWidth / 2;
+            const halfH = container.clientHeight / 2;
+            return {
+                x: (v.x * halfW) + halfW,
+                y: -(v.y * halfH) + halfH
+            };
+        }
+
+        function updateExplodedLabelPositions() {
+            const container = document.getElementById('webgl-container');
+            if (!container || !camera) return;
+
+            explodedLayers.forEach(layer => {
+                if (!layer.labelEl) return;
+
+                let worldPos;
+                if (layer.anchorObj) {
+                    worldPos = new THREE.Vector3();
+                    layer.anchorObj.getWorldPosition(worldPos);
+                } else if (layer.anchor) {
+                    worldPos = layer.anchor;
+                } else {
+                    return;
+                }
+
+                const pt = worldToScreen(worldPos, container);
+                const labelX = pt.x + layer.labelDX;
+                const labelY = pt.y + layer.labelDY;
+
+                layer.labelEl.style.left = labelX + 'px';
+                layer.labelEl.style.top = labelY + 'px';
+
+                if (layer.lineEl) {
+                    layer.lineEl.setAttribute('x1', labelX);
+                    layer.lineEl.setAttribute('y1', labelY);
+                    layer.lineEl.setAttribute('x2', pt.x);
+                    layer.lineEl.setAttribute('y2', pt.y);
+                }
+            });
+        }
+
+        function showExplodedLabels() {
+            explodedLabelsVisible = true;
+            updateExplodedLabelPositions();
+            explodedLayers.forEach(layer => {
+                if (layer.labelEl) layer.labelEl.classList.add('visible');
+                if (layer.lineEl) layer.lineEl.classList.add('visible');
+            });
+        }
+
+        function hideExplodedLabels() {
+            explodedLabelsVisible = false;
+            explodedLayers.forEach(layer => {
+                if (layer.labelEl) layer.labelEl.classList.remove('visible');
+                if (layer.lineEl) layer.lineEl.classList.remove('visible');
+            });
+        }
+
+        /* TOGGLE EXPLODED VIEW MODE (works alongside X-Ray; does not touch OrbitControls) */
+        function toggleExplodedView() {
+            isExploded = !isExploded;
+            const btn = document.getElementById('explodedBtn');
+            const sliderWrap = document.getElementById('explodedSliderWrap');
+
+            if (isExploded) {
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> 🧩 ปิดโหมดแยกชิ้นส่วน (Exit Exploded View)';
+                }
+                if (sliderWrap) sliderWrap.style.display = 'flex';
+                startExplodedTween(explodedAmount, 1000);
+                showExplodedLabels();
+            } else {
+                if (btn) {
+                    btn.classList.remove('active');
+                    btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> 🧩 โหมดแยกชิ้นส่วน (Exploded View)';
+                }
+                if (sliderWrap) sliderWrap.style.display = 'none';
+                startExplodedTween(0, 1000);
+                hideExplodedLabels();
+            }
+        }
+
+        /* Interactive slider: rescales how far apart the exploded layers sit (0-100%) */
+        function setExplodedAmount(percent) {
+            explodedAmount = Math.max(0, Math.min(100, Number(percent))) / 100;
+            const valEl = document.getElementById('explodedSliderVal');
+            if (valEl) valEl.innerText = Math.round(explodedAmount * 100) + '%';
+            if (isExploded) startExplodedTween(explodedAmount, 300);
+        }
+
+        /* ===================== LIGHT / DARK MODE TOGGLE ===================== */
+
+        /* Re-colors the parts of the Three.js scene that don't already read from CSS
+           (page CSS vars handle the rest via body.light-mode). Only the accent
+           indicator elements move — structural hardware colors (chassis, PCB, etc.)
+           stay put since those represent the physical device, not the UI theme. */
+        function applyThemeToScene() {
+            if (!scene) return;
+
+            const cyanHex = isLightMode ? 0x0891B2 : 0x00F0FF;
+            const emeraldHex = isLightMode ? 0x059669 : 0x00FF88;
+            const amberHex = isLightMode ? 0xB45309 : 0xFFB800;
+
+            // NOTE: this renderer is alpha:true (canvas composites over the CSS behind it).
+            // In light mode we deliberately leave scene.background transparent instead of an
+            // opaque near-white Color — some GPU/driver combos mis-clear premultiplied-alpha
+            // canvases to black for very light opaque clear colors. The CSS radial-gradient on
+            // .viewport-section (--viewport-grad-1/2, already themed to light gray) shows through
+            // instead, which renders correctly everywhere. Dark mode keeps the proven opaque path.
+            if (isLightMode) {
+                scene.background = null;
+                renderer.setClearColor(0x000000, 0);
+            } else {
+                scene.background = new THREE.Color(0x070A13);
+                renderer.setClearColor(0x070A13, 1);
+            }
+
+            if (ledFront) ledFront.material.color.setHex(cyanHex);
+            if (ledBack) ledBack.material.color.setHex(cyanHex);
+            if (stripeMesh) stripeMesh.material.color.setHex(cyanHex);
+            if (dividerMesh) dividerMesh.material.emissive.setHex(cyanHex);
+            if (pwrRing) pwrRing.material.color.setHex(emeraldHex);
+            if (ledPwrMesh) ledPwrMesh.material.color.setHex(emeraldHex);
+            if (ledDataMesh) ledDataMesh.material.color.setHex(cyanHex);
+            if (ledFlashMesh) ledFlashMesh.material.color.setHex(amberHex);
+
+            // 84 Pin Coil Field-Glow Rings (base color; per-frame opacity toggle is untouched)
+            pinMeshes.forEach(p => {
+                if (p.fieldGlowRing) p.fieldGlowRing.material.color.setHex(cyanHex);
+            });
+
+            // Slightly brighter ambient light in light mode so the model doesn't read as flat/dark against a white backdrop
+            if (ambientLightRef) ambientLightRef.intensity = isLightMode ? 0.95 : 0.75;
+
+            // Mechanism modal has its own separate scene/lights — keep it in sync if it has been opened
+            if (typeof mechScene !== 'undefined' && mechScene) {
+                mechScene.background = new THREE.Color(isLightMode ? 0xF5F7FA : 0x080d1a);
+            }
+        }
+
+        function toggleLightMode() {
+            isLightMode = !isLightMode;
+            document.body.classList.toggle('light-mode', isLightMode);
+
+            const btn = document.getElementById('lightModeBtn');
+            if (btn) {
+                btn.innerHTML = isLightMode
+                    ? '<i class="fa-solid fa-moon"></i> 🌙 โหมดมืด (Dark Mode)'
+                    : '<i class="fa-solid fa-sun"></i> ☀️ โหมดสว่าง (Light Mode)';
+            }
+
+            try {
+                localStorage.setItem('braillens-theme', isLightMode ? 'light' : 'dark');
+            } catch (e) {
+                // localStorage unavailable (private browsing, etc.) — theme just won't persist
+            }
+
+            applyThemeToScene();
         }
 
         /* CAMERA CONTROLS SWITCHER */
@@ -2104,6 +2637,7 @@
         // Initialize on DOM load
         window.addEventListener('DOMContentLoaded', () => {
             initMain3D();
+            applyThemeToScene(); // Sync 3D scene colors/lighting with the restored (or default) theme
             updateScreenCanvas("สวัสดีครับ");
             const inputEl = document.getElementById('thaiInput');
             if (inputEl) {
