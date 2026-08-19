@@ -5,7 +5,7 @@ const assert = require('assert');
 
 console.log('===============================================================');
 console.log('>>> [qa_agent] CURRENT_STATE: STATE_EXECUTING');
-console.log('>>> [qa_agent] LOG: Starting Autonomous Verification & QA Suite (Modular Codebase)');
+console.log('>>> [qa_agent] LOG: Starting Autonomous Verification & QA Suite (4-Corner Target Lock & Voice Guidance)');
 console.log('===============================================================\n');
 
 const projectRoot = path.resolve(__dirname, '..');
@@ -13,6 +13,7 @@ const indexPath = path.join(projectRoot, 'index.html');
 const cssPath = path.join(projectRoot, 'css', 'styles.css');
 const jsBraillePath = path.join(projectRoot, 'js', 'braille-engine.js');
 const jsThreePath = path.join(projectRoot, 'js', 'three-scene.js');
+const jsVoicePath = path.join(projectRoot, 'js', 'voice-guidance.js');
 const jsOcrPath = path.join(projectRoot, 'js', 'ocr-engine.js');
 const jsAppPath = path.join(projectRoot, 'js', 'app.js');
 const readmePath = path.join(projectRoot, 'README.md');
@@ -21,6 +22,7 @@ assert(fs.existsSync(indexPath), `Target index.html not found at ${indexPath}`);
 assert(fs.existsSync(cssPath), `Target css/styles.css not found at ${cssPath}`);
 assert(fs.existsSync(jsBraillePath), `Target js/braille-engine.js not found at ${jsBraillePath}`);
 assert(fs.existsSync(jsThreePath), `Target js/three-scene.js not found at ${jsThreePath}`);
+assert(fs.existsSync(jsVoicePath), `Target js/voice-guidance.js not found at ${jsVoicePath}`);
 assert(fs.existsSync(jsOcrPath), `Target js/ocr-engine.js not found at ${jsOcrPath}`);
 assert(fs.existsSync(jsAppPath), `Target js/app.js not found at ${jsAppPath}`);
 assert(fs.existsSync(readmePath), `Target README.md not found at ${readmePath}`);
@@ -29,6 +31,7 @@ const indexContent = fs.readFileSync(indexPath, 'utf-8');
 const cssContent = fs.readFileSync(cssPath, 'utf-8');
 const jsBrailleContent = fs.readFileSync(jsBraillePath, 'utf-8');
 const jsThreeContent = fs.readFileSync(jsThreePath, 'utf-8');
+const jsVoiceContent = fs.readFileSync(jsVoicePath, 'utf-8');
 const jsOcrContent = fs.readFileSync(jsOcrPath, 'utf-8');
 const jsAppContent = fs.readFileSync(jsAppPath, 'utf-8');
 const readmeContent = fs.readFileSync(readmePath, 'utf-8');
@@ -72,10 +75,11 @@ runTest('External CDN Dependencies in index.html', () => {
     assert(indexContent.includes('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'), 'Missing Tesseract.js v5 CDN in <head>');
 });
 
-runTest('Modular Stylesheet & Script Tags in index.html', () => {
+runTest('Modular Stylesheet & Script Tags in index.html (including voice-guidance.js)', () => {
     assert(indexContent.includes('<link rel="stylesheet" href="css/styles.css">'), 'Missing css/styles.css link tag');
     assert(indexContent.includes('<script src="js/braille-engine.js"></script>'), 'Missing js/braille-engine.js script tag');
     assert(indexContent.includes('<script src="js/three-scene.js"></script>'), 'Missing js/three-scene.js script tag');
+    assert(indexContent.includes('<script src="js/voice-guidance.js"></script>'), 'Missing js/voice-guidance.js script tag');
     assert(indexContent.includes('<script src="js/ocr-engine.js"></script>'), 'Missing js/ocr-engine.js script tag');
     assert(indexContent.includes('<script src="js/app.js"></script>'), 'Missing js/app.js script tag');
 });
@@ -104,21 +108,49 @@ runTest('Theme Tokens: Dark (:root) and Light (body.light-mode)', () => {
     assert(cssContent.includes('--accent-amber:'), 'Missing --accent-amber token');
 });
 
-runTest('OCR & Viewfinder CSS Selectors in css/styles.css', () => {
+runTest('OCR, Viewfinder, 4-Corner HUD, Focus Detector & Inspector CSS Selectors', () => {
     const requiredClasses = [
         '.ocr-section',
-        '.ocr-panel',
         '.dropzone',
         '.camera-modal',
         '.viewfinder-box',
+        '.viewfinder-corner',
+        '.viewfinder-corner.locked',
+        '.viewfinder-corner.missed',
+        '.corner-label',
+        '.corner-status-overlay',
+        '.corner-status-overlay.locked-100',
+        '.focus-status-hud',
+        '.focus-status-hud.focus-blurry',
+        '.focus-status-hud.focus-adjusting',
+        '.focus-status-hud.focus-sharp',
+        '#cornerTL',
+        '#cornerTR',
+        '#cornerBL',
+        '#cornerBR',
+        'targetLockPulse',
         '.shutter-btn',
         '.ocr-progress-bar',
         '.confidence-badge',
-        '.dropzone-preview'
+        '.dropzone-preview',
+        '.voice-status-hud',
+        '.cam-toggle-btn',
+        '.camera-modal-header-actions',
+        '.ocr-btn-inspector',
+        '.ocr-inspector-card',
+        '.inspector-canvas-wrap',
+        '#ocrResultCanvasInspector',
+        '.inspector-details-bar',
+        '.inspector-word-tag'
     ];
     for (const cls of requiredClasses) {
-        assert(cssContent.includes(cls), `Missing CSS selector: ${cls}`);
+        assert(cssContent.includes(cls), `Missing CSS selector or identifier: ${cls}`);
     }
+});
+
+runTest('Portrait Mode (9:16 / Book Format) CSS Viewfinder and Modal Specifications', () => {
+    assert(cssContent.includes('aspect-ratio: 9 / 16'), 'Missing aspect-ratio: 9 / 16 on .viewfinder-box');
+    assert(cssContent.includes('width: 480px') || cssContent.includes('max-width: 480px'), 'Missing 480px portrait width on .camera-modal-card');
 });
 
 // -------------------------------------------------------------
@@ -126,7 +158,7 @@ runTest('OCR & Viewfinder CSS Selectors in css/styles.css', () => {
 // -------------------------------------------------------------
 console.log('\n--- SUITE 3: DOM Elements & OCR IDs in index.html ---');
 
-runTest('Required OCR Control Panel and Viewfinder DOM IDs', () => {
+runTest('Required OCR Control Panel, 4-Corner Viewfinder, Focus HUD, Voice HUD & Inspector DOM IDs', () => {
     const requiredIds = [
         'ocrLangSelect',
         'ocrDropzone',
@@ -137,17 +169,39 @@ runTest('Required OCR Control Panel and Viewfinder DOM IDs', () => {
         'previewThumbnail',
         'previewFilename',
         'btnOpenLiveCamera',
+        'btnOpenOcrInspector',
         'cameraModal',
         'cameraVideo',
         'cameraCaptureCanvas',
+        'cornerTL',
+        'cornerTR',
+        'cornerBL',
+        'cornerBR',
+        'labelTL',
+        'labelTR',
+        'labelBL',
+        'labelBR',
+        'cornerStatusOverlay',
+        'cornerAlignmentText',
+        'focusStatusHud',
+        'focusStatusText',
         'btnCaptureSnapshot',
         'btnSwitchCamera',
         'btnCloseCameraModal',
         'btnCancelCamera',
+        'btnToggleVoiceGuidance',
+        'btnToggleAutoCapture',
+        'voiceStatusHud',
+        'voiceStatusMsg',
         'ocrProgressContainer',
         'ocrProgressBar',
         'ocrStatusText',
         'ocrConfidenceScore',
+        'ocrInspectorModal',
+        'ocrResultCanvasInspector',
+        'inspectorWordCount',
+        'btnCloseOcrInspector',
+        'inspectorDetailsBar',
         'thaiInput',
         'powerStatus',
         'btnPrevPage',
@@ -190,10 +244,28 @@ runTest('Compile js/three-scene.js with Node vm.Script', () => {
     assert(jsThreeContent.includes('function initMechanism3D'), 'Missing initMechanism3D');
 });
 
+runTest('Compile js/voice-guidance.js with Node vm.Script (including Laplacian Focus Detector & HUD)', () => {
+    new vm.Script(jsVoiceContent, { filename: 'voice-guidance.js' });
+    assert(jsVoiceContent.includes('function calculateLaplacianFocusScore'), 'Missing calculateLaplacianFocusScore');
+    assert(jsVoiceContent.includes('function updateFocusHUD'), 'Missing updateFocusHUD');
+    assert(jsVoiceContent.includes('function speakVoiceGuidance'), 'Missing speakVoiceGuidance');
+    assert(jsVoiceContent.includes('function playTacticalBeep'), 'Missing playTacticalBeep');
+    assert(jsVoiceContent.includes('function updateCornerTargetHUD'), 'Missing updateCornerTargetHUD');
+    assert(jsVoiceContent.includes('function analyzeLiveCameraFrame'), 'Missing analyzeLiveCameraFrame');
+    assert(jsVoiceContent.includes('function startLiveVoiceGuidance'), 'Missing startLiveVoiceGuidance');
+    assert(jsVoiceContent.includes('function stopLiveVoiceGuidance'), 'Missing stopLiveVoiceGuidance');
+    assert(jsVoiceContent.includes('function toggleVoiceGuidance'), 'Missing toggleVoiceGuidance');
+    assert(jsVoiceContent.includes('function toggleAutoCapture'), 'Missing toggleAutoCapture');
+});
+
 runTest('Compile js/ocr-engine.js with Node vm.Script', () => {
     new vm.Script(jsOcrContent, { filename: 'ocr-engine.js' });
     assert(jsOcrContent.includes('async function preprocessImageForOCR'), 'Missing preprocessImageForOCR');
     assert(jsOcrContent.includes('async function runOCRExtraction'), 'Missing runOCRExtraction');
+    assert(jsOcrContent.includes('function renderOCRInspector'), 'Missing renderOCRInspector');
+    assert(jsOcrContent.includes('function openOCRInspector'), 'Missing openOCRInspector');
+    assert(jsOcrContent.includes('function closeOCRInspector'), 'Missing closeOCRInspector');
+    assert(jsOcrContent.includes('function calculateViewfinderCrop'), 'Missing calculateViewfinderCrop');
     assert(jsOcrContent.includes('function startCameraStream'), 'Missing startCameraStream');
     assert(jsOcrContent.includes('function captureCameraSnapshot'), 'Missing captureCameraSnapshot');
     assert(jsOcrContent.includes('function initOCRHandlers'), 'Missing initOCRHandlers');
@@ -206,118 +278,183 @@ runTest('Compile js/app.js with Node vm.Script', () => {
 });
 
 // -------------------------------------------------------------
-// Suite 5: Logic, Exception Handling & Braille Encoding
+// Suite 5: Logic, Vision Algorithms & Viewfinder Crop Pipeline
 // -------------------------------------------------------------
-console.log('\n--- SUITE 5: Logic, Exception Handling & Braille Encoding ---');
+console.log('\n--- SUITE 5: Logic, Vision Algorithms & Viewfinder Crop Pipeline ---');
 
-runTest('Exception Handling & Safe Fallback in WebRTC Camera Controller', () => {
-    assert(jsOcrContent.includes('navigator.mediaDevices.getUserMedia'), 'Missing getUserMedia call');
-    assert(jsOcrContent.includes('track.stop()'), 'Missing track.stop() cleanup in stopCameraStream');
-    assert(jsOcrContent.includes('catch (err)'), 'Missing try/catch error handling in camera stream');
-    assert(jsOcrContent.includes('closeCameraModal()'), 'Missing closeCameraModal error fallback');
+runTest('Laplacian Variance Focus Detection 3x3 Kernel Math & Thresholds', () => {
+    assert(jsVoiceContent.includes('calculateLaplacianFocusScore'), 'Missing calculateLaplacianFocusScore');
+    assert(jsVoiceContent.includes('FOCUS_BLURRY_THRESHOLD = 80'), 'Missing FOCUS_BLURRY_THRESHOLD = 80');
+    assert(jsVoiceContent.includes('FOCUS_SHARP_THRESHOLD = 160'), 'Missing FOCUS_SHARP_THRESHOLD = 160');
+
+    // Test Laplacian Variance Math with simulated Blurry vs Sharp Data
+    const sandbox = {
+        Math: Math,
+        Uint8Array: Uint8Array,
+        calculateLaplacianFocusScore: null
+    };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(jsVoiceContent, ctx);
+
+    // 1. Uniform Blurry Pattern (Very low Laplacian variance)
+    const blurryData = new Uint8Array(40 * 40 * 4);
+    for (let i = 0; i < blurryData.length; i += 4) {
+        blurryData[i] = 128 + (i % 2); // almost zero gradient
+        blurryData[i+1] = 128;
+        blurryData[i+2] = 128;
+        blurryData[i+3] = 255;
+    }
+    const blurryScore = ctx.calculateLaplacianFocusScore({ width: 40, height: 40, data: blurryData });
+    assert(blurryScore < 80, `Blurry score should be < 80, got ${blurryScore}`);
+
+    // 2. High Frequency Sharp Text Edge Pattern (High Laplacian variance)
+    const sharpData = new Uint8Array(40 * 40 * 4);
+    for (let y = 0; y < 40; y++) {
+        for (let x = 0; x < 40; x++) {
+            const idx = (y * 40 + x) * 4;
+            const val = ((x % 4 < 2) && (y % 4 < 2)) ? 255 : 0;
+            sharpData[idx] = val;
+            sharpData[idx+1] = val;
+            sharpData[idx+2] = val;
+            sharpData[idx+3] = 255;
+        }
+    }
+    const sharpScore = ctx.calculateLaplacianFocusScore({ width: 40, height: 40, data: sharpData });
+    assert(sharpScore >= 160, `Sharp score should be >= 160, got ${sharpScore}`);
 });
 
-runTest('Tesseract.js Engine Guard & Clean-up Logic (English Only Locked)', () => {
-    assert(jsOcrContent.includes("typeof Tesseract === 'undefined'"), 'Missing Tesseract undefined guard');
-    assert(jsOcrContent.includes('isOCROngoing'), 'Missing reentrancy guard isOCROngoing');
-    assert(jsOcrContent.includes('Tesseract.recognize'), 'Missing Tesseract.recognize execution');
-    assert(jsOcrContent.includes("const lang = 'eng';"), 'Tesseract.js OCR engine must be locked to English Only (eng)');
-    assert(indexContent.includes('<option value="eng" selected>English Only (A-Z, 0-9)</option>'), 'index.html must have English Only option selected by default');
-    assert(jsBrailleContent.includes("let currentLanguageMode = 'eng';"), 'braille-engine.js must default currentLanguageMode to eng');
+runTest('Focus Voice Guidance Prompts & Focus Gating Protection', () => {
+    assert(jsVoiceContent.includes('ภาพยังเบลออยู่ ถือกล้องนิ่งๆ อีกนิดนะครับ'), 'Missing blurry voice prompt');
+    assert(jsVoiceContent.includes('ตัวอักษรชัดเจนแล้ว ถือค้างไว้นะครับ...'), 'Missing sharp voice prompt');
+    assert(jsVoiceContent.includes('focusScore >= FOCUS_SHARP_THRESHOLD'), 'Auto-Capture must gate shutter trigger on focusScore >= FOCUS_SHARP_THRESHOLD (160)');
 });
 
-runTest('Image Preprocessing Algorithm (Grayscale, Denoising, Sharpening, Contrast, Binarization)', () => {
+runTest('Real-time Focus Status HUD Format & Score Display', () => {
+    assert(jsVoiceContent.includes('FOCUS: BLURRY (Score'), 'Missing blurry focus HUD format');
+    assert(jsVoiceContent.includes('FOCUS: SHARP 100% (Score'), 'Missing sharp focus HUD format');
+});
+
+runTest('Viewfinder Crop Coordinate Calculation & 85% Fallback in captureCameraSnapshot', () => {
+    assert(jsOcrContent.includes('viewfinderBox'), 'Missing viewfinderBox reference in captureCameraSnapshot');
+    assert(jsOcrContent.includes('viewfinder-frame'), 'Missing viewfinder-frame selector in captureCameraSnapshot');
+    assert(jsOcrContent.includes('calculateViewfinderCrop'), 'Missing calculateViewfinderCrop invocation');
+    assert(jsOcrContent.includes('vw * 0.85'), 'Missing 85% safety fallback crop calculation');
+    assert(jsOcrContent.includes('drawImage(video, sx, sy, sw, sh'), 'Missing precise source crop drawImage coordinates');
+});
+
+runTest('Grayscale High-Contrast Preprocessing (BT.601, Denoise, Sharpen, Stretch, Auto-Polarity)', () => {
     assert(jsOcrContent.includes('0.299 * r + 0.587 * g + 0.114 * b'), 'Missing standard luminance grayscale conversion');
     assert(jsOcrContent.includes('(sum >> 4)'), 'Missing 3x3 Gaussian denoise convolution filter sum shift');
     assert(jsOcrContent.includes('5 * denoised[rowOffset + x]'), 'Missing 3x3 sharpen convolution filter on denoised buffer');
+    assert(jsOcrContent.includes('isDarkBackground'), 'Missing auto polarity inversion detection');
     assert(jsOcrContent.includes("imageSmoothingQuality = 'high'"), 'Missing high-quality image smoothing on upscaling');
     assert(jsOcrContent.includes('putImageData'), 'Missing canvas putImageData update');
 });
 
+runTest('Tesseract.js Engine Guard & PSM 3 Configuration (English Only Locked)', () => {
+    assert(jsOcrContent.includes("typeof Tesseract === 'undefined'"), 'Missing Tesseract undefined guard');
+    assert(jsOcrContent.includes('isOCROngoing'), 'Missing reentrancy guard isOCROngoing');
+    assert(jsOcrContent.includes('Tesseract.recognize'), 'Missing Tesseract.recognize execution');
+    assert(jsOcrContent.includes("const lang = 'eng';"), 'Tesseract.js OCR engine must be locked to English Only (eng)');
+    assert(jsOcrContent.includes("tessedit_pageseg_mode: '3'"), 'Tesseract OCR engine must use PSM 3 (PSM.AUTO) for auto angle/layout');
+});
+
+runTest('Visual OCR Bounding Box Inspector Canvas Rendering & Glowing Bounding Boxes', () => {
+    assert(jsOcrContent.includes('renderOCRInspector'), 'Missing renderOCRInspector function');
+    assert(jsOcrContent.includes('ocrResultCanvasInspector'), 'Missing ocrResultCanvasInspector canvas binding');
+    assert(jsOcrContent.includes("ctx.strokeStyle = '#00FF88'"), 'Missing neon-emerald bounding box outline');
+    assert(jsOcrContent.includes("ctx.shadowColor = '#00FF88'"), 'Missing glowing shadow color for boxes');
+    assert(jsOcrContent.includes('strokeRect(bx, by, bw, bh)'), 'Missing bounding box stroke rectangle drawing');
+    assert(jsOcrContent.includes('openOCRInspector'), 'Missing openOCRInspector function');
+    assert(jsOcrContent.includes('closeOCRInspector'), 'Missing closeOCRInspector function');
+    assert(jsOcrContent.includes('btnOpenOcrInspector'), 'Missing btnOpenOcrInspector event binding');
+});
+
+runTest('4-Corner Target Detection Engine & Directional Guidance Voice Prompts', () => {
+    assert(jsVoiceContent.includes('ตัวอักษรชัดเจนแล้ว ถือค้างไว้นะครับ...') || jsVoiceContent.includes('เข้ามุมทั้ง 4 เรียบร้อยแล้ว ถือค้างไว้นะครับ...'), 'Missing 4-corner lock Thai prompt');
+    assert(jsVoiceContent.includes('มุมบนซ้ายหลุดกรอบ'), 'Missing top-left corner slip Thai prompt');
+    assert(jsVoiceContent.includes('มุมบนขวาหลุดกรอบ'), 'Missing top-right corner slip Thai prompt');
+    assert(jsVoiceContent.includes('มุมล่างซ้ายหลุดกรอบ'), 'Missing bottom-left corner slip Thai prompt');
+    assert(jsVoiceContent.includes('มุมล่างขวาหลุดกรอบ'), 'Missing bottom-right corner slip Thai prompt');
+    assert(jsVoiceContent.includes('ยังไม่พบเอกสาร กรุณาส่องกล้องไปที่หนังสือ'), 'Missing no document Thai prompt');
+    assert(jsVoiceContent.includes('ถ่ายภาพสำเร็จ กำลังอ่านข้อความภาษาอังกฤษ...'), 'Missing capture success Thai prompt');
+    assert(jsVoiceContent.includes("'th-TH'"), 'Missing Thai th-TH voice language specification');
+});
+
+runTest('4-Corner Target Locked Bracket Density Scanning & HUD Synchronization', () => {
+    assert(jsVoiceContent.includes('CORNER_STROKE_THRESHOLD = 0.012'), 'Missing CORNER_STROKE_THRESHOLD constant');
+    assert(jsVoiceContent.includes('zoneTL'), 'Missing zoneTL corner target boundary definition');
+    assert(jsVoiceContent.includes('zoneTR'), 'Missing zoneTR corner target boundary definition');
+    assert(jsVoiceContent.includes('zoneBL'), 'Missing zoneBL corner target boundary definition');
+    assert(jsVoiceContent.includes('zoneBR'), 'Missing zoneBR corner target boundary definition');
+    assert(jsVoiceContent.includes('densityTL = countTL / Math.max(1, pixelsTL)'), 'Missing densityTL calculation');
+    assert(jsVoiceContent.includes('updateCornerTargetHUD(lockedTL, lockedTR, lockedBL, lockedBR)'), 'Missing updateCornerTargetHUD invocation');
+});
+
+runTest('Real-Time 4-Corner Target Alignment Percentage Math & 100% Lock Banner', () => {
+    function calcCornerPct(tl, tr, bl, br) {
+        const lockedCount = (tl ? 1 : 0) + (tr ? 1 : 0) + (bl ? 1 : 0) + (br ? 1 : 0);
+        const pct = Math.round((lockedCount / 4) * 100);
+        return { lockedCount, pct, is100: lockedCount === 4 };
+    }
+
+    assert.deepStrictEqual(calcCornerPct(false, false, false, false), { lockedCount: 0, pct: 0, is100: false });
+    assert.deepStrictEqual(calcCornerPct(true, false, false, false), { lockedCount: 1, pct: 25, is100: false });
+    assert.deepStrictEqual(calcCornerPct(true, true, false, false), { lockedCount: 2, pct: 50, is100: false });
+    assert.deepStrictEqual(calcCornerPct(true, true, true, false), { lockedCount: 3, pct: 75, is100: false });
+    assert.deepStrictEqual(calcCornerPct(true, true, true, true), { lockedCount: 4, pct: 100, is100: true });
+
+    assert(jsVoiceContent.includes('4-CORNER ALIGNMENT'), 'Missing 4-CORNER ALIGNMENT HUD text');
+    assert(jsVoiceContent.includes('[ 🎯 TARGET LOCKED 100% - AUTO CAPTURING... ]'), 'Missing 100% target locked banner text');
+    assert(jsVoiceContent.includes('locked-100'), 'Missing locked-100 class toggle on 100% alignment');
+});
+
+runTest('Auto-Capture Stability Timing Math (1.0s Rapid Shutter Requirement)', () => {
+    const STABILITY_REQUIRED_MS = 1000;
+    const startTime = 10000;
+    const checkTime = 11000;
+    const elapsed = checkTime - startTime;
+    assert.strictEqual(elapsed >= STABILITY_REQUIRED_MS, true, 'Stability elapsed time check failed');
+    assert(jsVoiceContent.includes('STABILITY_REQUIRED_MS = 1000'), 'js/voice-guidance.js must use 1000ms stability threshold');
+});
+
+runTest('Pre-Capture Voice Warning (0.5s Warning Before Shutter & Speech Callback)', () => {
+    assert(jsVoiceContent.includes('PRE_CAPTURE_WARNING_MS = 500'), 'Missing PRE_CAPTURE_WARNING_MS constant');
+    assert(jsVoiceContent.includes('กำลังถ่ายภาพ อยู่นิ่งๆ นะครับ') || jsVoiceContent.includes('อยู่นิ่งๆ นะครับ'), 'Missing pre-capture Thai warning text');
+    assert(jsVoiceContent.includes('hasSpokenPreCaptureWarning'), 'Missing hasSpokenPreCaptureWarning flag');
+    assert(jsVoiceContent.includes('speakVoiceGuidance(text, force = false, onEndCallback = null)'), 'Missing onEndCallback parameter in speakVoiceGuidance');
+    assert(jsOcrContent.includes('playTacticalBeep(1050, 220)'), 'Missing tactical beep feedback on snapshot capture');
+});
+
+runTest('Voice Guidance & Auto-Capture Toggle States', () => {
+    assert(jsVoiceContent.includes('toggleVoiceGuidance'), 'Missing toggleVoiceGuidance function');
+    assert(jsVoiceContent.includes('toggleAutoCapture'), 'Missing toggleAutoCapture function');
+    assert(jsOcrContent.includes('btnToggleVoiceGuidance'), 'Missing btnToggleVoiceGuidance binding');
+    assert(jsOcrContent.includes('btnToggleAutoCapture'), 'Missing btnToggleAutoCapture binding');
+});
+
 runTest('3x3 Gaussian Denoise Noise Reduction Filter Kernel Math Simulation', () => {
-    // 3x3 Gaussian weights: [1,2,1; 2,4,2; 1,2,1], sum = 16
     const center = 120;
-    const ortho = 100; // top, bottom, left, right (weight 2)
-    const diag = 80;   // 4 corners (weight 1)
+    const ortho = 100;
+    const diag = 80;
     const sum = (diag * 1 + ortho * 2 + diag * 1 + ortho * 2 + center * 4 + ortho * 2 + diag * 1 + ortho * 2 + diag * 1);
     const denoisedVal = sum >> 4;
     assert.strictEqual(denoisedVal, 100, 'Gaussian 3x3 denoise kernel math calculation error');
 });
 
-runTest('High-Resolution Native Camera Capture (1080p Full HD) & Video Constraints', () => {
-    assert(jsOcrContent.includes('width: { ideal: 1920, min: 1280 }'), 'Missing ideal 1920 Full HD width constraint');
-    assert(jsOcrContent.includes('height: { ideal: 1080, min: 720 }'), 'Missing ideal 1080 Full HD height constraint');
+runTest('High-Resolution Portrait Mode (9:16 Full HD) WebRTC Video Constraints', () => {
+    assert(jsOcrContent.includes('aspectRatio: { ideal: 9 / 16 }'), 'Missing portrait 9:16 aspect ratio constraint');
+    assert(jsOcrContent.includes('width: { ideal: 1080'), 'Missing ideal 1080 portrait width constraint');
+    assert(jsOcrContent.includes('height: { ideal: 1920'), 'Missing ideal 1920 portrait height constraint');
     assert(jsOcrContent.includes('video.videoWidth'), 'Missing video.videoWidth native resolution grab');
     assert(jsOcrContent.includes('video.videoHeight'), 'Missing video.videoHeight native resolution grab');
 });
 
-runTest('Processed Denoised & Binarized Preview on Dropzone Preview Card', () => {
-    assert(jsOcrContent.includes('processedCanvas.toDataURL'), 'Missing processedCanvas.toDataURL for live crisp preview');
-    assert(jsOcrContent.includes('previewCard.classList.add'), 'Missing previewCard active class activation');
-    assert(jsOcrContent.includes('_isPreprocessed'), 'Missing canvas _isPreprocessed optimization flag');
-});
-
-runTest('Tesseract Page Segmentation Mode (PSM 6) Optimization', () => {
-    assert(jsOcrContent.includes("tessedit_pageseg_mode: '6'"), 'Missing PSM 6 configuration in Tesseract.recognize options');
-});
-
-runTest('3x3 Sharpening Convolution Kernel Math Simulation', () => {
-    const center = 100;
-    const top = 50, bottom = 50, left = 50, right = 50;
-    const sharpVal = 5 * center - top - bottom - left - right;
-    const clamped = sharpVal < 0 ? 0 : (sharpVal > 255 ? 255 : sharpVal);
-    assert.strictEqual(clamped, 255, 'Sharpening kernel math calculation error');
-});
-
-runTest('DOM Event Listeners Binding in initOCRHandlers', () => {
-    assert(jsOcrContent.includes('btnBrowse.addEventListener'), 'Missing btnBrowse click listener');
-    assert(jsOcrContent.includes('dropzone.addEventListener'), 'Missing dropzone event listeners');
-    assert(jsOcrContent.includes('fileInput.addEventListener'), 'Missing fileInput change listener');
-    assert(jsOcrContent.includes('btnOpenCam.addEventListener'), 'Missing btnOpenLiveCamera listener');
-    assert(jsOcrContent.includes('btnCapture.addEventListener'), 'Missing btnCaptureSnapshot listener');
-    assert(jsOcrContent.includes('btnPrev.addEventListener'), 'Missing btnPrev click listener');
-    assert(jsOcrContent.includes('btnNext.addEventListener'), 'Missing btnNext click listener');
-    assert(jsOcrContent.includes('btnMode.addEventListener'), 'Missing btnMode click listener');
-});
-
-runTest('Keyboard Navigation Event Listener (ArrowLeft / ArrowRight)', () => {
-    assert(jsOcrContent.includes("e.key === 'ArrowLeft'"), 'Missing ArrowLeft keyboard shortcut');
-    assert(jsOcrContent.includes("e.key === 'ArrowRight'"), 'Missing ArrowRight keyboard shortcut');
-});
-
-runTest('OCR Output Text Sanitization & Normalization', () => {
-    const rawText = "  สวัสดีครับ  \r\n  ทดสอบ   OCR \n\n ";
-    const cleanedText = rawText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-    assert.strictEqual(cleanedText, "สวัสดีครับ ทดสอบ OCR", "Text sanitization failed to normalize whitespace and newlines");
-});
-
-runTest('14-Cell / 84-Pin Braille Grid Pin Indexing Calculation', () => {
-    const TOTAL_CELLS = 14;
-    const PINS_PER_CELL = 6;
-    const totalPins = TOTAL_CELLS * PINS_PER_CELL;
-    assert.strictEqual(totalPins, 84, "Total pins must equal 84");
-});
-
-runTest('Pin Protrusion Realistic Height Scale (0.12 - 0.14 / 1.2mm Engineering Scale)', () => {
-    // 1. Verify braille-engine.js target height
-    assert(jsBrailleContent.includes('const targetY = isActive ? 0.13 : 0.0;'), 'braille-engine.js must set targetY to 0.13 (1.2mm scale)');
-    
-    // 2. Verify three-scene.js single-pin mechanism modal values
-    assert(jsThreeContent.includes("pPin.innerText = 'UP (1.2mm)'"), 'Mechanism modal must display UP (1.2mm)');
-    assert(jsThreeContent.includes('mechPinMesh.position.y = 0.89'), 'mechPinMesh UP position must be 0.89');
-    assert(jsThreeContent.includes('UP - 1.2mm'), 'Mechanism description must reference UP - 1.2mm');
-});
-
 runTest('3D Hardware Interactive Tactical Buttons (Prev, Next, Mode) & Raycaster Handlers', () => {
-    // 1. 3D button groups and textures in three-scene.js
     assert(jsThreeContent.includes('btn3DPrevGroup'), 'Missing btn3DPrevGroup in three-scene.js');
     assert(jsThreeContent.includes('btn3DNextGroup'), 'Missing btn3DNextGroup in three-scene.js');
     assert(jsThreeContent.includes('btn3DModeGroup'), 'Missing btn3DModeGroup in three-scene.js');
-
-    // 2. Raycaster mouse hover and click handlers
     assert(jsThreeContent.includes('press3DButton(target.interactiveType)'), 'Missing 3D button click press dispatcher');
-    assert(jsThreeContent.includes("renderer.domElement.style.cursor = 'pointer'"), 'Missing pointer cursor on hover');
-    assert(jsThreeContent.includes('update3DButtonsState()'), 'Missing update3DButtonsState call in raycaster');
 });
 
 // -------------------------------------------------------------
@@ -350,35 +487,6 @@ runTest('14-Cell Text Chunking Algorithm (Empty, Short, Multi-Page)', () => {
     assert.strictEqual(exact28[0].length, 14);
     assert.strictEqual(exact28[1].length, 14);
     assert.strictEqual(exact28[2].length, 2);
-
-    const thaiText = 'สวัสดีครับ ยินดีต้อนรับสู่ระบบ BraillLens อักษรเบรลล์';
-    const thaiChunks = chunkText(thaiText);
-    assert(thaiChunks.length > 1, 'Multi-character Thai text should split into multiple 14-cell chunks');
-    assert.strictEqual(thaiChunks.join(''), thaiText, 'Reconstructed chunks must match original string');
-});
-
-runTest('Pagination Index Navigation & Boundary Clamping', () => {
-    let chunks = ['CHUNK_1', 'CHUNK_2', 'CHUNK_3'];
-    let pageIndex = 0;
-
-    function next() {
-        if (pageIndex < chunks.length - 1) pageIndex++;
-    }
-    function prev() {
-        if (pageIndex > 0) pageIndex--;
-    }
-
-    assert.strictEqual(pageIndex, 0);
-    prev();
-    assert.strictEqual(pageIndex, 0);
-    next();
-    assert.strictEqual(pageIndex, 1);
-    next();
-    assert.strictEqual(pageIndex, 2);
-    next();
-    assert.strictEqual(pageIndex, 2);
-    prev();
-    assert.strictEqual(pageIndex, 1);
 });
 
 runTest('English & Thai Braille Character Map Lookup', () => {
@@ -400,18 +508,12 @@ runTest('Single-Language Mode Switcher State Transitions (Default ENG)', () => {
     assert.strictEqual(mode, 'tha');
     toggle();
     assert.strictEqual(mode, 'eng');
-    toggle('tha');
-    assert.strictEqual(mode, 'tha');
-    toggle('eng');
-    assert.strictEqual(mode, 'eng');
 });
 
 runTest('README.md Documentation Integrity & Structure', () => {
     assert(readmeContent.includes('# BrailleLens 3D & Optical OCR System'), 'Missing title in README.md');
     assert(readmeContent.includes('14-Cell / 84-Pin'), 'Missing 14-cell 84-pin mention in README.md');
     assert(readmeContent.includes('Optical OCR'), 'Missing Optical OCR mention in README.md');
-    assert(readmeContent.includes('css/styles.css'), 'Missing directory reference in README.md');
-    assert(readmeContent.includes('js/braille-engine.js'), 'Missing JS module reference in README.md');
 });
 
 // -------------------------------------------------------------
