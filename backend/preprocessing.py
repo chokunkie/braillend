@@ -47,8 +47,10 @@ def resize_min_side(img: np.ndarray, min_side: int = MIN_SHORT_SIDE) -> tuple:
     if short_side >= min_side or short_side == 0:
         return img, 1.0
     scale = min_side / short_side
+    if scale > 2.2:
+        scale = 2.0
     new_w, new_h = round(w * scale), round(h * scale)
-    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC), scale
+    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR), scale
 
 
 def _is_lighting_uneven(gray: np.ndarray) -> bool:
@@ -121,9 +123,11 @@ def preprocess(image_bytes: bytes, document_source: str = "upload") -> tuple:
         )
 
     is_camera = document_source == "camera"
-    denoise_strength = 10 if is_camera else 4
-    denoised = cv2.fastNlMeansDenoising(
-        enhanced, h=denoise_strength, templateWindowSize=7, searchWindowSize=21
-    )
+    if is_camera:
+        denoise_strength = 6
+        denoised = cv2.fastNlMeansDenoising(
+            enhanced, h=denoise_strength, templateWindowSize=7, searchWindowSize=21
+        )
+        return denoised, scale
 
-    return denoised, scale
+    return enhanced, scale
