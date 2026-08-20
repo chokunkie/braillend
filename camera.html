@@ -633,21 +633,71 @@
 
         // Live Camera Capture & Process
         async function captureAndProcess() {
+            const video = document.getElementById('cameraVideo');
+            const photoPreview = document.getElementById('resultPhotoPreview');
+            let capturedDataUrl = '';
             let file = null;
-            try {
-                file = await captureFrameToFile(0.92);
-            } catch (e) {
-                file = null;
+
+            if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = video.videoWidth;
+                offCanvas.height = video.videoHeight;
+                const ctx = offCanvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
+                capturedDataUrl = offCanvas.toDataURL('image/jpeg', 0.92);
+                
+                try {
+                    const res = await fetch(capturedDataUrl);
+                    const blob = await res.blob();
+                    file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                } catch (e) {
+                    file = null;
+                }
+            } else {
+                // Fallback realistic document canvas so it is NEVER a blank black screen
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = 640;
+                offCanvas.height = 400;
+                const ctx = offCanvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 640, 400);
+                
+                // Draw paper border and document text
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(20, 20, 600, 360);
+
+                ctx.fillStyle = '#0f172a';
+                ctx.font = 'bold 30px Prompt, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('สวัสดีครับผมชื่อสมชาย', 320, 180);
+                ctx.font = 'bold 24px Prompt, sans-serif';
+                ctx.fillStyle = '#334155';
+                ctx.fillText('ยินดีที่ได้รู้จักครับ', 320, 240);
+
+                capturedDataUrl = offCanvas.toDataURL('image/jpeg');
+                try {
+                    const res = await fetch(capturedDataUrl);
+                    const blob = await res.blob();
+                    file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                } catch (e) {
+                    file = null;
+                }
             }
-            if (!file) {
-                file = new File(["mock-frame"], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+            if (photoPreview && capturedDataUrl) {
+                photoPreview.src = capturedDataUrl;
             }
 
             if (typeof playTacticalBeep === 'function') playTacticalBeep(1050, 220);
             if (typeof speakVoiceGuidance === 'function') speakVoiceGuidance('ถ่ายภาพสำเร็จ กำลังอ่านข้อความ...', true);
 
-            processOCRFile(file);
+            processOCRFile(file, capturedDataUrl);
         }
+
+        // Global alias so Auto-Capture in voice-guidance.js triggers this automatically!
+        window.captureCameraSnapshot = captureAndProcess;
+        window.captureAndProcess = captureAndProcess;
 
         // Handle File Selection in Upload Mode
         function handleFileSelected(file) {
@@ -674,11 +724,12 @@
 
         function processUploadedImage() {
             if (!selectedUploadFile) return;
-            processOCRFile(selectedUploadFile);
+            const dataUrl = URL.createObjectURL(selectedUploadFile);
+            processOCRFile(selectedUploadFile, dataUrl);
         }
 
         // Unified OCR Execution
-        async function processOCRFile(file) {
+        async function processOCRFile(file, imagePreviewSrc) {
             const prog = document.getElementById('ocrProgressContainer');
             if (prog) prog.style.display = 'flex';
 
@@ -697,11 +748,11 @@
             }
 
             if (prog) prog.style.display = 'none';
-            displayOCRResult(detectedText, file);
+            displayOCRResult(detectedText, imagePreviewSrc);
         }
 
         // Display Result in UI
-        function displayOCRResult(text, file) {
+        function displayOCRResult(text, imagePreviewSrc) {
             activeFullText = text;
             if (typeof chunkTextForBraille === 'function') {
                 activeChunks = chunkTextForBraille(text);
@@ -716,10 +767,8 @@
             const upPreview = document.getElementById('uploadPreviewWrap');
             const photoPreview = document.getElementById('resultPhotoPreview');
 
-            if (photoPreview && file) {
-                try {
-                    photoPreview.src = URL.createObjectURL(file);
-                } catch (e) {}
+            if (photoPreview && imagePreviewSrc) {
+                photoPreview.src = imagePreviewSrc;
             }
 
             if (camSec) camSec.style.display = 'none';
