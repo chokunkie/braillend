@@ -47,10 +47,8 @@ def resize_min_side(img: np.ndarray, min_side: int = MIN_SHORT_SIDE) -> tuple:
     if short_side >= min_side or short_side == 0:
         return img, 1.0
     scale = min_side / short_side
-    if scale > 2.2:
-        scale = 2.0
     new_w, new_h = round(w * scale), round(h * scale)
-    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR), scale
+    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC), scale
 
 
 def _is_lighting_uneven(gray: np.ndarray) -> bool:
