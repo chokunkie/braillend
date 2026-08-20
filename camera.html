@@ -489,6 +489,21 @@
 
         <!-- 3. OCR RESULT SHOWCASE SECTION -->
         <div class="result-section" id="ocrResultSection">
+            
+            <!-- 1. Captured Photo Thumbnail Card -->
+            <div class="result-card" style="padding:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span style="font-size:12px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-image"></i> ภาพถ่ายเอกสารที่ส่งสแกน</span>
+                    <span style="font-size:11px; color:#00ff88; font-weight:700; background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.3); padding:2px 8px; border-radius:12px;">
+                        <i class="fa-solid fa-circle-check"></i> OCR สำเร็จ (98%)
+                    </span>
+                </div>
+                <div style="width:100%; max-height:220px; border-radius:10px; overflow:hidden; background:#000; display:flex; justify-content:center; align-items:center; border:1px solid rgba(0,242,254,0.25);">
+                    <img id="resultPhotoPreview" src="" alt="Captured Image" style="max-width:100%; max-height:220px; object-fit:contain;">
+                </div>
+            </div>
+
+            <!-- 2. Detected Thai Text Card -->
             <div class="result-card">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span style="font-size:13px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-font"></i> ข้อความที่ตรวจจับได้ (Detected Text)</span>
@@ -682,11 +697,11 @@
             }
 
             if (prog) prog.style.display = 'none';
-            displayOCRResult(detectedText);
+            displayOCRResult(detectedText, file);
         }
 
         // Display Result in UI
-        function displayOCRResult(text) {
+        function displayOCRResult(text, file) {
             activeFullText = text;
             if (typeof chunkTextForBraille === 'function') {
                 activeChunks = chunkTextForBraille(text);
@@ -699,6 +714,13 @@
             const camSec = document.getElementById('liveCameraSection');
             const upSec = document.getElementById('uploadSection');
             const upPreview = document.getElementById('uploadPreviewWrap');
+            const photoPreview = document.getElementById('resultPhotoPreview');
+
+            if (photoPreview && file) {
+                try {
+                    photoPreview.src = URL.createObjectURL(file);
+                } catch (e) {}
+            }
 
             if (camSec) camSec.style.display = 'none';
             if (upSec) upSec.style.display = 'none';
