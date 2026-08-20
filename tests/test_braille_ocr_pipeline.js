@@ -595,6 +595,57 @@ runTest('English & Thai Braille Character Map Lookup', () => {
     assert(jsBrailleContent.includes("'า': [3, 4, 5]"), "Missing Braille mapping for 'า'");
 });
 
+runTest('ท (tho thahan) vs ห (ho hip) Braille Patterns Must Not Collide', () => {
+    // Regression guard for a real bug: ท was previously mis-assigned ห's
+    // dot pattern ([1,2,5]), silently rendering every ท as if it were ห.
+    // Verified against Thai Braille's actual Unicode braille glyphs on
+    // Wikipedia (ท = U+283E = dots 2,3,4,5,6; ห = U+2813 = dots 1,2,5),
+    // decoded directly from the Braille Patterns block bitmask. Pinned as
+    // two independent assertions plus an inequality check so a future
+    // edit can't quietly swap them back to matching.
+    const sandbox = {};
+    const ctx = vm.createContext(sandbox);
+    // THAI_BRAILLE_MAP is declared with `const`, which (unlike `var`) does not
+    // attach to the vm context's global object -- bridge it explicitly.
+    vm.runInContext(jsBrailleContent + '\nvar __THAI_BRAILLE_MAP__ = THAI_BRAILLE_MAP;', ctx);
+
+    // Compared as joined strings, not assert.deepStrictEqual: arrays built
+    // inside a vm.createContext sandbox belong to a separate realm (their
+    // own Array constructor/prototype), which fails deepStrictEqual's
+    // prototype-identity check even when the element values are identical.
+    const thoPattern = ctx.__THAI_BRAILLE_MAP__['ท'].join(',');
+    const hoPattern = ctx.__THAI_BRAILLE_MAP__['ห'].join(',');
+
+    assert.strictEqual(thoPattern, '2,3,4,5,6', 'ท must map to dots 2,3,4,5,6');
+    assert.strictEqual(hoPattern, '1,2,5', 'ห must map to dots 1,2,5');
+    assert.notStrictEqual(thoPattern, hoPattern,
+        'ท and ห are both common consonants and must never share a dot pattern');
+});
+
+runTest('Thai Tone Mark Braille Patterns (mai ek/tho/tri, thanthakhat)', () => {
+    // Regression guard for 4 more confirmed mismatches found the same way
+    // as ท/ห: fetched each mark's actual Unicode braille glyph from
+    // Wikipedia's Thai Braille article and manually decoded the codepoint
+    // against the Braille Patterns block bitmask (bit0=dot1 ... bit5=dot6).
+    //   ่  mai ek       U+2814 -> 0x14 -> dots 3,5
+    //   ้  mai tho      U+2832 -> 0x32 -> dots 2,5,6
+    //   ๊  mai tri      U+2836 -> 0x36 -> dots 2,3,5,6
+    //   ์  thanthakhat  U+2834 -> 0x34 -> dots 3,5,6
+    // ๋ mai chattawa (U+2826 -> dots 2,3,6) was already correct and is left
+    // as-is; not re-pinned here since js/braille-engine.js didn't change
+    // for it. Each mark gets its own independent assertion so a future
+    // edit that silently reverts just one of them still fails loudly.
+    const sandbox2 = {};
+    const ctx2 = vm.createContext(sandbox2);
+    vm.runInContext(jsBrailleContent + '\nvar __THAI_BRAILLE_MAP__ = THAI_BRAILLE_MAP;', ctx2);
+    const map = ctx2.__THAI_BRAILLE_MAP__;
+
+    assert.strictEqual(map['่'].join(','), '3,5', 'mai ek must map to dots 3,5');
+    assert.strictEqual(map['้'].join(','), '2,5,6', 'mai tho must map to dots 2,5,6');
+    assert.strictEqual(map['๊'].join(','), '2,3,5,6', 'mai tri must map to dots 2,3,5,6');
+    assert.strictEqual(map['์'].join(','), '3,5,6', 'thanthakhat must map to dots 3,5,6');
+});
+
 runTest('Single-Language Mode Switcher State Transitions (Default ENG)', () => {
     let mode = 'eng';
     function toggle(forced) {
