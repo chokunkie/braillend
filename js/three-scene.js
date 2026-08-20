@@ -160,44 +160,28 @@ function drawScreenContent(text) {
     drawRoundRect(ctx, 8, 8, w - 16, h - 16, 10, null, 'rgba(255, 255, 255, 0.12)', 1);
 
     // 2. Header Bar
-    const headY = 16, headH = 52;
-    drawRoundRect(ctx, 16, headY, w - 32, headH, 8, 'rgba(19, 30, 58, 0.95)', '#00f0ff', 1.5);
-    ctx.font = "bold 32px Prompt, sans-serif";
-    ctx.fillStyle = '#00f0ff';
-    ctx.shadowColor = '#00f0ff';
-    ctx.shadowBlur = 10;
-    ctx.fillText('Waveshare 3.5" TFT LCD • Raspberry Pi Zero 2 W', 32, headY + 36);
-    ctx.shadowBlur = 0;
+    const headY = 16, headH = 54;
+    drawRoundRect(ctx, 16, headY, w - 32, headH, 8, 'rgba(0, 242, 254, 0.15)', '#00f2fe', 1.5);
+    ctx.font = "bold 28px Prompt, sans-serif";
+    ctx.fillStyle = '#00f2fe';
+    ctx.fillText("📷 ผลการอ่านข้อความ OCR • แสดงผลที่หมุด 84 พิน", 36, headY + 36);
 
-    // 3. Telemetry Bar
-    const telemY = 78, telemH = 44;
-    drawRoundRect(ctx, 16, telemY, w - 32, telemH, 8, 'rgba(0, 255, 136, 0.08)', '#00ff88', 1.5);
+    // 3. Main Text Box
+    const boxX = 16, boxY = 88, boxW = w - 32, boxH = 280;
+    drawRoundRect(ctx, boxX, boxY, boxW, boxH, 12, '#111c38', '#00ff88', 2);
+
+    ctx.font = "bold 46px Prompt, sans-serif";
+    ctx.fillStyle = '#00ff88';
+    ctx.textAlign = 'center';
+    ctx.fillText(`"${displayStr}"`, w / 2, boxY + 155);
+
+    // 4. Telemetry Footer
     const totalPages = (typeof currentBrailleChunks !== 'undefined' && currentBrailleChunks && currentBrailleChunks.length > 0) ? currentBrailleChunks.length : 1;
     const currentPage = (typeof currentBraillePageIndex !== 'undefined') ? currentBraillePageIndex + 1 : 1;
-    const langLabel = (typeof currentLanguageMode !== 'undefined' && currentLanguageMode === 'eng') ? 'ENG' : 'THAI';
-
-    ctx.font = "bold 26px Prompt, sans-serif";
-    ctx.fillStyle = '#00ff88';
-    ctx.shadowColor = '#00ff88';
-    ctx.shadowBlur = 8;
-    ctx.fillText(`● CPU: 18% | TEMP: 42°C | 5G ONLINE | MODE: ${langLabel} | PAGE ${currentPage}/${totalPages}`, 32, telemY + 31);
-    ctx.shadowBlur = 0;
-
-    // 4. Main Text Box
-    const boxX = 16, boxY = 132, boxW = w - 32, boxH = 244;
-    ctx.shadowColor = '#00f0ff';
-    ctx.shadowBlur = 14;
-    drawRoundRect(ctx, boxX, boxY, boxW, boxH, 12, '#131e3a', '#00f0ff', 2.5);
-    ctx.shadowBlur = 0;
-
-    const totalChars = (typeof currentBrailleFullText !== 'undefined' && currentBrailleFullText) ? Array.from(currentBrailleFullText).length : Array.from(displayStr).length;
-    const startCharIdx = totalChars === 0 ? 0 : (currentPage - 1) * 14 + 1;
-    const endCharIdx = totalChars === 0 ? 0 : Math.min(currentPage * 14, totalChars);
-    const rangeStr = totalPages > 1 ? ` • PAGE ${currentPage}/${totalPages} [${startCharIdx}-${endCharIdx}]` : '';
-
-    ctx.font = "bold 18px 'JetBrains Mono', Prompt, monospace";
-    ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
-    ctx.fillText(`📷 LIVE SCAN & BRAILLE INPUT READOUT (${langLabel}${rangeStr})`, boxX + 18, boxY + 26);
+    ctx.font = "bold 24px Prompt, monospace";
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'left';
+    ctx.fillText(`● แสดงผล 14 เซลล์ | หน้าที่ ${currentPage}/${totalPages} [${displayStr}]`, 32, 440);
 
     ctx.strokeStyle = 'rgba(0, 240, 255, 0.04)';
     ctx.lineWidth = 1;
@@ -313,10 +297,15 @@ function initMain3D() {
     initOLEDDisplay();
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x070a13);
+    scene.background = null;
 
+    const isMobile = width < 768;
     camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 1000);
-    camera.position.set(0, 13, 10);
+    if (isMobile) {
+        camera.position.set(7.5, 14.5, 12.5);
+    } else {
+        camera.position.set(7.5, 13.5, 11.5);
+    }
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
@@ -1265,7 +1254,11 @@ function setCameraView(view) {
             break;
         case '3d':
         case 'iso':
-            camera.position.set(9, 10, 11);
+            if (window.innerWidth < 768) {
+                camera.position.set(13, 14, 16);
+            } else {
+                camera.position.set(9, 10, 11);
+            }
             controls.target.set(0, -0.3, -0.5);
             if (document.getElementById('btnView3D')) document.getElementById('btnView3D').classList.add('active');
             break;
