@@ -577,6 +577,9 @@
         <canvas id="ocrResultCanvasInspector"></canvas>
     </div>
 
+    <!-- In-Browser OCR Engine (Tesseract.js Thai + English) -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
     <!-- JavaScript Modules -->
     <script src="js/textProcessor.js"></script>
     <script src="js/camera.js"></script>
@@ -644,17 +647,16 @@
             let capturedDataUrl = '';
             let file = null;
 
-            // Immediately stop camera stream and voice guidance so it doesn't loop
-            stopCameraStream();
-            if (typeof stopLiveVoiceGuidance === 'function') stopLiveVoiceGuidance();
-
-            if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+            // 1. CAPTURE FRAME FROM LIVE VIDEO FIRST (BEFORE STOPPING STREAM!)
+            if (video && (video.videoWidth > 0 || video.readyState >= 2)) {
+                const w = video.videoWidth || 640;
+                const h = video.videoHeight || 480;
                 const offCanvas = document.createElement('canvas');
-                offCanvas.width = video.videoWidth;
-                offCanvas.height = video.videoHeight;
+                offCanvas.width = w;
+                offCanvas.height = h;
                 const ctx = offCanvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
-                capturedDataUrl = offCanvas.toDataURL('image/jpeg', 0.92);
+                ctx.drawImage(video, 0, 0, w, h);
+                capturedDataUrl = offCanvas.toDataURL('image/jpeg', 0.95);
                 
                 try {
                     const res = await fetch(capturedDataUrl);
@@ -665,13 +667,20 @@
                 }
             }
 
+            // 2. NOW SAFELY STOP CAMERA STREAM & VOICE GUIDANCE AFTER FRAME IS SAVED
+            stopCameraStream();
+            if (typeof stopLiveVoiceGuidance === 'function') stopLiveVoiceGuidance();
+
+            // 3. DISPLAY CAPTURED PHOTO IN RESULT PREVIEW
             if (photoPreview && capturedDataUrl) {
                 photoPreview.src = capturedDataUrl;
             }
 
+            // 4. SOUND & VOICE FEEDBACK
             if (typeof playTacticalBeep === 'function') playTacticalBeep(1050, 220);
             if (typeof speakVoiceGuidance === 'function') speakVoiceGuidance('ถ่ายภาพแล้ว กำลังอ่านข้อความ...', true);
 
+            // 5. SEND REAL IMAGE TO OCR PIPELINE
             processOCRFile(file, capturedDataUrl);
         }
 
@@ -844,9 +853,28 @@
             }
         }
 
-        // Initialize Live Camera on Page Load
+        async function prewarmOCR() {
+            if (typeof Tesseract !== 'undefined') {
+                try {
+                    const langPath = (typeof window !== 'undefined' && window.location) 
+                        ? window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')) + '/tessdata'
+                        : './tessdata';
+                    const worker = await Tesseract.createWorker('tha+eng', 1, {
+                        langPath: langPath,
+                        gzip: true
+                    });
+                    window._cachedTesseractWorker = worker;
+                    console.log('[Tesseract.js]: Thai + English OCR worker pre-warmed & ready!');
+                } catch (e) {
+                    console.warn('[Tesseract.js pre-warm notice]:', e);
+                }
+            }
+        }
+
+        // Initialize Live Camera & Prewarm OCR on Page Load
         window.addEventListener('DOMContentLoaded', () => {
             startLiveCamera();
+            prewarmOCR();
         });
     </script>
 </body>
