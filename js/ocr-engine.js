@@ -368,6 +368,10 @@ function clearImagePreview() {
  * Camera modal open/close. Actual stream lifecycle lives in js/camera.js.
  */
 async function openCameraModal() {
+    if (typeof window !== 'undefined' && (window.location.pathname.endsWith('index.html') || window.location.pathname === '/' || window.location.pathname.endsWith('/'))) {
+        window.location.href = 'camera.html';
+        return;
+    }
     const modal = document.getElementById('cameraModal');
     if (modal) {
         modal.classList.add('active');
@@ -388,6 +392,10 @@ function closeCameraModal() {
  * documentSource: 'camera' only tunes backend preprocessing intensity.
  */
 async function captureCameraSnapshot() {
+    if (typeof window !== 'undefined' && (window.location.pathname.endsWith('index.html') || window.location.pathname === '/' || window.location.pathname.endsWith('/'))) {
+        window.location.href = 'camera.html';
+        return;
+    }
     let file = null;
     try {
         file = await captureFrameToFile(0.92);
@@ -395,7 +403,6 @@ async function captureCameraSnapshot() {
         file = null;
     }
     if (!file) {
-        // Fallback File so capture never drops
         file = new File(["mock-frame"], `Camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
     }
 
@@ -405,11 +412,6 @@ async function captureCameraSnapshot() {
 
     showPreview(file, `Camera_${new Date().toLocaleTimeString().replace(/:/g, '-')}.jpg`);
     runOcrPipeline(file, 'camera');
-
-    // Navigate to full simulation experience
-    setTimeout(() => {
-        window.location.href = 'simulation.html?autoStart=true';
-    }, 600);
 }
 
 // Global window bindings
@@ -465,7 +467,16 @@ function initOCRHandlers() {
     }
     if (fileInput) fileInput.addEventListener('change', (e) => { if (e.target.files && e.target.files.length > 0) handleImageFileSelect(e.target.files[0]); });
     if (btnRemove) btnRemove.addEventListener('click', (e) => { e.stopPropagation(); clearImagePreview(); });
-    if (btnOpenCam) btnOpenCam.addEventListener('click', openCameraModal);
+    if (btnOpenCam) {
+        btnOpenCam.addEventListener('click', (e) => {
+            if (typeof window !== 'undefined' && (window.location.pathname.endsWith('index.html') || window.location.pathname === '/' || window.location.pathname.endsWith('/'))) {
+                e.preventDefault();
+                window.location.href = 'camera.html';
+                return;
+            }
+            openCameraModal();
+        });
+    }
     if (btnCloseCam) btnCloseCam.addEventListener('click', closeCameraModal);
     if (btnCancelCam) btnCancelCam.addEventListener('click', closeCameraModal);
     if (btnSwitchCam) btnSwitchCam.addEventListener('click', switchCamera);

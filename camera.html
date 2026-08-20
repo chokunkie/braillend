@@ -593,9 +593,12 @@
         let activeChunkIdx = 0;
         let selectedUploadFile = null;
 
+        let isCapturing = false;
+
         // Switch between Live Camera and File Upload
         function switchMode(mode) {
             currentMode = mode;
+            isCapturing = false;
             const tabCam = document.getElementById('tabLiveCamBtn');
             const tabUp = document.getElementById('tabUploadBtn');
             const camSec = document.getElementById('liveCameraSection');
@@ -631,12 +634,19 @@
             }
         }
 
-        // Live Camera Capture & Process
+        // Live Camera Capture & Process (Strictly Single-Shot Lock!)
         async function captureAndProcess() {
+            if (isCapturing) return; // Prevent rapid multi-capture loop
+            isCapturing = true;
+
             const video = document.getElementById('cameraVideo');
             const photoPreview = document.getElementById('resultPhotoPreview');
             let capturedDataUrl = '';
             let file = null;
+
+            // Immediately stop camera stream and voice guidance so it doesn't loop
+            stopCameraStream();
+            if (typeof stopLiveVoiceGuidance === 'function') stopLiveVoiceGuidance();
 
             if (video && video.videoWidth > 0 && video.videoHeight > 0) {
                 const offCanvas = document.createElement('canvas');
@@ -653,36 +663,6 @@
                 } catch (e) {
                     file = null;
                 }
-            } else {
-                // Fallback realistic document canvas so it is NEVER a blank black screen
-                const offCanvas = document.createElement('canvas');
-                offCanvas.width = 640;
-                offCanvas.height = 400;
-                const ctx = offCanvas.getContext('2d');
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, 640, 400);
-                
-                // Draw paper border and document text
-                ctx.strokeStyle = '#cbd5e1';
-                ctx.lineWidth = 4;
-                ctx.strokeRect(20, 20, 600, 360);
-
-                ctx.fillStyle = '#0f172a';
-                ctx.font = 'bold 30px Prompt, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('สวัสดีครับผมชื่อสมชาย', 320, 180);
-                ctx.font = 'bold 24px Prompt, sans-serif';
-                ctx.fillStyle = '#334155';
-                ctx.fillText('ยินดีที่ได้รู้จักครับ', 320, 240);
-
-                capturedDataUrl = offCanvas.toDataURL('image/jpeg');
-                try {
-                    const res = await fetch(capturedDataUrl);
-                    const blob = await res.blob();
-                    file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
-                } catch (e) {
-                    file = null;
-                }
             }
 
             if (photoPreview && capturedDataUrl) {
@@ -690,12 +670,12 @@
             }
 
             if (typeof playTacticalBeep === 'function') playTacticalBeep(1050, 220);
-            if (typeof speakVoiceGuidance === 'function') speakVoiceGuidance('ถ่ายภาพสำเร็จ กำลังอ่านข้อความ...', true);
+            if (typeof speakVoiceGuidance === 'function') speakVoiceGuidance('ถ่ายภาพแล้ว กำลังอ่านข้อความ...', true);
 
             processOCRFile(file, capturedDataUrl);
         }
 
-        // Global alias so Auto-Capture in voice-guidance.js triggers this automatically!
+        // Global alias so Auto-Capture in voice-guidance.js triggers single shot
         window.captureCameraSnapshot = captureAndProcess;
         window.captureAndProcess = captureAndProcess;
 
@@ -723,27 +703,33 @@
         }
 
         function processUploadedImage() {
-            if (!selectedUploadFile) return;
+            if (!selectedUploadFile || isCapturing) return;
+            isCapturing = true;
             const dataUrl = URL.createObjectURL(selectedUploadFile);
             processOCRFile(selectedUploadFile, dataUrl);
         }
 
-        // Unified OCR Execution
+        // Unified OCR Execution - Strictly returns real detected text (No fake mock text)
         async function processOCRFile(file, imagePreviewSrc) {
             const prog = document.getElementById('ocrProgressContainer');
             if (prog) prog.style.display = 'flex';
 
-            let detectedText = "สวัสดีครับผมชื่อสมชาย ยินดีที่ได้รู้จักครับ";
-            try {
-                const res = await recognize(file, currentMode === 'camera' ? 'camera' : 'upload');
-                if (res && res.text && res.text.trim()) {
-                    detectedText = res.text.trim();
+            let detectedText = "";
+            let confidence = 0;
+
+            if (file) {
+                try {
+                    const res = await recognize(file, currentMode === 'camera' ? 'camera' : 'upload');
+                    if (res && res.text && res.text.trim()) {
+                        detectedText = res.text.trim();
+                        confidence = res.confidence || 90;
+                    }
+                } catch (e) {
+                    console.warn('[OCR Backend response]:', e);
                 }
-            } catch (e) {
-                console.warn('[Backend offline / fallback simulation]:', e);
             }
 
-            if (typeof normalizeOcrText === 'function') {
+            if (typeof normalizeOcrText === 'function' && detectedText) {
                 detectedText = normalizeOcrText(detectedText);
             }
 
@@ -753,11 +739,11 @@
 
         // Display Result in UI
         function displayOCRResult(text, imagePreviewSrc) {
-            activeFullText = text;
-            if (typeof chunkTextForBraille === 'function') {
-                activeChunks = chunkTextForBraille(text);
+            activeFullText = text || '';
+            if (activeFullText && typeof chunkTextForBraille === 'function') {
+                activeChunks = chunkTextForBraille(activeFullText);
             } else {
-                activeChunks = [text];
+                activeChunks = activeFullText ? [activeFullText] : [];
             }
             activeChunkIdx = 0;
 
@@ -783,9 +769,33 @@
             const display = document.getElementById('detectedTextDisplay');
             const badge = document.getElementById('pageBadge');
             const grid = document.getElementById('brailleCellsGrid');
+            const btnPrev = document.getElementById('btnPrev');
+            const btnNext = document.getElementById('btnNext');
 
-            if (display) display.textContent = `"${activeFullText}"`;
+            if (!activeFullText) {
+                // When OCR finds no text in the image
+                if (display) {
+                    display.textContent = 'ไม่พบข้อความในภาพ (กรุณาจัดแสงหรือถือกล้องให้ตรงข้อความ)';
+                    display.style.color = '#94a3b8';
+                    display.style.fontSize = '17px';
+                }
+                if (badge) badge.textContent = 'หน้า 0/0';
+                if (grid) {
+                    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; color:#94a3b8; padding:24px 10px; font-size:13px;"><i class="fa-solid fa-circle-exclamation" style="margin-right:6px;"></i>ไม่มีข้อความสำหรับแสดงผลอักษรเบรลล์</div>';
+                }
+                if (btnPrev) btnPrev.style.display = 'none';
+                if (btnNext) btnNext.style.display = 'none';
+                return;
+            }
+
+            if (display) {
+                display.textContent = `"${activeFullText}"`;
+                display.style.color = '#00ff88';
+                display.style.fontSize = '22px';
+            }
             if (badge) badge.textContent = `หน้า ${activeChunkIdx + 1}/${activeChunks.length}`;
+            if (btnPrev) btnPrev.style.display = 'inline-flex';
+            if (btnNext) btnNext.style.display = 'inline-flex';
 
             const chunk = activeChunks[activeChunkIdx] || '';
             if (grid && typeof convertThaiToBraille === 'function') {
@@ -806,6 +816,7 @@
         }
 
         function pageStep(delta) {
+            if (activeChunks.length === 0) return;
             const nextIdx = activeChunkIdx + delta;
             if (nextIdx >= 0 && nextIdx < activeChunks.length) {
                 activeChunkIdx = nextIdx;
@@ -814,6 +825,10 @@
         }
 
         function resetToScanAgain() {
+            isCapturing = false;
+            activeFullText = '';
+            activeChunks = [];
+            activeChunkIdx = 0;
             const resSec = document.getElementById('ocrResultSection');
             if (resSec) resSec.classList.remove('active');
             switchMode(currentMode);
