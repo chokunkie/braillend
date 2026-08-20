@@ -2,8 +2,8 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BRAILLELENS - ทดลองใช้งานจริง (Camera & OCR Scanner)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BrailBox - ทดลองใช้งานจริง (Camera & OCR Scanner)</title>
     
     <!-- External Dependencies & Fonts -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -15,17 +15,31 @@
     <link rel="stylesheet" href="css/styles.css">
 
     <style>
+        html {
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            height: auto;
+            min-height: 100%;
+        }
+
         body {
             background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%);
             color: #0f172a;
             margin: 0;
             font-family: 'Prompt', sans-serif;
             min-height: 100vh;
+            height: auto;
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
             display: flex;
             flex-direction: column;
             align-items: center;
             box-sizing: border-box;
-            padding: 16px 12px 30px;
+            padding: 16px 12px 90px;
         }
 
         .camera-page-container {
@@ -34,6 +48,7 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
+            touch-action: pan-y;
         }
 
         /* Top Navigation Header */
@@ -374,7 +389,7 @@
             <div class="page-brand">
                 <div class="page-logo"><i class="fa-solid fa-braille"></i></div>
                 <div>
-                    <div class="page-title">BRAILLELENS SCANNER</div>
+                    <div class="page-title">BrailBox Scanner</div>
                     <div style="font-size:11px; color:#00f2fe;">ทดลองใช้งานจริง • แปลงอักษรเบรลล์ 14 เซลล์</div>
                 </div>
             </div>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BrailleLens 3D Hardware Simulation - Smart Reader Workstation</title>
+    <title>BrailBox 3D Hardware Simulation - Smart Reader Workstation</title>
     <!-- Three.js and OrbitControls -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -344,7 +344,7 @@
     <div id="flashOverlay"></div>
 
     <!-- Hidden Input Textarea for Braille Engine Sync -->
-    <textarea id="thaiInput" style="display:none;">สวัสดีครับผมชื่อสมชายยินดีที่ได้รู้จักครับ</textarea>
+    <textarea id="thaiInput" style="display:none;">สวัสดีครับพวกเราทีมรับเหมาก่อเรื่อง</textarea>
 
     <!-- Modular Subsystems -->
     <script src="js/textProcessor.js"></script>
@@ -354,11 +354,11 @@
 
     <script>
         // Exact Document Text & 14-Cell Chunks
-        const FULL_ESSAY_TEXT = "สวัสดีครับผมชื่อสมชายยินดีที่ได้รู้จักครับ";
+        const FULL_ESSAY_TEXT = "สวัสดีครับพวกเราทีมรับเหมาก่อเรื่อง";
         const ESSAY_CHUNKS = [
             "สวัสดีครับ",
-            "ผมชื่อสมชาย",
-            "ยินดีที่ได้รู้จักครับ"
+            "พวกเราทีม",
+            "รับเหมาก่อเรื่อง"
         ];
 
         let lineIdx = 0;
