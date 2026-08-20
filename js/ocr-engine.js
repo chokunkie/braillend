@@ -1,156 +1,20 @@
 /* =========================================================================
-   BraillLens 3D & Optical OCR System - Optical Character Recognition Engine
-   Version: 3.3.0 (Visual OCR Bounding Box Inspector & Viewfinder Crop Core)
+   BraillLens 3D & Optical OCR System - OCR Orchestration & UI Glue
+   Version: 4.0.0 (EasyOCR Backend / Thai-Focused)
+
+   This file owns UI wiring only (dropzone, camera modal, progress HUD,
+   bounding-box inspector) plus the single unified pipeline function that
+   BOTH the upload flow and the camera-capture flow call. The only thing
+   that differs between them is the documentSource label - it has zero
+   effect on how OCR is actually performed (that logic lives entirely in
+   js/ocr.js). Camera stream/capture mechanics live in js/camera.js. Text
+   normalization lives in js/textProcessor.js. Demo Mode lives in
+   js/demoMode.js and never touches this pipeline's network call.
    ========================================================================= */
 
-// OCR & Vision State Variables
-let cameraStream = null;
-let currentFacingMode = 'environment';
 let isOCROngoing = false;
 let lastOcrInspectorData = null;
-
-/**
- * Grayscale High-Contrast Preprocessing Pipeline
- * BT.601 Grayscale -> 3x3 Gaussian Denoise -> 3x3 Sharpen -> Contrast Stretch -> Auto Polarity
- */
-async function preprocessImageForOCR(imageSource, options = {}) {
-    return new Promise((resolve, reject) => {
-        if (imageSource instanceof HTMLCanvasElement && imageSource._isPreprocessed) {
-            resolve(imageSource);
-            return;
-        }
-
-        const processCanvas = (sourceImg, width, height) => {
-            try {
-                const canvas = document.createElement('canvas');
-                let scaleFactor = options.scale || (width < 600 || height < 600 ? 3.0 : (width >= 1600 || height >= 1600 ? 1.0 : 2.0));
-                if (width * scaleFactor > 3200 || height * scaleFactor > 3200) {
-                    scaleFactor = Math.min(2.0, 3200 / Math.max(width, height));
-                }
-
-                const targetWidth = Math.max(1, Math.round(width * scaleFactor));
-                const targetHeight = Math.max(1, Math.round(height * scaleFactor));
-                canvas.width = targetWidth;
-                canvas.height = targetHeight;
-
-                const pctx = canvas.getContext('2d', { willReadFrequently: true });
-                pctx.fillStyle = '#FFFFFF';
-                pctx.fillRect(0, 0, targetWidth, targetHeight);
-                pctx.imageSmoothingEnabled = true;
-                pctx.imageSmoothingQuality = 'high';
-                pctx.drawImage(sourceImg, 0, 0, targetWidth, targetHeight);
-
-                const imgData = pctx.getImageData(0, 0, targetWidth, targetHeight);
-                const data = imgData.data;
-                const totalPixels = targetWidth * targetHeight;
-                const gray = new Uint8Array(totalPixels);
-
-                // Step 1: Standard Luminance Grayscale (BT.601: 0.299R + 0.587G + 0.114B)
-                let sumLuma = 0;
-                for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-                    const r = data[i], g = data[i + 1], b = data[i + 2];
-                    const luma = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-                    gray[p] = luma;
-                    sumLuma += luma;
-                }
-
-                // Step 2: 3x3 Gaussian Denoising Filter (Kernel: [1, 2, 1; 2, 4, 2; 1, 2, 1] / 16)
-                const denoised = new Uint8Array(totalPixels);
-                for (let y = 0; y < targetHeight; y++) {
-                    const rowOffset = y * targetWidth;
-                    for (let x = 0; x < targetWidth; x++) {
-                        if (x === 0 || y === 0 || x === targetWidth - 1 || y === targetHeight - 1) {
-                            denoised[rowOffset + x] = gray[rowOffset + x];
-                            continue;
-                        }
-                        const sum = (
-                            gray[(y - 1) * targetWidth + (x - 1)] * 1 + gray[(y - 1) * targetWidth + x] * 2 + gray[(y - 1) * targetWidth + (x + 1)] * 1 +
-                            gray[rowOffset + (x - 1)] * 2 + gray[rowOffset + x] * 4 + gray[rowOffset + (x + 1)] * 2 +
-                            gray[(y + 1) * targetWidth + (x - 1)] * 1 + gray[(y + 1) * targetWidth + x] * 2 + gray[(y + 1) * targetWidth + (x + 1)] * 1
-                        );
-                        denoised[rowOffset + x] = (sum >> 4);
-                    }
-                }
-
-                // Step 3: 3x3 Convolution Sharpening Filter ([0, -1, 0], [-1, 5, -1], [0, -1, 0])
-                const sharpened = new Uint8Array(totalPixels);
-                let minVal = 255, maxVal = 0;
-                for (let y = 0; y < targetHeight; y++) {
-                    const rowOffset = y * targetWidth;
-                    for (let x = 0; x < targetWidth; x++) {
-                        if (x === 0 || y === 0 || x === targetWidth - 1 || y === targetHeight - 1) {
-                            const edgeVal = denoised[rowOffset + x];
-                            sharpened[rowOffset + x] = edgeVal;
-                            if (edgeVal < minVal) minVal = edgeVal;
-                            if (edgeVal > maxVal) maxVal = edgeVal;
-                            continue;
-                        }
-                        const sharpVal = -denoised[(y - 1) * targetWidth + x] - denoised[rowOffset + (x - 1)] + 5 * denoised[rowOffset + x] - denoised[rowOffset + (x + 1)] - denoised[(y + 1) * targetWidth + x];
-                        const clamped = sharpVal < 0 ? 0 : (sharpVal > 255 ? 255 : sharpVal);
-                        sharpened[rowOffset + x] = clamped;
-                        if (clamped < minVal) minVal = clamped;
-                        if (clamped > maxVal) maxVal = clamped;
-                    }
-                }
-
-                // Step 4: Dynamic Contrast Normalization / Min-Max Histogram Stretching
-                const range = maxVal - minVal;
-                const factor = range > 15 ? (255.0 / range) : 1.0;
-                let avgStretchedLuma = 0;
-                for (let p = 0; p < totalPixels; p++) {
-                    const normalized = range > 15 ? (sharpened[p] - minVal) * factor : sharpened[p];
-                    const clampedVal = normalized < 0 ? 0 : (normalized > 255 ? 255 : Math.round(normalized));
-                    sharpened[p] = clampedVal;
-                    avgStretchedLuma += clampedVal;
-                }
-
-                // Step 5: Auto Polarity Inversion (Invert if dark background with bright text)
-                const isDarkBackground = (avgStretchedLuma / totalPixels) < 120;
-                for (let p = 0; p < totalPixels; p++) {
-                    let pixelVal = isDarkBackground ? (255 - sharpened[p]) : sharpened[p];
-                    const idx = p * 4;
-                    data[idx] = pixelVal;
-                    data[idx + 1] = pixelVal;
-                    data[idx + 2] = pixelVal;
-                    data[idx + 3] = 255;
-                }
-
-                pctx.putImageData(imgData, 0, 0);
-                canvas._isPreprocessed = true;
-                resolve(canvas);
-            } catch (err) {
-                reject(err);
-            }
-        };
-
-        if (imageSource instanceof HTMLCanvasElement) {
-            processCanvas(imageSource, imageSource.width, imageSource.height);
-        } else if (imageSource instanceof HTMLImageElement) {
-            if (imageSource.complete && imageSource.naturalWidth > 0) processCanvas(imageSource, imageSource.naturalWidth, imageSource.naturalHeight);
-            else { imageSource.onload = () => processCanvas(imageSource, imageSource.naturalWidth, imageSource.naturalHeight); imageSource.onerror = reject; }
-        } else if (imageSource instanceof HTMLVideoElement) {
-            processCanvas(imageSource, imageSource.videoWidth || 1080, imageSource.videoHeight || 1920);
-        } else if (imageSource instanceof Blob || imageSource instanceof File) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => processCanvas(img, img.naturalWidth, img.naturalHeight);
-                img.onerror = reject;
-                img.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(imageSource);
-        } else if (typeof imageSource === 'string') {
-            const img = new Image();
-            img.crossOrigin = 'Anonymous';
-            img.onload = () => processCanvas(img, img.naturalWidth, img.naturalHeight);
-            img.onerror = reject;
-            img.src = imageSource;
-        } else {
-            reject(new Error('Unsupported image source type for OCR preprocessing.'));
-        }
-    });
-}
+const OCR_LOW_CONFIDENCE_THRESHOLD = 50;
 
 /**
  * Updates OCR Progress HUD and Confidence Indicator
@@ -171,7 +35,7 @@ function updateOCRProgress(progress01, statusHtml, confidence = null) {
             confBadge.style.background = 'rgba(0, 255, 136, 0.15)';
             confBadge.style.color = 'var(--accent-emerald)';
             confBadge.style.borderColor = 'rgba(0, 255, 136, 0.4)';
-        } else if (confidence >= 50) {
+        } else if (confidence >= OCR_LOW_CONFIDENCE_THRESHOLD) {
             confBadge.style.background = 'rgba(245, 158, 11, 0.15)';
             confBadge.style.color = 'var(--accent-amber)';
             confBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
@@ -203,13 +67,9 @@ function renderOCRInspector(imageSource, ocrData) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Draw base scanned image
     ctx.drawImage(imageSource, 0, 0, srcW, srcH);
 
-    const words = (ocrData && ocrData.words && ocrData.words.length > 0)
-        ? ocrData.words
-        : ((ocrData && ocrData.lines) ? ocrData.lines.flatMap(l => l.words || [l]) : []);
-
+    const words = (ocrData && ocrData.words) ? ocrData.words : [];
     const overallConf = (typeof ocrData.confidence === 'number') ? ocrData.confidence : 90;
     if (wordCountBadge) {
         wordCountBadge.innerText = `${words.length} Words (Confidence: ${Math.round(overallConf)}%)`;
@@ -227,7 +87,6 @@ function renderOCRInspector(imageSource, ocrData) {
         }
     }
 
-    // Draw glowing bounding boxes & label tags
     for (const w of words) {
         const bbox = w.bbox;
         if (!bbox) continue;
@@ -236,18 +95,15 @@ function renderOCRInspector(imageSource, ocrData) {
         if (bw <= 0 || bh <= 0) continue;
 
         ctx.save();
-        // 1. Neon glowing bounding box outline
         ctx.strokeStyle = '#00FF88';
         ctx.lineWidth = Math.max(2, Math.round(srcW / 500));
         ctx.shadowColor = '#00FF88';
         ctx.shadowBlur = 8;
         ctx.strokeRect(bx, by, bw, bh);
 
-        // 2. Translucent overlay fill
         ctx.fillStyle = 'rgba(0, 255, 136, 0.12)';
         ctx.fillRect(bx, by, bw, bh);
 
-        // 3. Label tag above bounding box
         const labelText = (w.text || '').trim();
         if (labelText) {
             const fontSize = Math.max(11, Math.min(22, Math.round(bh * 0.55)));
@@ -269,9 +125,6 @@ function renderOCRInspector(imageSource, ocrData) {
     }
 }
 
-/**
- * Opens OCR Bounding Box Inspector Modal
- */
 function openOCRInspector() {
     const modal = document.getElementById('ocrInspectorModal');
     if (modal) {
@@ -280,81 +133,75 @@ function openOCRInspector() {
     }
 }
 
-/**
- * Closes OCR Bounding Box Inspector Modal
- */
 function closeOCRInspector() {
     const modal = document.getElementById('ocrInspectorModal');
     if (modal) modal.classList.remove('active');
 }
 
 /**
- * Tesseract.js Worker Engine & Extraction Dispatcher (PSM 3 Mode - English Only Locked)
+ * Loads a File/Blob into an HTMLImageElement (used for the preview thumbnail
+ * and the bounding-box inspector background).
  */
-async function runOCRExtraction(imageSource, langOverride = null) {
-    if (isOCROngoing) return;
-    isOCROngoing = true;
-    const lang = 'eng'; // Locked to English Only ('eng')
+function loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => resolve({ img, url });
+        img.onerror = reject;
+        img.src = url;
+    });
+}
 
-    const langSelect = document.getElementById('ocrLangSelect');
-    if (langSelect && langSelect.value !== 'eng') langSelect.value = 'eng';
+function showPreview(file, label) {
+    const previewCard = document.getElementById('dropzonePreview');
+    const previewThumb = document.getElementById('previewThumbnail');
+    const previewName = document.getElementById('previewFilename');
+    if (previewCard && previewThumb && previewName) {
+        previewThumb.src = URL.createObjectURL(file);
+        previewName.innerText = label;
+        previewCard.classList.add('active');
+    }
+}
+
+/**
+ * THE unified OCR pipeline. Both the upload handler and captureCameraSnapshot()
+ * call this same function - documentSource is a UI label only and never
+ * changes how OCR is performed.
+ */
+async function runOcrPipeline(imageFile, documentSource) {
+    if (isOCROngoing || !imageFile) return null;
+    isOCROngoing = true;
 
     try {
-        updateOCRProgress(0.08, '<i class="fa-solid fa-wand-magic-sparkles fa-spin"></i> กำลังปรับปรุงคอนทราสต์ภาพ (Grayscale-First Pipeline)...', 0);
-        const preprocessedCanvas = await preprocessImageForOCR(imageSource);
+        updateOCRProgress(0.15, '<i class="fa-solid fa-paper-plane fa-spin"></i> กำลังส่งภาพไปยังเซิร์ฟเวอร์ OCR (EasyOCR: ไทย + อังกฤษ)...', 0);
 
-        const previewCard = document.getElementById('dropzonePreview');
-        const previewThumb = document.getElementById('previewThumbnail');
-        if (previewCard && previewThumb && preprocessedCanvas) {
-            previewThumb.src = preprocessedCanvas.toDataURL('image/png');
-            previewCard.classList.add('active');
+        const result = await recognize(imageFile, documentSource);
+        updateOCRProgress(0.75, '<i class="fa-solid fa-microchip fa-spin"></i> กำลังประมวลผลข้อความที่ถอดได้...', result.confidence);
+
+        const cleanedText = normalizeOcrText(result.text);
+
+        let inspectorImage = null;
+        try {
+            const loaded = await loadImageFromFile(imageFile);
+            inspectorImage = loaded.img;
+        } catch (e) {
+            inspectorImage = null;
         }
 
-        updateOCRProgress(0.2, `<i class="fa-solid fa-microchip fa-spin"></i> กำลังโหลดโมเดล OCR (${lang.toUpperCase()})...`);
-        if (typeof Tesseract === 'undefined') {
-            throw new Error('ไม่พบไลบรารี Tesseract.js ในระบบ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต');
+        if (inspectorImage) {
+            renderOCRInspector(inspectorImage, { words: result.words, confidence: result.confidence });
         }
 
-        // PSM 3 (PSM.AUTO) for full page layout analysis, automatic angle detection & OCR accuracy
-        const result = await Tesseract.recognize(
-            preprocessedCanvas,
-            lang,
-            {
-                tessedit_pageseg_mode: '3',
-                logger: (m) => {
-                    if (m.status === 'loading tesseract core') {
-                        updateOCRProgress(0.15 + (m.progress || 0) * 0.15, '<i class="fa-solid fa-download fa-spin"></i> กำลังโหลด Tesseract Core...');
-                    } else if (m.status === 'loading language traineddata') {
-                        updateOCRProgress(0.30 + (m.progress || 0) * 0.25, `<i class="fa-solid fa-book-open-reader fa-spin"></i> กำลังโหลดพจนานุกรม (${lang.toUpperCase()}) ${Math.round((m.progress || 0) * 100)}%...`);
-                    } else if (m.status === 'initializing api') {
-                        updateOCRProgress(0.58, '<i class="fa-solid fa-gears fa-spin"></i> กำลังเริ่มต้นโมเดลโครงข่ายประสาท (Neural Network)...');
-                    } else if (m.status === 'recognizing text') {
-                        const subProgress = 0.60 + (m.progress || 0) * 0.38;
-                        updateOCRProgress(subProgress, `<i class="fa-solid fa-magnifying-glass fa-spin"></i> กำลังถอดรหัสตัวอักษร (${Math.round((m.progress || 0) * 100)}%)...`);
-                    }
-                }
-            }
-        );
-
-        const rawText = (result && result.data && result.data.text) ? result.data.text : '';
-        const confidence = (result && result.data && typeof result.data.confidence === 'number') ? result.data.confidence : 90;
-        const cleanedText = rawText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-        if (!cleanedText) {
-            updateOCRProgress(1.0, '<i class="fa-solid fa-circle-exclamation" style="color:var(--accent-amber);"></i> ไม่พบตัวอักษรในภาพ กรุณาถ่ายภาพใหม่หรือปรับมุมกล้อง', 0);
-            setTimeout(() => {
-                const container = document.getElementById('ocrProgressContainer');
-                if (container) container.classList.remove('active');
-            }, 4000);
-        } else {
-            const previewSnippet = cleanedText.length > 22 ? cleanedText.substring(0, 22) + '...' : cleanedText;
-            updateOCRProgress(1.0, `<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> สแกนสำเร็จ: "${previewSnippet}"`, confidence);
-            applyOCRResultToSystem(cleanedText, confidence);
+        if (!cleanedText || result.confidence < OCR_LOW_CONFIDENCE_THRESHOLD) {
+            updateOCRProgress(1.0, '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> ภาพไม่ชัดเจน กรุณาลองใหม่ (image unclear, try again)', result.confidence);
+            return { text: cleanedText, confidence: result.confidence, words: result.words, accepted: false };
         }
 
-        // Render Visual OCR Bounding Box Inspector
-        if (result && result.data) renderOCRInspector(preprocessedCanvas || imageSource, result.data);
-        return { text: cleanedText, confidence: confidence, rawResult: result };
+        const previewSnippet = cleanedText.length > 22 ? cleanedText.substring(0, 22) + '...' : cleanedText;
+        updateOCRProgress(1.0, `<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> สแกนสำเร็จ: "${previewSnippet}"`, result.confidence);
+        applyOCRResultToSystem(cleanedText, result.confidence);
+
+        return { text: cleanedText, confidence: result.confidence, words: result.words, accepted: true };
     } catch (err) {
         console.error('[BraillLens OCR Error]:', err);
         updateOCRProgress(1.0, `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-magenta);"></i> ผิดพลาด: ${err.message || err}`, 0);
@@ -394,22 +241,15 @@ function updatePowerTelemetry(pulseWatts = 2.4, durationMs = 600) {
 }
 
 /**
- * Image file selection handler
+ * Image file selection handler (upload flow)
  */
 function handleImageFileSelect(file) {
     if (!file || !file.type.startsWith('image/')) {
         alert('กรุณาเลือกไฟล์ภาพที่ถูกต้อง (PNG, JPG, WebP, BMP)');
         return;
     }
-    const previewCard = document.getElementById('dropzonePreview');
-    const previewThumb = document.getElementById('previewThumbnail');
-    const previewName = document.getElementById('previewFilename');
-    if (previewCard && previewThumb && previewName) {
-        previewThumb.src = URL.createObjectURL(file);
-        previewName.innerText = file.name || 'image.png';
-        previewCard.classList.add('active');
-    }
-    runOCRExtraction(file);
+    showPreview(file, file.name || 'image.png');
+    runOcrPipeline(file, 'upload');
 }
 
 function clearImagePreview() {
@@ -424,7 +264,7 @@ function clearImagePreview() {
 }
 
 /**
- * WebRTC Camera Viewfinder Controller & Live Guidance Bootstrap
+ * Camera modal open/close. Actual stream lifecycle lives in js/camera.js.
  */
 async function openCameraModal() {
     const modal = document.getElementById('cameraModal');
@@ -442,180 +282,37 @@ function closeCameraModal() {
     if (modal) modal.classList.remove('active');
 }
 
-async function startCameraStream(facingMode = 'environment') {
-    currentFacingMode = facingMode;
-    stopCameraStream();
-    const video = document.getElementById('cameraVideo');
-    if (!video) return;
-
-    try {
-        const constraints = {
-            video: {
-                facingMode: { ideal: facingMode },
-                aspectRatio: { ideal: 9 / 16 },
-                width: { ideal: 1080, min: 720 },
-                height: { ideal: 1920, min: 1280 }
-            },
-            audio: false
-        };
-        let stream;
-        try {
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (e) {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: { ideal: facingMode },
-                        aspectRatio: { ideal: 9 / 16 },
-                        width: { ideal: 720 },
-                        height: { ideal: 1280 }
-                    },
-                    audio: false
-                });
-            } catch (e2) {
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { ideal: facingMode } },
-                        audio: false
-                    });
-                } catch (e3) {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                }
-            }
-        }
-        cameraStream = stream;
-        video.srcObject = stream;
-        await video.play();
-    } catch (err) {
-        console.error('[WebRTC Camera Error]:', err);
-        alert(`ไม่สามารถเปิดใช้งานกล้องได้: ${err.message || 'กรุณาอนุญาตการเข้าถึงกล้องบนเบราว์เซอร์'}`);
-        closeCameraModal();
-    }
-}
-
-function stopCameraStream() {
-    if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-    }
-    const video = document.getElementById('cameraVideo');
-    if (video) video.srcObject = null;
-}
-
-async function switchCamera() {
-    currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
-    await startCameraStream(currentFacingMode);
-}
-
 /**
- * Calculates viewfinder crop coordinates with exact scale factoring, safety clamping & 85% fallback
- */
-function calculateViewfinderCrop(video, box, frame) {
-    const vw = (video && video.videoWidth > 0) ? video.videoWidth : 1080;
-    const vh = (video && video.videoHeight > 0) ? video.videoHeight : 1920;
-
-    const getFallback = () => {
-        const sw = Math.max(50, Math.round(vw * 0.85));
-        const sh = Math.max(50, Math.round(vh * 0.85));
-        const sx = Math.max(0, Math.round((vw - sw) / 2));
-        const sy = Math.max(0, Math.round((vh - sh) / 2));
-        return { sx, sy, sw, sh };
-    };
-
-    if (!video || !box) return getFallback();
-
-    try {
-        const bw = video.clientWidth || box.clientWidth || 0;
-        const bh = video.clientHeight || box.clientHeight || 0;
-        if (bw <= 0 || bh <= 0 || vw <= 0 || vh <= 0) return getFallback();
-
-        const videoStyle = (typeof window !== 'undefined' && window.getComputedStyle) ? window.getComputedStyle(video) : null;
-        const fitMode = videoStyle ? videoStyle.objectFit : 'contain';
-
-        const scale = (fitMode === 'cover') ? Math.max(bw / vw, bh / vh) : Math.min(bw / vw, bh / vh);
-        if (scale <= 0 || isNaN(scale)) return getFallback();
-
-        const renderW = vw * scale;
-        const renderH = vh * scale;
-        const renderLeft = (bw - renderW) / 2;
-        const renderTop = (bh - renderH) / 2;
-
-        let frameLeft, frameTop, frameWidth, frameHeight;
-        if (frame && typeof frame.getBoundingClientRect === 'function') {
-            const frameRect = frame.getBoundingClientRect();
-            const containerEl = (video.clientWidth > 0 ? video : box);
-            const containerRect = containerEl.getBoundingClientRect();
-            if (containerRect.width > 0 && containerRect.height > 0 && frameRect.width > 0 && frameRect.height > 0) {
-                frameLeft = frameRect.left - containerRect.left;
-                frameTop = frameRect.top - containerRect.top;
-                frameWidth = frameRect.width;
-                frameHeight = frameRect.height;
-            }
-        }
-
-        if (!frameWidth || !frameHeight || frameWidth <= 0 || frameHeight <= 0) {
-            frameWidth = bw * 0.82;
-            frameHeight = bh * 0.78;
-            frameLeft = (bw - frameWidth) / 2;
-            frameTop = (bh - frameHeight) / 2;
-        }
-
-        const rawSx = (frameLeft - renderLeft) / scale;
-        const rawSy = (frameTop - renderTop) / scale;
-        const rawSw = frameWidth / scale;
-        const rawSh = frameHeight / scale;
-
-        const sx = Math.max(0, Math.min(vw - 20, Math.round(rawSx)));
-        const sy = Math.max(0, Math.min(vh - 20, Math.round(rawSy)));
-        const sw = Math.max(20, Math.min(vw - sx, Math.round(rawSw)));
-        const sh = Math.max(20, Math.min(vh - sy, Math.round(rawSh)));
-
-        if (isNaN(sx) || isNaN(sy) || isNaN(sw) || isNaN(sh) || sw < 50 || sh < 50) return getFallback();
-        return { sx, sy, sw, sh };
-    } catch (err) {
-        console.warn('[Viewfinder Crop Calculation Fallback]:', err);
-        return getFallback();
-    }
-}
-
-/**
- * Viewfinder Crop Engine & Grayscale Snapshot Capture
+ * Camera capture flow - shares runOcrPipeline() with the upload flow.
+ * documentSource: 'camera' only tunes backend preprocessing intensity.
  */
 async function captureCameraSnapshot() {
-    const video = document.getElementById('cameraVideo');
-    const canvas = document.getElementById('cameraCaptureCanvas');
-    if (!video || !canvas) return;
-
-    const box = document.getElementById('viewfinderBox');
-    const frame = document.querySelector('.viewfinder-frame');
-    const { sx, sy, sw, sh } = calculateViewfinderCrop(video, box, frame);
-
-    canvas.width = Math.round(sw);
-    canvas.height = Math.round(sh);
-    const cctx = canvas.getContext('2d', { willReadFrequently: true });
-    cctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    const file = await captureFrameToFile(0.92);
+    if (!file) return;
 
     closeCameraModal();
     if (typeof playTacticalBeep === 'function') playTacticalBeep(1050, 220);
-    if (typeof speakVoiceGuidance === 'function') speakVoiceGuidance('ถ่ายภาพสำเร็จ กำลังอ่านข้อความภาษาอังกฤษ...', true);
-    updateOCRProgress(0.05, '<i class="fa-solid fa-wand-magic-sparkles fa-spin"></i> กำลังปรับปรุงคอนทราสต์ภาพจากกรอบเล็ง (Viewfinder Crop)...', 0);
+    if (typeof speakVoiceGuidance === 'function') speakVoiceGuidance('ถ่ายภาพสำเร็จ กำลังอ่านข้อความ...', true);
 
+    showPreview(file, `Camera_${new Date().toLocaleTimeString().replace(/:/g, '-')}.jpg`);
+    runOcrPipeline(file, 'camera');
+}
+
+/**
+ * Demo Mode - hardcoded Thai sample text, no network call, clearly separated
+ * from the real OCR pipeline (js/demoMode.js).
+ */
+async function runDemoModeFlow() {
+    if (isOCROngoing) return;
+    isOCROngoing = true;
     try {
-        const processedCanvas = await preprocessImageForOCR(canvas, { isCamera: true });
-        const previewCard = document.getElementById('dropzonePreview');
-        const previewThumb = document.getElementById('previewThumbnail');
-        const previewName = document.getElementById('previewFilename');
-
-        if (previewCard && previewThumb && previewName) {
-            previewThumb.src = processedCanvas.toDataURL('image/png');
-            previewName.innerText = `Camera_Crop_${new Date().toLocaleTimeString().replace(/:/g, '-')}.png`;
-            previewCard.classList.add('active');
-        }
-
-        runOCRExtraction(processedCanvas);
-    } catch (err) {
-        console.error('[Capture Denoising Error]:', err);
-        runOCRExtraction(canvas);
+        updateOCRProgress(0.2, '<i class="fa-solid fa-flask fa-spin"></i> DEMO MODE: กำลังจำลองผลลัพธ์ OCR (ไม่ใช่ภาพจริง)...', 0);
+        const result = await runDemoOcr();
+        const cleanedText = normalizeOcrText(result.text);
+        updateOCRProgress(1.0, `<i class="fa-solid fa-flask" style="color:var(--accent-cyan);"></i> DEMO MODE: "${cleanedText}"`, result.confidence);
+        applyOCRResultToSystem(cleanedText, result.confidence);
+    } finally {
+        isOCROngoing = false;
     }
 }
 
@@ -627,6 +324,7 @@ function initOCRHandlers() {
     const btnCapture = document.getElementById('btnCaptureSnapshot'), btnVoice = document.getElementById('btnToggleVoiceGuidance');
     const btnAutoCap = document.getElementById('btnToggleAutoCapture'), btnOpenInspector = document.getElementById('btnOpenOcrInspector');
     const btnCloseInspector = document.getElementById('btnCloseOcrInspector'), btnPreviewInspector = document.getElementById('btnPreviewInspector');
+    const btnDemoMode = document.getElementById('btnDemoMode');
 
     if (btnBrowse && fileInput) btnBrowse.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
     if (dropzone && fileInput) {
@@ -653,6 +351,7 @@ function initOCRHandlers() {
     if (btnOpenInspector) btnOpenInspector.addEventListener('click', openOCRInspector);
     if (btnPreviewInspector) btnPreviewInspector.addEventListener('click', openOCRInspector);
     if (btnCloseInspector) btnCloseInspector.addEventListener('click', closeOCRInspector);
+    if (btnDemoMode) btnDemoMode.addEventListener('click', runDemoModeFlow);
 
     const btnPrev = document.getElementById('btnPrevPage'), btnNext = document.getElementById('btnNextPage');
     const btnMode = document.getElementById('btnToggleLanguageMode'), langSelect = document.getElementById('ocrLangSelect');

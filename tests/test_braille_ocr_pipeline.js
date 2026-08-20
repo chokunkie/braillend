@@ -14,27 +14,51 @@ const cssPath = path.join(projectRoot, 'css', 'styles.css');
 const jsBraillePath = path.join(projectRoot, 'js', 'braille-engine.js');
 const jsThreePath = path.join(projectRoot, 'js', 'three-scene.js');
 const jsVoicePath = path.join(projectRoot, 'js', 'voice-guidance.js');
-const jsOcrPath = path.join(projectRoot, 'js', 'ocr-engine.js');
+const jsOcrEnginePath = path.join(projectRoot, 'js', 'ocr-engine.js');
+const jsOcrModulePath = path.join(projectRoot, 'js', 'ocr.js');
+const jsCameraPath = path.join(projectRoot, 'js', 'camera.js');
+const jsTextProcessorPath = path.join(projectRoot, 'js', 'textProcessor.js');
+const jsDemoModePath = path.join(projectRoot, 'js', 'demoMode.js');
 const jsAppPath = path.join(projectRoot, 'js', 'app.js');
 const readmePath = path.join(projectRoot, 'README.md');
+const backendMainPath = path.join(projectRoot, 'backend', 'main.py');
+const backendPreprocessingPath = path.join(projectRoot, 'backend', 'preprocessing.py');
+const backendOcrEnginePath = path.join(projectRoot, 'backend', 'ocr_engine.py');
+const backendRequirementsPath = path.join(projectRoot, 'backend', 'requirements.txt');
 
 assert(fs.existsSync(indexPath), `Target index.html not found at ${indexPath}`);
 assert(fs.existsSync(cssPath), `Target css/styles.css not found at ${cssPath}`);
 assert(fs.existsSync(jsBraillePath), `Target js/braille-engine.js not found at ${jsBraillePath}`);
 assert(fs.existsSync(jsThreePath), `Target js/three-scene.js not found at ${jsThreePath}`);
 assert(fs.existsSync(jsVoicePath), `Target js/voice-guidance.js not found at ${jsVoicePath}`);
-assert(fs.existsSync(jsOcrPath), `Target js/ocr-engine.js not found at ${jsOcrPath}`);
+assert(fs.existsSync(jsOcrEnginePath), `Target js/ocr-engine.js not found at ${jsOcrEnginePath}`);
+assert(fs.existsSync(jsOcrModulePath), `Target js/ocr.js not found at ${jsOcrModulePath}`);
+assert(fs.existsSync(jsCameraPath), `Target js/camera.js not found at ${jsCameraPath}`);
+assert(fs.existsSync(jsTextProcessorPath), `Target js/textProcessor.js not found at ${jsTextProcessorPath}`);
+assert(fs.existsSync(jsDemoModePath), `Target js/demoMode.js not found at ${jsDemoModePath}`);
 assert(fs.existsSync(jsAppPath), `Target js/app.js not found at ${jsAppPath}`);
 assert(fs.existsSync(readmePath), `Target README.md not found at ${readmePath}`);
+assert(fs.existsSync(backendMainPath), `Target backend/main.py not found at ${backendMainPath}`);
+assert(fs.existsSync(backendPreprocessingPath), `Target backend/preprocessing.py not found at ${backendPreprocessingPath}`);
+assert(fs.existsSync(backendOcrEnginePath), `Target backend/ocr_engine.py not found at ${backendOcrEnginePath}`);
+assert(fs.existsSync(backendRequirementsPath), `Target backend/requirements.txt not found at ${backendRequirementsPath}`);
 
 const indexContent = fs.readFileSync(indexPath, 'utf-8');
 const cssContent = fs.readFileSync(cssPath, 'utf-8');
 const jsBrailleContent = fs.readFileSync(jsBraillePath, 'utf-8');
 const jsThreeContent = fs.readFileSync(jsThreePath, 'utf-8');
 const jsVoiceContent = fs.readFileSync(jsVoicePath, 'utf-8');
-const jsOcrContent = fs.readFileSync(jsOcrPath, 'utf-8');
+const jsOcrContent = fs.readFileSync(jsOcrEnginePath, 'utf-8');
+const jsOcrModuleContent = fs.readFileSync(jsOcrModulePath, 'utf-8');
+const jsCameraContent = fs.readFileSync(jsCameraPath, 'utf-8');
+const jsTextProcessorContent = fs.readFileSync(jsTextProcessorPath, 'utf-8');
+const jsDemoModeContent = fs.readFileSync(jsDemoModePath, 'utf-8');
 const jsAppContent = fs.readFileSync(jsAppPath, 'utf-8');
 const readmeContent = fs.readFileSync(readmePath, 'utf-8');
+const backendMainContent = fs.readFileSync(backendMainPath, 'utf-8');
+const backendPreprocessingContent = fs.readFileSync(backendPreprocessingPath, 'utf-8');
+const backendOcrEngineContent = fs.readFileSync(backendOcrEnginePath, 'utf-8');
+const backendRequirementsContent = fs.readFileSync(backendRequirementsPath, 'utf-8');
 
 let totalTests = 0;
 let passedTests = 0;
@@ -72,11 +96,15 @@ runTest('External CDN Dependencies in index.html', () => {
     assert(indexContent.includes('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'), 'Missing Three.js CDN');
     assert(indexContent.includes('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js'), 'Missing OrbitControls CDN');
     assert(indexContent.includes('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'), 'Missing FontAwesome CDN');
-    assert(indexContent.includes('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'), 'Missing Tesseract.js v5 CDN in <head>');
+    assert(!indexContent.includes('tesseract'), 'Tesseract.js CDN should be removed - OCR now runs via the EasyOCR backend');
 });
 
-runTest('Modular Stylesheet & Script Tags in index.html (including voice-guidance.js)', () => {
+runTest('Modular Stylesheet & Script Tags in index.html (including OCR module split)', () => {
     assert(indexContent.includes('<link rel="stylesheet" href="css/styles.css">'), 'Missing css/styles.css link tag');
+    assert(indexContent.includes('<script src="js/textProcessor.js"></script>'), 'Missing js/textProcessor.js script tag');
+    assert(indexContent.includes('<script src="js/camera.js"></script>'), 'Missing js/camera.js script tag');
+    assert(indexContent.includes('<script src="js/ocr.js"></script>'), 'Missing js/ocr.js script tag');
+    assert(indexContent.includes('<script src="js/demoMode.js"></script>'), 'Missing js/demoMode.js script tag');
     assert(indexContent.includes('<script src="js/braille-engine.js"></script>'), 'Missing js/braille-engine.js script tag');
     assert(indexContent.includes('<script src="js/three-scene.js"></script>'), 'Missing js/three-scene.js script tag');
     assert(indexContent.includes('<script src="js/voice-guidance.js"></script>'), 'Missing js/voice-guidance.js script tag');
@@ -160,7 +188,6 @@ console.log('\n--- SUITE 3: DOM Elements & OCR IDs in index.html ---');
 
 runTest('Required OCR Control Panel, 4-Corner Viewfinder, Focus HUD, Voice HUD & Inspector DOM IDs', () => {
     const requiredIds = [
-        'ocrLangSelect',
         'ocrDropzone',
         'imageFileInput',
         'btnTriggerFileBrowse',
@@ -170,6 +197,7 @@ runTest('Required OCR Control Panel, 4-Corner Viewfinder, Focus HUD, Voice HUD &
         'previewFilename',
         'btnOpenLiveCamera',
         'btnOpenOcrInspector',
+        'btnDemoMode',
         'cameraModal',
         'cameraVideo',
         'cameraCaptureCanvas',
@@ -214,6 +242,9 @@ runTest('Required OCR Control Panel, 4-Corner Viewfinder, Focus HUD, Voice HUD &
         const idRegex = new RegExp(`id=["']${id}["']`);
         assert(idRegex.test(indexContent), `Missing DOM element with id="${id}" in index.html`);
     }
+
+    assert(!/id=["']ocrLangSelect["']/.test(indexContent), 'ocrLangSelect should be removed - EasyOCR always loads both th+en, no language choice exists');
+    assert(indexContent.includes('ocr-lang-badge'), 'Missing static ocr-lang-badge replacing the old language dropdown');
 });
 
 // -------------------------------------------------------------
@@ -258,17 +289,48 @@ runTest('Compile js/voice-guidance.js with Node vm.Script (including Laplacian F
     assert(jsVoiceContent.includes('function toggleAutoCapture'), 'Missing toggleAutoCapture');
 });
 
-runTest('Compile js/ocr-engine.js with Node vm.Script', () => {
+runTest('Compile js/ocr-engine.js with Node vm.Script (UI orchestration & unified pipeline)', () => {
     new vm.Script(jsOcrContent, { filename: 'ocr-engine.js' });
-    assert(jsOcrContent.includes('async function preprocessImageForOCR'), 'Missing preprocessImageForOCR');
-    assert(jsOcrContent.includes('async function runOCRExtraction'), 'Missing runOCRExtraction');
+    assert(jsOcrContent.includes('async function runOcrPipeline'), 'Missing runOcrPipeline - the single unified OCR entry point');
     assert(jsOcrContent.includes('function renderOCRInspector'), 'Missing renderOCRInspector');
     assert(jsOcrContent.includes('function openOCRInspector'), 'Missing openOCRInspector');
     assert(jsOcrContent.includes('function closeOCRInspector'), 'Missing closeOCRInspector');
-    assert(jsOcrContent.includes('function calculateViewfinderCrop'), 'Missing calculateViewfinderCrop');
-    assert(jsOcrContent.includes('function startCameraStream'), 'Missing startCameraStream');
-    assert(jsOcrContent.includes('function captureCameraSnapshot'), 'Missing captureCameraSnapshot');
+    assert(jsOcrContent.includes('async function captureCameraSnapshot'), 'Missing captureCameraSnapshot');
     assert(jsOcrContent.includes('function initOCRHandlers'), 'Missing initOCRHandlers');
+    assert(jsOcrContent.includes('async function runDemoModeFlow'), 'Missing runDemoModeFlow');
+});
+
+runTest('Compile js/camera.js with Node vm.Script (client-only camera lifecycle & capture)', () => {
+    new vm.Script(jsCameraContent, { filename: 'camera.js' });
+    assert(jsCameraContent.includes('function startCameraStream'), 'Missing startCameraStream');
+    assert(jsCameraContent.includes('function stopCameraStream'), 'Missing stopCameraStream');
+    assert(jsCameraContent.includes('function switchCamera'), 'Missing switchCamera');
+    assert(jsCameraContent.includes('function calculateViewfinderCrop'), 'Missing calculateViewfinderCrop');
+    assert(jsCameraContent.includes('function captureFrameToFile'), 'Missing captureFrameToFile');
+    assert(!/fetch\s*\(/.test(jsCameraContent), 'js/camera.js must stay client-side only - no network calls');
+});
+
+runTest('Compile js/ocr.js with Node vm.Script (the ONLY module that performs OCR)', () => {
+    new vm.Script(jsOcrModuleContent, { filename: 'ocr.js' });
+    assert(jsOcrModuleContent.includes('async function recognize'), 'Missing recognize() - the single exported OCR function');
+    assert(jsOcrModuleContent.includes("fetch(OCR_BACKEND_URL"), 'recognize() must call the backend via fetch()');
+    assert(jsOcrModuleContent.includes("method: 'POST'"), 'Missing POST method for /ocr call');
+    assert(jsOcrModuleContent.includes('documentSource'), 'Missing documentSource form field passthrough');
+});
+
+runTest('Compile js/textProcessor.js with Node vm.Script (Thai-aware NFC normalization)', () => {
+    new vm.Script(jsTextProcessorContent, { filename: 'textProcessor.js' });
+    assert(jsTextProcessorContent.includes('function normalizeOcrText'), 'Missing normalizeOcrText');
+    assert(jsTextProcessorContent.includes("normalize('NFC')"), 'Missing Unicode NFC normalization');
+    assert(!/toUpperCase/.test(jsTextProcessorContent), 'textProcessor.js must not force uppercase - Thai has no case');
+});
+
+runTest('Compile js/demoMode.js with Node vm.Script (isolated from real OCR)', () => {
+    new vm.Script(jsDemoModeContent, { filename: 'demoMode.js' });
+    assert(jsDemoModeContent.includes('function runDemoOcr'), 'Missing runDemoOcr');
+    assert(jsDemoModeContent.includes('setTimeout'), 'Missing artificial delay simulating an OCR call');
+    assert(!/fetch\s*\(/.test(jsDemoModeContent), 'js/demoMode.js must never call the network / real OCR backend');
+    assert(/[฀-๿]/.test(jsDemoModeContent), 'Missing a hardcoded Thai sample string');
 });
 
 runTest('Compile js/app.js with Node vm.Script', () => {
@@ -334,29 +396,48 @@ runTest('Real-time Focus Status HUD Format & Score Display', () => {
     assert(jsVoiceContent.includes('FOCUS: SHARP 100% (Score'), 'Missing sharp focus HUD format');
 });
 
-runTest('Viewfinder Crop Coordinate Calculation & 85% Fallback in captureCameraSnapshot', () => {
-    assert(jsOcrContent.includes('viewfinderBox'), 'Missing viewfinderBox reference in captureCameraSnapshot');
-    assert(jsOcrContent.includes('viewfinder-frame'), 'Missing viewfinder-frame selector in captureCameraSnapshot');
-    assert(jsOcrContent.includes('calculateViewfinderCrop'), 'Missing calculateViewfinderCrop invocation');
-    assert(jsOcrContent.includes('vw * 0.85'), 'Missing 85% safety fallback crop calculation');
-    assert(jsOcrContent.includes('drawImage(video, sx, sy, sw, sh'), 'Missing precise source crop drawImage coordinates');
+runTest('Viewfinder Crop Coordinate Calculation & 85% Fallback in js/camera.js', () => {
+    assert(jsCameraContent.includes('viewfinderBox'), 'Missing viewfinderBox reference');
+    assert(jsCameraContent.includes('viewfinder-frame'), 'Missing viewfinder-frame selector');
+    assert(jsCameraContent.includes('calculateViewfinderCrop'), 'Missing calculateViewfinderCrop invocation');
+    assert(jsCameraContent.includes('vw * 0.85'), 'Missing 85% safety fallback crop calculation');
+    assert(jsCameraContent.includes('drawImage(video, sx, sy, sw, sh'), 'Missing precise source crop drawImage coordinates');
 });
 
-runTest('Grayscale High-Contrast Preprocessing (BT.601, Denoise, Sharpen, Stretch, Auto-Polarity)', () => {
-    assert(jsOcrContent.includes('0.299 * r + 0.587 * g + 0.114 * b'), 'Missing standard luminance grayscale conversion');
-    assert(jsOcrContent.includes('(sum >> 4)'), 'Missing 3x3 Gaussian denoise convolution filter sum shift');
-    assert(jsOcrContent.includes('5 * denoised[rowOffset + x]'), 'Missing 3x3 sharpen convolution filter on denoised buffer');
-    assert(jsOcrContent.includes('isDarkBackground'), 'Missing auto polarity inversion detection');
-    assert(jsOcrContent.includes("imageSmoothingQuality = 'high'"), 'Missing high-quality image smoothing on upscaling');
-    assert(jsOcrContent.includes('putImageData'), 'Missing canvas putImageData update');
+runTest('Backend Preprocessing Pipeline (Resize, CLAHE, Adaptive Threshold, Source-Aware Denoise)', () => {
+    assert(backendPreprocessingContent.includes('MIN_SHORT_SIDE = 640'), 'Missing 640px minimum short-side resize target');
+    assert(backendPreprocessingContent.includes('createCLAHE'), 'Missing CLAHE contrast enhancement');
+    assert(backendPreprocessingContent.includes('adaptiveThreshold'), 'Missing adaptive threshold for uneven lighting');
+    assert(backendPreprocessingContent.includes('_is_lighting_uneven'), 'Missing lighting-unevenness heuristic gating the adaptive threshold');
+    assert(backendPreprocessingContent.includes('fastNlMeansDenoising'), 'Missing denoise step');
+    assert(backendPreprocessingContent.includes('document_source == "camera"'), 'Denoise strength must be tuned by documentSource (camera vs upload)');
 });
 
-runTest('Tesseract.js Engine Guard & PSM 3 Configuration (English Only Locked)', () => {
-    assert(jsOcrContent.includes("typeof Tesseract === 'undefined'"), 'Missing Tesseract undefined guard');
+runTest('EasyOCR Engine Configuration (Thai + English, Beamsearch, Per-Word Boxes)', () => {
+    assert(backendOcrEngineContent.includes("easyocr.Reader([\"th\", \"en\"]"), "EasyOCR must load both 'th' and 'en'");
+    assert(backendOcrEngineContent.includes('decoder="beamsearch"'), 'Missing decoder=\"beamsearch\" for accuracy');
+    assert(backendOcrEngineContent.includes('paragraph=False'), 'Missing paragraph=False for per-word bounding boxes');
+    assert(backendOcrEngineContent.includes('_bbox_to_rect'), 'Missing conversion of EasyOCR polygon bbox to axis-aligned rect');
+});
+
+runTest('FastAPI /ocr Endpoint Contract', () => {
+    assert(backendMainContent.includes('@app.post("/ocr")'), 'Missing POST /ocr route');
+    assert(backendMainContent.includes('CORSMiddleware'), 'Missing CORS middleware for the local frontend');
+    assert(backendMainContent.includes('documentSource'), 'Missing documentSource form field');
+    assert(backendRequirementsContent.includes('fastapi'), 'Missing fastapi in requirements.txt');
+    assert(backendRequirementsContent.includes('easyocr'), 'Missing easyocr in requirements.txt');
+    assert(backendRequirementsContent.includes('opencv-python'), 'Missing opencv-python in requirements.txt');
+    assert(backendRequirementsContent.includes('python-multipart'), 'Missing python-multipart in requirements.txt');
+});
+
+runTest('Single Unified OCR Call Path (Upload & Camera share runOcrPipeline; documentSource is UI-label only)', () => {
     assert(jsOcrContent.includes('isOCROngoing'), 'Missing reentrancy guard isOCROngoing');
-    assert(jsOcrContent.includes('Tesseract.recognize'), 'Missing Tesseract.recognize execution');
-    assert(jsOcrContent.includes("const lang = 'eng';"), 'Tesseract.js OCR engine must be locked to English Only (eng)');
-    assert(jsOcrContent.includes("tessedit_pageseg_mode: '3'"), 'Tesseract OCR engine must use PSM 3 (PSM.AUTO) for auto angle/layout');
+    assert(/runOcrPipeline\(\s*file\s*,\s*['"]upload['"]\s*\)/.test(jsOcrContent), 'Upload flow must call runOcrPipeline(file, \'upload\')');
+    assert(/runOcrPipeline\(\s*file\s*,\s*['"]camera['"]\s*\)/.test(jsOcrContent), 'Camera flow must call runOcrPipeline(file, \'camera\')');
+    assert(jsOcrContent.includes('await recognize(imageFile, documentSource)'), 'runOcrPipeline must delegate the actual OCR call to js/ocr.js\'s recognize()');
+    assert(jsOcrContent.includes('normalizeOcrText(result.text)'), 'runOcrPipeline must normalize OCR text via js/textProcessor.js');
+    assert(jsOcrContent.includes('OCR_LOW_CONFIDENCE_THRESHOLD'), 'Missing low-confidence gate constant');
+    assert(jsOcrContent.includes('result.confidence < OCR_LOW_CONFIDENCE_THRESHOLD'), 'Missing low-confidence gate blocking Braille actuation on unclear images');
 });
 
 runTest('Visual OCR Bounding Box Inspector Canvas Rendering & Glowing Bounding Boxes', () => {
@@ -443,11 +524,11 @@ runTest('3x3 Gaussian Denoise Noise Reduction Filter Kernel Math Simulation', ()
 });
 
 runTest('High-Resolution Portrait Mode (9:16 Full HD) WebRTC Video Constraints', () => {
-    assert(jsOcrContent.includes('aspectRatio: { ideal: 9 / 16 }'), 'Missing portrait 9:16 aspect ratio constraint');
-    assert(jsOcrContent.includes('width: { ideal: 1080'), 'Missing ideal 1080 portrait width constraint');
-    assert(jsOcrContent.includes('height: { ideal: 1920'), 'Missing ideal 1920 portrait height constraint');
-    assert(jsOcrContent.includes('video.videoWidth'), 'Missing video.videoWidth native resolution grab');
-    assert(jsOcrContent.includes('video.videoHeight'), 'Missing video.videoHeight native resolution grab');
+    assert(jsCameraContent.includes('aspectRatio: { ideal: 9 / 16 }'), 'Missing portrait 9:16 aspect ratio constraint');
+    assert(jsCameraContent.includes('width: { ideal: 1080'), 'Missing ideal 1080 portrait width constraint');
+    assert(jsCameraContent.includes('height: { ideal: 1920'), 'Missing ideal 1920 portrait height constraint');
+    assert(jsCameraContent.includes('video.videoWidth'), 'Missing video.videoWidth native resolution grab');
+    assert(jsCameraContent.includes('video.videoHeight'), 'Missing video.videoHeight native resolution grab');
 });
 
 runTest('3D Hardware Interactive Tactical Buttons (Prev, Next, Mode) & Raycaster Handlers', () => {
@@ -489,11 +570,80 @@ runTest('14-Cell Text Chunking Algorithm (Empty, Short, Multi-Page)', () => {
     assert.strictEqual(exact28[2].length, 2);
 });
 
+runTest('js/textProcessor.js normalizeOcrText() - NFC Normalization & Thai Preservation', () => {
+    const sandbox = { normalizeOcrText: null };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(jsTextProcessorContent, ctx);
+
+    // Decomposed Thai (base + combining tone mark, NFD-style) must normalize to a single composed form.
+    const decomposed = 'ก' + 'ิ' + '่'; // base + sara i + mai ek, combining order
+    const normalized = ctx.normalizeOcrText(decomposed);
+    assert.strictEqual(normalized, decomposed.normalize('NFC'), 'Must apply Unicode NFC normalization');
+
+    // Thai text must survive untouched (not filtered out like the old A-Z-only pipeline did).
+    assert.strictEqual(ctx.normalizeOcrText('สวัสดีครับ'), 'สวัสดีครับ');
+
+    // Whitespace collapses, but case is never forced (Thai has no case; must not corrupt mixed-language text).
+    assert.strictEqual(ctx.normalizeOcrText('  Hello   สวัสดี  '), 'Hello สวัสดี');
+    assert.strictEqual(ctx.normalizeOcrText(''), '');
+});
+
 runTest('English & Thai Braille Character Map Lookup', () => {
     assert(jsBrailleContent.includes("'A': [1]"), "Missing Braille mapping for 'A'");
     assert(jsBrailleContent.includes("'B': [1, 2]"), "Missing Braille mapping for 'B'");
     assert(jsBrailleContent.includes("'ก': [1, 2, 4, 5]"), "Missing Braille mapping for 'ก'");
     assert(jsBrailleContent.includes("'า': [3, 4, 5]"), "Missing Braille mapping for 'า'");
+});
+
+runTest('ท (tho thahan) vs ห (ho hip) Braille Patterns Must Not Collide', () => {
+    // Regression guard for a real bug: ท was previously mis-assigned ห's
+    // dot pattern ([1,2,5]), silently rendering every ท as if it were ห.
+    // Verified against Thai Braille's actual Unicode braille glyphs on
+    // Wikipedia (ท = U+283E = dots 2,3,4,5,6; ห = U+2813 = dots 1,2,5),
+    // decoded directly from the Braille Patterns block bitmask. Pinned as
+    // two independent assertions plus an inequality check so a future
+    // edit can't quietly swap them back to matching.
+    const sandbox = {};
+    const ctx = vm.createContext(sandbox);
+    // THAI_BRAILLE_MAP is declared with `const`, which (unlike `var`) does not
+    // attach to the vm context's global object -- bridge it explicitly.
+    vm.runInContext(jsBrailleContent + '\nvar __THAI_BRAILLE_MAP__ = THAI_BRAILLE_MAP;', ctx);
+
+    // Compared as joined strings, not assert.deepStrictEqual: arrays built
+    // inside a vm.createContext sandbox belong to a separate realm (their
+    // own Array constructor/prototype), which fails deepStrictEqual's
+    // prototype-identity check even when the element values are identical.
+    const thoPattern = ctx.__THAI_BRAILLE_MAP__['ท'].join(',');
+    const hoPattern = ctx.__THAI_BRAILLE_MAP__['ห'].join(',');
+
+    assert.strictEqual(thoPattern, '2,3,4,5,6', 'ท must map to dots 2,3,4,5,6');
+    assert.strictEqual(hoPattern, '1,2,5', 'ห must map to dots 1,2,5');
+    assert.notStrictEqual(thoPattern, hoPattern,
+        'ท and ห are both common consonants and must never share a dot pattern');
+});
+
+runTest('Thai Tone Mark Braille Patterns (mai ek/tho/tri, thanthakhat)', () => {
+    // Regression guard for 4 more confirmed mismatches found the same way
+    // as ท/ห: fetched each mark's actual Unicode braille glyph from
+    // Wikipedia's Thai Braille article and manually decoded the codepoint
+    // against the Braille Patterns block bitmask (bit0=dot1 ... bit5=dot6).
+    //   ่  mai ek       U+2814 -> 0x14 -> dots 3,5
+    //   ้  mai tho      U+2832 -> 0x32 -> dots 2,5,6
+    //   ๊  mai tri      U+2836 -> 0x36 -> dots 2,3,5,6
+    //   ์  thanthakhat  U+2834 -> 0x34 -> dots 3,5,6
+    // ๋ mai chattawa (U+2826 -> dots 2,3,6) was already correct and is left
+    // as-is; not re-pinned here since js/braille-engine.js didn't change
+    // for it. Each mark gets its own independent assertion so a future
+    // edit that silently reverts just one of them still fails loudly.
+    const sandbox2 = {};
+    const ctx2 = vm.createContext(sandbox2);
+    vm.runInContext(jsBrailleContent + '\nvar __THAI_BRAILLE_MAP__ = THAI_BRAILLE_MAP;', ctx2);
+    const map = ctx2.__THAI_BRAILLE_MAP__;
+
+    assert.strictEqual(map['่'].join(','), '3,5', 'mai ek must map to dots 3,5');
+    assert.strictEqual(map['้'].join(','), '2,5,6', 'mai tho must map to dots 2,5,6');
+    assert.strictEqual(map['๊'].join(','), '2,3,5,6', 'mai tri must map to dots 2,3,5,6');
+    assert.strictEqual(map['์'].join(','), '3,5,6', 'thanthakhat must map to dots 3,5,6');
 });
 
 runTest('Single-Language Mode Switcher State Transitions (Default ENG)', () => {

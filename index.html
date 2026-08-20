@@ -14,8 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Tesseract.js v5 for Client-Side Optical Character Recognition -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- OCR now runs server-side via an EasyOCR (Thai + English) FastAPI backend; see js/ocr.js -->
 
     <!-- Main Stylesheet -->
     <link rel="stylesheet" href="css/styles.css">
@@ -93,12 +92,8 @@
                 <div class="ocr-header-row">
                     <div class="section-title"><i class="fa-solid fa-camera-retro"></i> OPTICAL OCR SCANNER</div>
                     <div class="ocr-lang-wrap">
-                        <label for="ocrLangSelect"><i class="fa-solid fa-globe"></i> LANG:</label>
-                        <select id="ocrLangSelect" class="ocr-lang-select">
-                            <option value="eng" selected>English Only (A-Z, 0-9)</option>
-                            <option value="tha">ภาษาไทย (tha)</option>
-                            <option value="tha+eng">ไทย + ENG (tha+eng)</option>
-                        </select>
+                        <label><i class="fa-solid fa-globe"></i> LANG:</label>
+                        <span class="ocr-lang-badge" title="EasyOCR โหลดทั้งสองภาษาเสมอในทุกคำขอ (ไม่ใช่ตัวเลือก)">TH + EN (EasyOCR)</span>
                     </div>
                 </div>
 
@@ -129,6 +124,11 @@
                     </button>
                     <button class="ocr-btn ocr-btn-emerald" id="btnTriggerFileBrowse">
                         <i class="fa-solid fa-folder-open"></i> เลือกไฟล์ภาพ
+                    </button>
+                </div>
+                <div class="ocr-actions-row">
+                    <button class="ocr-btn ocr-btn-demo" id="btnDemoMode" title="แสดงตัวอย่างข้อความไทยจำลอง (ไม่ใช้ภาพจริง / ไม่เชื่อมต่อเซิร์ฟเวอร์)">
+                        <i class="fa-solid fa-flask"></i> DEMO MODE (ข้อความจำลอง)
                     </button>
                 </div>
                 <div class="ocr-inspector-btn-row">
@@ -333,6 +333,10 @@
     </div>
 
     <!-- Modular JavaScript Applications -->
+    <script src="js/textProcessor.js"></script>
+    <script src="js/camera.js"></script>
+    <script src="js/ocr.js"></script>
+    <script src="js/demoMode.js"></script>
     <script src="js/braille-engine.js"></script>
     <script src="js/three-scene.js"></script>
     <script src="js/voice-guidance.js"></script>
