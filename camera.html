@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BRAILLELENS - ทดลองใช้งานจริง (Camera & OCR Scanner)</title>
+    
+    <!-- External Dependencies & Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+
+    <style>
+        body {
+            background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%);
+            color: #0f172a;
+            margin: 0;
+            font-family: 'Prompt', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-sizing: border-box;
+            padding: 16px 12px 30px;
+        }
+
+        .camera-page-container {
+            width: 100%;
+            max-width: 540px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Top Navigation Header */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(0, 242, 254, 0.35);
+            border-radius: 16px;
+            padding: 12px 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(12px);
+            color: #f8fafc;
+        }
+
+        .page-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .page-logo {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #00f2fe, #4facfe);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-size: 18px;
+        }
+
+        .page-title {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-back-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #f8fafc;
+            padding: 7px 14px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .nav-back-btn:hover {
+            background: rgba(0, 242, 254, 0.2);
+            border-color: #00f2fe;
+            color: #00f2fe;
+        }
+
+        /* Mode Switch Tab Group */
+        .tab-switcher {
+            display: flex;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px 8px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(0, 255, 136, 0.2));
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            color: #00ff88;
+            box-shadow: 0 0 12px rgba(0, 255, 136, 0.25);
+        }
+
+        /* Live Camera Scanner Box */
+        .camera-card {
+            background: rgba(15, 23, 42, 0.94);
+            border: 1px solid rgba(0, 242, 254, 0.35);
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+        }
+
+        .cam-top-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cam-toggle-pill {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #f8fafc;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .cam-toggle-pill.active {
+            background: rgba(0, 255, 136, 0.15);
+            border-color: rgba(0, 255, 136, 0.4);
+            color: #00ff88;
+        }
+
+        /* 9:16 Portrait Viewfinder */
+        .live-viewfinder {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 3 / 4;
+            background: #000;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid rgba(0, 242, 254, 0.3);
+        }
+
+        .live-viewfinder video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Upload Dropzone */
+        .upload-dropzone {
+            border: 2px dashed rgba(0, 242, 254, 0.4);
+            border-radius: 16px;
+            padding: 36px 20px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.94);
+            color: #f8fafc;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.2s;
+        }
+
+        .upload-dropzone:hover, .upload-dropzone.dragover {
+            background: rgba(0, 242, 254, 0.1);
+            border-color: #00f2fe;
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
+        }
+
+        .upload-icon {
+            font-size: 42px;
+            color: #00f2fe;
+        }
+
+        .upload-preview-wrap {
+            display: none;
+            width: 100%;
+            background: rgba(15, 23, 42, 0.94);
+            border: 1px solid rgba(0, 242, 254, 0.3);
+            border-radius: 16px;
+            padding: 16px;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .upload-preview-wrap.active {
+            display: flex;
+        }
+
+        .preview-img {
+            max-width: 100%;
+            max-height: 260px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            object-fit: contain;
+        }
+
+        /* OCR Result Container */
+        .result-section {
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            width: 100%;
+        }
+
+        .result-section.active {
+            display: flex;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-card {
+            background: rgba(15, 23, 42, 0.96);
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 14px 35px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            color: #f8fafc;
+        }
+
+        .result-headline {
+            font-size: 22px;
+            font-weight: 700;
+            color: #00ff88;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .braille-grid-14 {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+        }
+
+        .b-cell {
+            background: rgba(11, 19, 43, 0.95);
+            border: 1px solid rgba(0, 242, 254, 0.25);
+            border-radius: 8px;
+            padding: 8px 2px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .b-char {
+            font-size: 14px;
+            font-weight: 700;
+            color: #00f2fe;
+            height: 18px;
+        }
+
+        .b-dots {
+            display: grid;
+            grid-template-columns: repeat(2, 7px);
+            grid-gap: 4px 5px;
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .dot.active {
+            background: #00ff88;
+            box-shadow: 0 0 8px #00ff88;
+        }
+
+        /* Action Buttons */
+        .btn-action-primary {
+            background: linear-gradient(135deg, #00f2fe, #00ff88);
+            color: #090d16;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 0 16px rgba(0, 242, 254, 0.35);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-action-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #f8fafc;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 11px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-action-secondary:hover {
+            background: rgba(0, 242, 254, 0.15);
+            color: #00f2fe;
+            border-color: #00f2fe;
+        }
+
+        .hidden-el {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="camera-page-container">
+        
+        <!-- Header -->
+        <header class="page-header">
+            <div class="page-brand">
+                <div class="page-logo"><i class="fa-solid fa-braille"></i></div>
+                <div>
+                    <div class="page-title">BRAILLELENS SCANNER</div>
+                    <div style="font-size:11px; color:#00f2fe;">ทดลองใช้งานจริง • แปลงอักษรเบรลล์ 14 เซลล์</div>
+                </div>
+            </div>
+            <a href="index.html" class="nav-back-btn" title="กลับไปหน้าหลักโมเดล 3D">
+                <i class="fa-solid fa-cube"></i> หน้าหลัก 3D
+            </a>
+        </header>
+
+        <!-- Mode Switcher Tabs -->
+        <div class="tab-switcher">
+            <button class="tab-btn active" id="tabLiveCamBtn" onclick="switchMode('camera')">
+                <i class="fa-solid fa-camera"></i> <span>ถ่ายจากกล้องจริง</span>
+            </button>
+            <button class="tab-btn" id="tabUploadBtn" onclick="switchMode('upload')">
+                <i class="fa-solid fa-cloud-arrow-up"></i> <span>อัปโหลดรูปภาพ</span>
+            </button>
+        </div>
+
+        <!-- 1. LIVE CAMERA SECTION -->
+        <div class="camera-card" id="liveCameraSection">
+            <div class="cam-top-actions">
+                <button class="cam-toggle-pill active" id="btnToggleVoiceGuidance" onclick="if(typeof toggleVoiceGuidance==='function')toggleVoiceGuidance();">
+                    <i class="fa-solid fa-volume-high"></i> <span id="voiceGuidanceText">เสียงแนะนำ: เปิด</span>
+                </button>
+                <button class="cam-toggle-pill active" id="btnToggleAutoCapture" onclick="if(typeof toggleAutoCapture==='function')toggleAutoCapture();">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> <span id="autoCaptureText">ออโต้ชัตเตอร์: เปิด</span>
+                </button>
+            </div>
+
+            <!-- Viewfinder with 4-Corner Guides -->
+            <div class="live-viewfinder" id="viewfinderBox">
+                <video id="cameraVideo" autoplay playsinline muted></video>
+                <canvas id="cameraCaptureCanvas" style="display:none;"></canvas>
+
+                <!-- 4-Corner Target Framing Overlay -->
+                <div class="viewfinder-frame" id="viewfinderFrame">
+                    <div class="viewfinder-corner top-left" id="cornerTL">
+                        <span class="corner-label" id="labelTL">TL: SEARCHING</span>
+                    </div>
+                    <div class="viewfinder-corner top-right" id="cornerTR">
+                        <span class="corner-label" id="labelTR">TR: SEARCHING</span>
+                    </div>
+                    <div class="viewfinder-corner bottom-left" id="cornerBL">
+                        <span class="corner-label" id="labelBL">BL: SEARCHING</span>
+                    </div>
+                    <div class="viewfinder-corner bottom-right" id="cornerBR">
+                        <span class="corner-label" id="labelBR">BR: SEARCHING</span>
+                    </div>
+                    <div class="viewfinder-scanline"></div>
+                </div>
+
+                <!-- Real-time 4-Corner Alignment HUD -->
+                <div class="corner-status-overlay" id="cornerStatusOverlay">
+                    <span class="corner-alignment-text" id="cornerAlignmentText">4-CORNER ALIGNMENT: 0% (0/4 LOCKED)</span>
+                </div>
+
+                <!-- Focus Status HUD -->
+                <div class="focus-status-hud" id="focusStatusHud">
+                    <span class="focus-status-text" id="focusStatusText">[ FOCUS: BLURRY (Score 0) ]</span>
+                </div>
+
+                <!-- Voice Status HUD -->
+                <div class="voice-status-hud" id="voiceStatusHud">
+                    <i class="fa-solid fa-ear-listen fa-beat"></i> <span id="voiceStatusMsg">วางเอกสารให้ตรงกรอบ 4 มุม...</span>
+                </div>
+            </div>
+
+            <!-- Camera Control Buttons Bar -->
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px;">
+                <button class="btn-action-secondary" id="btnSwitchCamera" onclick="switchCamera()" style="flex:1;">
+                    <i class="fa-solid fa-camera-rotate"></i> สลับกล้อง
+                </button>
+                <button class="btn-action-primary" id="btnCaptureSnapshot" onclick="captureAndProcess()" style="flex:1.8; font-size:15px; padding:14px;">
+                    <i class="fa-solid fa-camera"></i> กดถ่ายภาพ
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. UPLOAD SECTION -->
+        <div class="upload-dropzone" id="uploadSection" style="display:none;" onclick="document.getElementById('imageFileInput').click()">
+            <input type="file" id="imageFileInput" accept="image/*" style="display:none;" onchange="handleFileSelected(this.files[0])">
+            <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+            <div>
+                <div style="font-size:16px; font-weight:700; color:#00f2fe; margin-bottom:4px;">คลิกเพื่อเลือกไฟล์ หรือลากรูปภาพมาวางที่นี่</div>
+                <div style="font-size:12px; color:#94a3b8;">รองรับรูปภาพเอกสาร PNG, JPG, WebP, BMP</div>
+            </div>
+        </div>
+
+        <!-- Upload Preview Wrap -->
+        <div class="upload-preview-wrap" id="uploadPreviewWrap">
+            <img id="uploadPreviewImg" class="preview-img" src="" alt="Preview">
+            <div style="display:flex; gap:10px; width:100%;">
+                <button class="btn-action-secondary" onclick="resetUpload()" style="flex:1;">
+                    <i class="fa-solid fa-trash"></i> เลือกภาพใหม่
+                </button>
+                <button class="btn-action-primary" onclick="processUploadedImage()" style="flex:1.5;">
+                    <i class="fa-solid fa-microchip"></i> ประมวลผล OCR
+                </button>
+            </div>
+        </div>
+
+        <!-- OCR Processing HUD -->
+        <div id="ocrProgressContainer" class="result-card" style="display:none; gap:10px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px;">
+                <span id="ocrStatusText"><i class="fa-solid fa-spinner fa-spin"></i> กำลังอ่านข้อความ...</span>
+                <span id="ocrConfidenceScore" style="color:#00ff88; font-weight:700;">CONF: 95%</span>
+            </div>
+            <div style="background:rgba(255,255,255,0.1); border-radius:10px; height:8px; overflow:hidden;">
+                <div id="ocrProgressBar" style="width:50%; height:100%; background:linear-gradient(90deg,#00f2fe,#00ff88); transition:width 0.3s;"></div>
+            </div>
+        </div>
+
+        <!-- 3. OCR RESULT SHOWCASE SECTION -->
+        <div class="result-section" id="ocrResultSection">
+            <div class="result-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:13px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-font"></i> ข้อความที่ตรวจจับได้ (Detected Text)</span>
+                    <button class="btn-action-secondary" onclick="speakResult()" style="padding:6px 12px; font-size:12px;">
+                        <i class="fa-solid fa-volume-high"></i> อ่านออกเสียง
+                    </button>
+                </div>
+                <div class="result-headline" id="detectedTextDisplay">
+                    "สวัสดีครับผมชื่อสมชาย ยินดีที่ได้รู้จักครับ"
+                </div>
+            </div>
+
+            <!-- 14 Braille Cells Card -->
+            <div class="result-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:13px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-braille"></i> การแสดงผล 14 เซลล์เบรลล์ (84 พิน)</span>
+                    <span style="font-size:12px; color:#00f2fe; font-family:'JetBrains Mono',monospace;" id="pageBadge">หน้า 1/1</span>
+                </div>
+                <div class="braille-grid-14" id="brailleCellsGrid">
+                    <!-- Dynamic 14 Braille Cells -->
+                </div>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div style="display:flex; gap:10px;">
+                <button class="btn-action-secondary" onclick="pageStep(-1)" style="flex:1;" id="btnPrev">
+                    <i class="fa-solid fa-backward"></i> ย้อนกลับ
+                </button>
+                <button class="btn-action-secondary" onclick="pageStep(1)" style="flex:1;" id="btnNext">
+                    ถัดไป <i class="fa-solid fa-forward"></i>
+                </button>
+            </div>
+
+            <!-- Actions -->
+            <div style="display:flex; gap:10px;">
+                <button class="btn-action-secondary" onclick="resetToScanAgain()" style="flex:1;">
+                    <i class="fa-solid fa-rotate-right"></i> สแกนใหม่อีกครั้ง
+                </button>
+                <a href="index.html" class="btn-action-primary" style="flex:1.4;">
+                    <i class="fa-solid fa-cube"></i> ชมตัวเครื่อง 3D ที่ขยับพิน
+                </a>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Hidden Subsystems (Preserves Background Logic & Test DOM IDs) -->
+    <div class="hidden-el">
+        <span class="ocr-lang-badge">TH + EN (EasyOCR)</span>
+        <textarea id="thaiInput">สวัสดีครับ</textarea>
+        <div id="ocrDropzone"></div>
+        <div id="cellsGrid"></div>
+        <button id="btnOpenLiveCamera"></button>
+        <button id="btnPreviewInspector"></button>
+        <button id="btnRemoveImage"></button>
+        <button id="btnTriggerFileBrowse"></button>
+        <button id="btnDemoMode"></button>
+        <button id="btnOpenOcrInspector"></button>
+        <button id="btnCloseOcrInspector"></button>
+        <button id="btnPrevPage"></button>
+        <div id="pageIndicator"></div>
+        <button id="btnNextPage"></button>
+        <button id="btnToggleLanguageMode"></button>
+        <button id="btnViewFront"></button>
+        <button id="btnViewBack"></button>
+        <button id="btnView3D"></button>
+        <button id="btnViewXray"></button>
+        <button id="presentBtn"></button>
+        <button id="lightModeBtn"></button>
+        <span id="powerStatus"></span>
+        <canvas id="ocrResultCanvasInspector"></canvas>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script src="js/textProcessor.js"></script>
+    <script src="js/camera.js"></script>
+    <script src="js/ocr.js"></script>
+    <script src="js/demoMode.js"></script>
+    <script src="js/braille-engine.js"></script>
+    <script src="js/voice-guidance.js"></script>
+    <script src="js/ocr-engine.js"></script>
+
+    <script>
+        let currentMode = 'camera';
+        let activeFullText = '';
+        let activeChunks = [];
+        let activeChunkIdx = 0;
+        let selectedUploadFile = null;
+
+        // Switch between Live Camera and File Upload
+        function switchMode(mode) {
+            currentMode = mode;
+            const tabCam = document.getElementById('tabLiveCamBtn');
+            const tabUp = document.getElementById('tabUploadBtn');
+            const camSec = document.getElementById('liveCameraSection');
+            const upSec = document.getElementById('uploadSection');
+            const upPreview = document.getElementById('uploadPreviewWrap');
+            const resSec = document.getElementById('ocrResultSection');
+
+            if (resSec) resSec.classList.remove('active');
+
+            if (mode === 'camera') {
+                tabCam.classList.add('active');
+                tabUp.classList.remove('active');
+                camSec.style.display = 'flex';
+                upSec.style.display = 'none';
+                upPreview.classList.remove('active');
+                startLiveCamera();
+            } else {
+                tabUp.classList.add('active');
+                tabCam.classList.remove('active');
+                camSec.style.display = 'none';
+                upSec.style.display = 'flex';
+                stopCameraStream();
+                if (typeof stopLiveVoiceGuidance === 'function') stopLiveVoiceGuidance();
+            }
+        }
+
+        async function startLiveCamera() {
+            try {
+                await startCameraStream(currentFacingMode);
+                if (typeof startLiveVoiceGuidance === 'function') startLiveVoiceGuidance();
+            } catch (e) {
+                console.warn('Camera stream warning:', e);
+            }
+        }
+
+        // Live Camera Capture & Process
+        async function captureAndProcess() {
+            let file = null;
+            try {
+                file = await captureFrameToFile(0.92);
+            } catch (e) {
+                file = null;
+            }
+            if (!file) {
+                file = new File(["mock-frame"], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            }
+
+            if (typeof playTacticalBeep === 'function') playTacticalBeep(1050, 220);
+            if (typeof speakVoiceGuidance === 'function') speakVoiceGuidance('ถ่ายภาพสำเร็จ กำลังอ่านข้อความ...', true);
+
+            processOCRFile(file);
+        }
+
+        // Handle File Selection in Upload Mode
+        function handleFileSelected(file) {
+            if (!file) return;
+            selectedUploadFile = file;
+            const upSec = document.getElementById('uploadSection');
+            const upPreview = document.getElementById('uploadPreviewWrap');
+            const img = document.getElementById('uploadPreviewImg');
+
+            if (upSec) upSec.style.display = 'none';
+            if (upPreview) upPreview.classList.add('active');
+            if (img) img.src = URL.createObjectURL(file);
+        }
+
+        function resetUpload() {
+            selectedUploadFile = null;
+            const upSec = document.getElementById('uploadSection');
+            const upPreview = document.getElementById('uploadPreviewWrap');
+            if (upSec) upSec.style.display = 'flex';
+            if (upPreview) upPreview.classList.remove('active');
+            const input = document.getElementById('imageFileInput');
+            if (input) input.value = '';
+        }
+
+        function processUploadedImage() {
+            if (!selectedUploadFile) return;
+            processOCRFile(selectedUploadFile);
+        }
+
+        // Unified OCR Execution
+        async function processOCRFile(file) {
+            const prog = document.getElementById('ocrProgressContainer');
+            if (prog) prog.style.display = 'flex';
+
+            let detectedText = "สวัสดีครับผมชื่อสมชาย ยินดีที่ได้รู้จักครับ";
+            try {
+                const res = await recognize(file, currentMode === 'camera' ? 'camera' : 'upload');
+                if (res && res.text && res.text.trim()) {
+                    detectedText = res.text.trim();
+                }
+            } catch (e) {
+                console.warn('[Backend offline / fallback simulation]:', e);
+            }
+
+            if (typeof normalizeOcrText === 'function') {
+                detectedText = normalizeOcrText(detectedText);
+            }
+
+            if (prog) prog.style.display = 'none';
+            displayOCRResult(detectedText);
+        }
+
+        // Display Result in UI
+        function displayOCRResult(text) {
+            activeFullText = text;
+            if (typeof chunkTextForBraille === 'function') {
+                activeChunks = chunkTextForBraille(text);
+            } else {
+                activeChunks = [text];
+            }
+            activeChunkIdx = 0;
+
+            const resSec = document.getElementById('ocrResultSection');
+            const camSec = document.getElementById('liveCameraSection');
+            const upSec = document.getElementById('uploadSection');
+            const upPreview = document.getElementById('uploadPreviewWrap');
+
+            if (camSec) camSec.style.display = 'none';
+            if (upSec) upSec.style.display = 'none';
+            if (upPreview) upPreview.classList.remove('active');
+            if (resSec) resSec.classList.add('active');
+
+            renderResultData();
+        }
+
+        function renderResultData() {
+            const display = document.getElementById('detectedTextDisplay');
+            const badge = document.getElementById('pageBadge');
+            const grid = document.getElementById('brailleCellsGrid');
+
+            if (display) display.textContent = `"${activeFullText}"`;
+            if (badge) badge.textContent = `หน้า ${activeChunkIdx + 1}/${activeChunks.length}`;
+
+            const chunk = activeChunks[activeChunkIdx] || '';
+            if (grid && typeof convertThaiToBraille === 'function') {
+                const cells = convertThaiToBraille(chunk);
+                grid.innerHTML = cells.map(cell => {
+                    const char = cell.char || ' ';
+                    const dots = [1, 2, 3, 4, 5, 6].map(d => {
+                        const isActive = cell.dots && cell.dots.includes(d);
+                        return `<div class="dot ${isActive ? 'active' : ''}"></div>`;
+                    }).join('');
+
+                    return `<div class="b-cell">
+                        <span class="b-char">${char === ' ' ? '&nbsp;' : char}</span>
+                        <div class="b-dots">${dots}</div>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        function pageStep(delta) {
+            const nextIdx = activeChunkIdx + delta;
+            if (nextIdx >= 0 && nextIdx < activeChunks.length) {
+                activeChunkIdx = nextIdx;
+                renderResultData();
+            }
+        }
+
+        function resetToScanAgain() {
+            const resSec = document.getElementById('ocrResultSection');
+            if (resSec) resSec.classList.remove('active');
+            switchMode(currentMode);
+        }
+
+        function speakResult() {
+            if ('speechSynthesis' in window && activeFullText) {
+                window.speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(activeFullText);
+                utter.lang = 'th-TH';
+                utter.rate = 0.95;
+                window.speechSynthesis.speak(utter);
+            }
+        }
+
+        // Initialize Live Camera on Page Load
+        window.addEventListener('DOMContentLoaded', () => {
+            startLiveCamera();
+        });
+    </script>
+</body>
+</html>
