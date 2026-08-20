@@ -15,7 +15,7 @@ _reader = None
 def get_reader() -> "easyocr.Reader":
     global _reader
     if _reader is None:
-        _reader = easyocr.Reader(["th", "en"], gpu=False)
+        _reader = easyocr.Reader(["th", "en"], gpu=False, verbose=False)
     return _reader
 
 
@@ -34,7 +34,10 @@ def _bbox_to_rect(points: List[List[float]], scale: float) -> Dict[str, float]:
 
 def run_ocr(image, scale: float = 1.0) -> Dict[str, Any]:
     reader = get_reader()
-    raw_results = reader.readtext(image, decoder="beamsearch", paragraph=False)
+    try:
+        raw_results = reader.readtext(image, y_ths=0.5, x_ths=1.0, paragraph=False)
+    except Exception:
+        raw_results = reader.readtext(image, decoder="beamsearch", paragraph=False)
 
     words = []
     confidences = []

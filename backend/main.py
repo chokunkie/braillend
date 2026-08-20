@@ -1,5 +1,7 @@
+import os
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from ocr_engine import run_ocr
 from preprocessing import preprocess
@@ -32,3 +34,10 @@ async def ocr(image: UploadFile = File(...), documentSource: str = Form("upload"
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# Mount static files so frontend and backend run seamlessly on port 8000
+_workspace_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if os.path.exists(_workspace_root):
+    app.mount("/", StaticFiles(directory=_workspace_root, html=True), name="static")
+

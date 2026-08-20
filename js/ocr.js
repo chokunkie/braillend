@@ -40,27 +40,37 @@ async function recognize(imageFile, documentSource = 'upload') {
         console.warn('[EasyOCR Backend offline, running In-Browser Tesseract.js Engine]:', backendErr);
     }
 
-    // 2. Secondary Engine: Self-Hosted In-Browser Client OCR (Tesseract.js Thai + English)
+    // 2. Secondary Engine: Self-Hosted In-Browser Client OCR (Tesseract.js Thai Only - Google High-Accuracy LSTM)
     if (typeof Tesseract !== 'undefined') {
         try {
-            console.log('[Tesseract.js]: Processing real image with Thai + English models from ./tessdata ...');
+            console.log('[Tesseract.js]: Processing real image with Google High-Accuracy Thai model from ./tessdata ...');
+            
             let res = null;
             if (window._cachedTesseractWorker) {
+                try {
+                    await window._cachedTesseractWorker.setParameters({
+                        tessedit_pageseg_mode: '6',
+                        preserve_interword_spaces: '1'
+                    });
+                } catch (e) {}
                 res = await window._cachedTesseractWorker.recognize(imageFile);
             } else {
                 const langPath = (typeof window !== 'undefined' && window.location) 
                     ? window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')) + '/tessdata'
                     : './tessdata';
-                res = await Tesseract.recognize(imageFile, 'tha+eng', {
+                res = await Tesseract.recognize(imageFile, 'tha', {
                     langPath: langPath,
                     gzip: true,
+                    tessedit_pageseg_mode: '6',
                     logger: m => {
-                        if (m && m.status) console.log(`[Tesseract OCR]: ${m.status} ${(m.progress ? Math.round(m.progress * 100) + '%' : '')}`);
+                        if (m && m.status) console.log(`[Tesseract OCR (Thai LSTM)]: ${m.status} ${(m.progress ? Math.round(m.progress * 100) + '%' : '')}`);
                     }
                 });
             }
 
-            const extractedText = (res && res.data && res.data.text) ? res.data.text.trim() : '';
+            let extractedText = (res && res.data && res.data.text) ? res.data.text.trim() : '';
+            // Clean up extraneous line breaks
+            extractedText = extractedText.replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
             const conf = (res && res.data && res.data.confidence) ? Math.round(res.data.confidence) : 85;
             const wordsList = (res.data && Array.isArray(res.data.words)) ? res.data.words.map(w => ({
                 text: w.text,
@@ -83,4 +93,18 @@ async function recognize(imageFile, documentSource = 'upload') {
         confidence: 0,
         words: []
     };
+}
+
+/**
+ * Helper to load an Image element from File/Blob
+ */
+function loadImageElement(fileOrBlob) {
+    return new Promise((resolve, reject) => {
+        if (!fileOrBlob) return reject(new Error('No file'));
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = (e) => reject(e);
+        img.src = URL.createObjectURL(fileOrBlob);
+    });
 }

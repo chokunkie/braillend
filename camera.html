@@ -494,12 +494,13 @@
             <div class="result-card" style="padding:12px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <span style="font-size:12px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-image"></i> ภาพถ่ายเอกสารที่ส่งสแกน</span>
-                    <span style="font-size:11px; color:#00ff88; font-weight:700; background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.3); padding:2px 8px; border-radius:12px;">
-                        <i class="fa-solid fa-circle-check"></i> OCR สำเร็จ (98%)
+                    <span id="ocrSuccessBadge" style="font-size:11px; color:#00ff88; font-weight:700; background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.3); padding:2px 8px; border-radius:12px;">
+                        <i class="fa-solid fa-circle-check"></i> กำลังตรวจจับ...
                     </span>
                 </div>
-                <div style="width:100%; max-height:220px; border-radius:10px; overflow:hidden; background:#000; display:flex; justify-content:center; align-items:center; border:1px solid rgba(0,242,254,0.25);">
-                    <img id="resultPhotoPreview" src="" alt="Captured Image" style="max-width:100%; max-height:220px; object-fit:contain;">
+                <div style="width:100%; max-height:280px; border-radius:10px; overflow:hidden; background:#000; display:flex; justify-content:center; align-items:center; border:1px solid rgba(0,242,254,0.25);">
+                    <canvas id="resultPhotoCanvas" style="max-width:100%; max-height:280px; object-fit:contain; border-radius:8px;"></canvas>
+                    <img id="resultPhotoPreview" src="" alt="Captured Image" style="display:none; max-width:100%; max-height:280px; object-fit:contain;">
                 </div>
             </div>
 
@@ -718,6 +719,9 @@
             processOCRFile(selectedUploadFile, dataUrl);
         }
 
+        let activeConfidence = 0;
+        let activeWords = [];
+
         // Unified OCR Execution - Strictly returns real detected text (No fake mock text)
         async function processOCRFile(file, imagePreviewSrc) {
             const prog = document.getElementById('ocrProgressContainer');
@@ -725,6 +729,7 @@
 
             let detectedText = "";
             let confidence = 0;
+            let words = [];
 
             if (file) {
                 try {
@@ -732,6 +737,7 @@
                     if (res && res.text && res.text.trim()) {
                         detectedText = res.text.trim();
                         confidence = res.confidence || 90;
+                        words = res.words || [];
                     }
                 } catch (e) {
                     console.warn('[OCR Backend response]:', e);
@@ -743,12 +749,14 @@
             }
 
             if (prog) prog.style.display = 'none';
-            displayOCRResult(detectedText, imagePreviewSrc);
+            displayOCRResult(detectedText, imagePreviewSrc, confidence, words);
         }
 
         // Display Result in UI
-        function displayOCRResult(text, imagePreviewSrc) {
+        function displayOCRResult(text, imagePreviewSrc, confidence = 0, words = []) {
             activeFullText = text || '';
+            activeConfidence = confidence;
+            activeWords = words || [];
             if (activeFullText && typeof chunkTextForBraille === 'function') {
                 activeChunks = chunkTextForBraille(activeFullText);
             } else {
@@ -760,10 +768,9 @@
             const camSec = document.getElementById('liveCameraSection');
             const upSec = document.getElementById('uploadSection');
             const upPreview = document.getElementById('uploadPreviewWrap');
-            const photoPreview = document.getElementById('resultPhotoPreview');
 
-            if (photoPreview && imagePreviewSrc) {
-                photoPreview.src = imagePreviewSrc;
+            if (imagePreviewSrc) {
+                drawBoundingBoxesOnCanvas(imagePreviewSrc, activeWords);
             }
 
             if (camSec) camSec.style.display = 'none';
@@ -774,15 +781,85 @@
             renderResultData();
         }
 
+        function drawBoundingBoxesOnCanvas(imageSrc, words = []) {
+            const canvas = document.getElementById('resultPhotoCanvas');
+            const imgPreview = document.getElementById('resultPhotoPreview');
+            if (!canvas || !imageSrc) return;
+
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                canvas.width = img.naturalWidth || img.width;
+                canvas.height = img.naturalHeight || img.height;
+                const ctx = canvas.getContext('2d');
+                
+                // 1. Draw base photo crisp and clear
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                // 2. Draw sleek glowing bounding boxes
+                if (Array.isArray(words) && words.length > 0) {
+                    ctx.shadowBlur = 6;
+                    ctx.shadowColor = '#00ff88';
+
+                    words.forEach(w => {
+                        if (!w || !w.bbox) return;
+                        const { x0, y0, x1, y1 } = w.bbox;
+                        const boxW = Math.max(4, x1 - x0);
+                        const boxH = Math.max(4, y1 - y0);
+
+                        // Subtle transparent tint (never obscures text)
+                        ctx.fillStyle = 'rgba(0, 255, 136, 0.08)';
+                        ctx.fillRect(x0, y0, boxW, boxH);
+
+                        // Crisp neon outline
+                        ctx.strokeStyle = '#00ff88';
+                        ctx.lineWidth = Math.max(1.5, Math.min(3, Math.round(canvas.width * 0.002)));
+                        ctx.strokeRect(x0, y0, boxW, boxH);
+
+                        // Corner accent marks
+                        const cornerLen = Math.min(10, Math.min(boxW, boxH) * 0.35);
+                        ctx.strokeStyle = '#00f2fe';
+                        ctx.lineWidth = Math.max(2, ctx.lineWidth + 0.5);
+
+                        // Top-left corner
+                        ctx.beginPath();
+                        ctx.moveTo(x0, y0 + cornerLen);
+                        ctx.lineTo(x0, y0);
+                        ctx.lineTo(x0 + cornerLen, y0);
+                        ctx.stroke();
+
+                        // Bottom-right corner
+                        ctx.beginPath();
+                        ctx.moveTo(x1 - cornerLen, y1);
+                        ctx.lineTo(x1, y1);
+                        ctx.lineTo(x1, y1 - cornerLen);
+                        ctx.stroke();
+                    });
+                    ctx.shadowBlur = 0;
+                }
+
+                canvas.style.display = 'block';
+                if (imgPreview) imgPreview.style.display = 'none';
+            };
+            img.src = imageSrc;
+        }
+
         function renderResultData() {
             const display = document.getElementById('detectedTextDisplay');
             const badge = document.getElementById('pageBadge');
             const grid = document.getElementById('brailleCellsGrid');
             const btnPrev = document.getElementById('btnPrev');
             const btnNext = document.getElementById('btnNext');
+            const successBadge = document.getElementById('ocrSuccessBadge');
 
-            if (!activeFullText) {
+            if (!activeFullText || activeFullText.trim().length === 0) {
                 // When OCR finds no text in the image
+                if (successBadge) {
+                    successBadge.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ไม่พบข้อความ (0%)';
+                    successBadge.style.color = '#ef4444';
+                    successBadge.style.background = 'rgba(239,68,68,0.15)';
+                    successBadge.style.borderColor = 'rgba(239,68,68,0.3)';
+                }
                 if (display) {
                     display.textContent = 'ไม่พบข้อความในภาพ (กรุณาจัดแสงหรือถือกล้องให้ตรงข้อความ)';
                     display.style.color = '#94a3b8';
@@ -797,6 +874,14 @@
                 return;
             }
 
+            // Real text detected
+            if (successBadge) {
+                const conf = Math.max(10, Math.min(100, Math.round(activeConfidence || 85)));
+                successBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจพบข้อความ (${conf}%)`;
+                successBadge.style.color = '#00ff88';
+                successBadge.style.background = 'rgba(0,255,136,0.15)';
+                successBadge.style.borderColor = 'rgba(0,255,136,0.3)';
+            }
             if (display) {
                 display.textContent = `"${activeFullText}"`;
                 display.style.color = '#00ff88';
@@ -859,12 +944,12 @@
                     const langPath = (typeof window !== 'undefined' && window.location) 
                         ? window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')) + '/tessdata'
                         : './tessdata';
-                    const worker = await Tesseract.createWorker('tha+eng', 1, {
+                    const worker = await Tesseract.createWorker('tha', 1, {
                         langPath: langPath,
                         gzip: true
                     });
                     window._cachedTesseractWorker = worker;
-                    console.log('[Tesseract.js]: Thai + English OCR worker pre-warmed & ready!');
+                    console.log('[Tesseract.js]: Thai OCR worker (tha) pre-warmed & ready!');
                 } catch (e) {
                     console.warn('[Tesseract.js pre-warm notice]:', e);
                 }
