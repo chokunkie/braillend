@@ -1012,14 +1012,15 @@
             screenCtx = ctx;
 
             screenTexture = new THREE.CanvasTexture(screenCanvas);
-            screenTexture.minFilter = THREE.LinearFilter;
+            screenTexture.minFilter = THREE.LinearMipmapLinearFilter;
             screenTexture.magFilter = THREE.LinearFilter;
+            screenTexture.generateMipmaps = true;
 
             oledCanvas = screenCanvas;
             oledCtx = ctx;
             oledTexture = screenTexture;
 
-            drawScreenContent('สวัสดีครับ');
+            drawScreenContent('สวัสดีครับผมชื่อสมชาย');
             if (screenTexture) screenTexture.needsUpdate = true;
             if (oledTexture) oledTexture.needsUpdate = true;
         }
@@ -1051,7 +1052,7 @@
                 currentText = text;
                 currentLCDText = text;
             }
-            const displayStr = (currentText && currentText.trim() !== '') ? currentText : 'สวัสดีครับ';
+            const displayStr = (currentText && currentText.trim() !== '') ? currentText : 'สวัสดีครับผมชื่อสมชาย';
 
             pulseAnimFrame += 0.08;
 
@@ -1066,19 +1067,9 @@
 
             ctx.save();
 
-            // 1. Fill background with vibrant dark blue #0b132b
-            ctx.fillStyle = '#0b132b';
+            // 1. Fill background with clean dark OLED #060a17 (No moire grid lines)
+            ctx.fillStyle = '#060a17';
             ctx.fillRect(0, 0, w, h);
-
-            // Tech Grid Lines (Subtle cyan accent)
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.05)';
-            ctx.lineWidth = 1;
-            for (let x = 0; x < w; x += 32) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-            }
-            for (let y = 0; y < h; y += 32) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-            }
 
             // Outer Screen Edge Glow Rim
             drawRoundRect(ctx, 4, 4, w - 8, h - 8, 14, null, '#00f0ff', 2);
@@ -1482,7 +1473,7 @@
             const tftPcbGeo = new THREE.BoxGeometry(6.8, 0.06, 3.2);
             const tftPcbMat = new THREE.MeshStandardMaterial({ color: 0x0f141d, metalness: 0.6, roughness: 0.3 });
             tftPcbMesh = new THREE.Mesh(tftPcbGeo, tftPcbMat);
-            tftPcbMesh.position.set(0, 0.78, -2.6);
+            tftPcbMesh.position.set(0, 0.74, -2.6);
             scene.add(tftPcbMesh);
 
             // 2. 4 Corner Screw Holes & Metallic Screws
@@ -1510,12 +1501,16 @@
             const bezelRimGeo = new THREE.BoxGeometry(6.6, 0.02, 3.2);
             const bezelRimMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.2 });
             bezelRim = new THREE.Mesh(bezelRimGeo, bezelRimMat);
-            bezelRim.position.set(0, 0.81, -2.6);
+            bezelRim.position.set(0, 0.78, -2.6);
             scene.add(bezelRim);
 
             // 4. Dedicated 3D Screen Plane Mesh (Width 6.4, Height 3.0, 100% Bright BasicMaterial)
             const screenGeo = new THREE.PlaneGeometry(6.4, 3.0);
-            const screenMat = new THREE.MeshBasicMaterial({ map: screenTexture, side: THREE.DoubleSide });
+            const screenMat = new THREE.MeshBasicMaterial({
+                map: screenTexture,
+                side: THREE.DoubleSide,
+                depthWrite: true
+            });
             screenMesh = new THREE.Mesh(screenGeo, screenMat);
             screenMesh.rotation.x = -Math.PI / 2;
             screenMesh.position.set(0, 0.82, -2.6);
@@ -1527,13 +1522,14 @@
             const oledGlassMat = new THREE.MeshPhysicalMaterial({
                 color: 0xffffff,
                 transparent: true,
-                opacity: 0.08,
+                opacity: 0.04,
                 roughness: 0.05,
-                transmission: 0.95
+                transmission: 0.95,
+                depthWrite: false
             });
             oledGlass = new THREE.Mesh(oledGlassGeo, oledGlassMat);
             oledGlass.rotation.x = -Math.PI / 2;
-            oledGlass.position.set(0, 0.825, -2.6);
+            oledGlass.position.set(0, 0.84, -2.6);
             scene.add(oledGlass);
 
             // 6. DSI Flexible Ribbon Cable Connection Edge
@@ -1784,11 +1780,6 @@
             requestAnimationFrame(animate);
 
             if (controls) controls.update();
-
-            // Real-time animated LCD display screen updates (smooth pulse wave & live text)
-            updateScreenCanvas();
-            if (screenTexture) screenTexture.needsUpdate = true;
-            if (oledTexture) oledTexture.needsUpdate = true;
 
             // Smooth Lerp Pin Heights, Cam Rotations, Magnet Positions & Coil Field Glows for 84 Pins
             for (let i = 0; i < pinMeshes.length; i++) {

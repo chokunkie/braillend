@@ -87,14 +87,15 @@ function initScreenDisplay() {
     screenCtx = ctx;
 
     screenTexture = new THREE.CanvasTexture(screenCanvas);
-    screenTexture.minFilter = THREE.LinearFilter;
+    screenTexture.minFilter = THREE.LinearMipmapLinearFilter;
     screenTexture.magFilter = THREE.LinearFilter;
+    screenTexture.generateMipmaps = true;
 
     oledCanvas = screenCanvas;
     oledCtx = ctx;
     oledTexture = screenTexture;
 
-    drawScreenContent('HELLO WORLD');
+    drawScreenContent('สวัสดีครับผมชื่อสมชาย');
     if (screenTexture) screenTexture.needsUpdate = true;
     if (oledTexture) oledTexture.needsUpdate = true;
 }
@@ -119,6 +120,8 @@ function updateScreenCanvas(text) {
     drawScreenContent(text);
 }
 
+window.drawScreenTexture = drawScreenContent;
+
 /**
  * Renders full tactical HUD readout onto OLED Canvas Texture
  */
@@ -129,7 +132,7 @@ function drawScreenContent(text) {
         currentLCDText = text;
         if (typeof currentText !== 'undefined') currentText = text;
     }
-    const displayStr = (currentLCDText && currentLCDText.trim() !== '') ? currentLCDText : 'HELLO WORLD';
+    const displayStr = (currentLCDText && currentLCDText.trim() !== '') ? currentLCDText : 'สวัสดีครับผมชื่อสมชาย';
     pulseAnimFrame += 0.08;
 
     let activePinCount = 0;
@@ -141,19 +144,9 @@ function drawScreenContent(text) {
     const h = 512;
     ctx.save();
 
-    // 1. Background
-    ctx.fillStyle = '#0b132b';
+    // 1. Clean Dark OLED Background (No moire grid lines)
+    ctx.fillStyle = '#060a17';
     ctx.fillRect(0, 0, w, h);
-
-    // Tech Grid Lines
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.05)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < w; x += 32) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-    }
-    for (let y = 0; y < h; y += 32) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-    }
 
     // Outer Rim
     drawRoundRect(ctx, 4, 4, w - 8, h - 8, 14, null, '#00f0ff', 2);
@@ -442,22 +435,39 @@ function createHardwareChassis() {
 
     // TFT LCD Display Module (Z = -2.6)
     tftPcbMesh = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.06, 3.2), new THREE.MeshStandardMaterial({ color: 0x0f141d, metalness: 0.6, roughness: 0.3 }));
-    tftPcbMesh.position.set(0, 0.78, -2.6);
+    tftPcbMesh.position.set(0, 0.74, -2.6);
     scene.add(tftPcbMesh);
 
     bezelRim = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.02, 3.2), new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.2 }));
-    bezelRim.position.set(0, 0.81, -2.6);
+    bezelRim.position.set(0, 0.78, -2.6);
     scene.add(bezelRim);
 
-    screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.0), new THREE.MeshBasicMaterial({ map: screenTexture, side: THREE.DoubleSide }));
+    screenMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(6.4, 3.0),
+        new THREE.MeshBasicMaterial({
+            map: screenTexture,
+            side: THREE.DoubleSide,
+            depthWrite: true
+        })
+    );
     screenMesh.rotation.x = -Math.PI / 2;
     screenMesh.position.set(0, 0.82, -2.6);
     scene.add(screenMesh);
     oledMesh = screenMesh;
 
-    oledGlass = new THREE.Mesh(new THREE.PlaneGeometry(6.45, 3.05), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, roughness: 0.05, transmission: 0.95 }));
+    oledGlass = new THREE.Mesh(
+        new THREE.PlaneGeometry(6.45, 3.05),
+        new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.04,
+            roughness: 0.05,
+            transmission: 0.95,
+            depthWrite: false
+        })
+    );
     oledGlass.rotation.x = -Math.PI / 2;
-    oledGlass.position.set(0, 0.825, -2.6);
+    oledGlass.position.set(0, 0.84, -2.6);
     scene.add(oledGlass);
 
     const pwrBezel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.06, 32), new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 }));
@@ -848,10 +858,6 @@ function createBrailleCells() {
 function animate() {
     requestAnimationFrame(animate);
     if (controls) controls.update();
-
-    updateScreenCanvas();
-    if (screenTexture) screenTexture.needsUpdate = true;
-    if (oledTexture) oledTexture.needsUpdate = true;
 
     for (let i = 0; i < pinMeshes.length; i++) {
         const p = pinMeshes[i];
