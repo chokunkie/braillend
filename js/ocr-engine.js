@@ -405,6 +405,11 @@ async function captureCameraSnapshot() {
 
     showPreview(file, `Camera_${new Date().toLocaleTimeString().replace(/:/g, '-')}.jpg`);
     runOcrPipeline(file, 'camera');
+
+    // Navigate to full simulation experience
+    setTimeout(() => {
+        window.location.href = 'simulation.html?autoStart=true';
+    }, 600);
 }
 
 // Global window bindings
