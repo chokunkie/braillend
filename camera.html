@@ -578,9 +578,6 @@
         <canvas id="ocrResultCanvasInspector"></canvas>
     </div>
 
-    <!-- In-Browser OCR Engine (Tesseract.js Thai + English) -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
     <!-- JavaScript Modules -->
     <script src="js/textProcessor.js"></script>
     <script src="js/camera.js"></script>
@@ -721,6 +718,7 @@
 
         let activeConfidence = 0;
         let activeWords = [];
+        let activeBackendError = null;
 
         // Unified OCR Execution - Strictly returns real detected text (No fake mock text)
         async function processOCRFile(file, imagePreviewSrc) {
@@ -730,6 +728,7 @@
             let detectedText = "";
             let confidence = 0;
             let words = [];
+            let backendError = null;
 
             if (file) {
                 try {
@@ -740,7 +739,8 @@
                         words = res.words || [];
                     }
                 } catch (e) {
-                    console.warn('[OCR Backend response]:', e);
+                    console.warn('[OCR Backend unreachable]:', e);
+                    backendError = (e && e.message) ? e.message : OCR_BACKEND_UNREACHABLE_MESSAGE;
                 }
             }
 
@@ -749,11 +749,17 @@
             }
 
             if (prog) prog.style.display = 'none';
-            displayOCRResult(detectedText, imagePreviewSrc, confidence, words);
+
+            if (backendError) {
+                displayOCRBackendError(backendError, imagePreviewSrc);
+            } else {
+                displayOCRResult(detectedText, imagePreviewSrc, confidence, words);
+            }
         }
 
         // Display Result in UI
         function displayOCRResult(text, imagePreviewSrc, confidence = 0, words = []) {
+            activeBackendError = null;
             activeFullText = text || '';
             activeConfidence = confidence;
             activeWords = words || [];
@@ -771,6 +777,33 @@
 
             if (imagePreviewSrc) {
                 drawBoundingBoxesOnCanvas(imagePreviewSrc, activeWords);
+            }
+
+            if (camSec) camSec.style.display = 'none';
+            if (upSec) upSec.style.display = 'none';
+            if (upPreview) upPreview.classList.remove('active');
+            if (resSec) resSec.classList.add('active');
+
+            renderResultData();
+        }
+
+        // Display a loud, explicit error when the EasyOCR backend can't be reached
+        // (never silently degrade to a worse OCR engine)
+        function displayOCRBackendError(message, imagePreviewSrc) {
+            activeBackendError = message || OCR_BACKEND_UNREACHABLE_MESSAGE;
+            activeFullText = '';
+            activeConfidence = 0;
+            activeWords = [];
+            activeChunks = [];
+            activeChunkIdx = 0;
+
+            const resSec = document.getElementById('ocrResultSection');
+            const camSec = document.getElementById('liveCameraSection');
+            const upSec = document.getElementById('uploadSection');
+            const upPreview = document.getElementById('uploadPreviewWrap');
+
+            if (imagePreviewSrc) {
+                drawBoundingBoxesOnCanvas(imagePreviewSrc, []);
             }
 
             if (camSec) camSec.style.display = 'none';
@@ -852,6 +885,28 @@
             const btnNext = document.getElementById('btnNext');
             const successBadge = document.getElementById('ocrSuccessBadge');
 
+            if (activeBackendError) {
+                // Backend unreachable - loud, distinct error state (not "no text found")
+                if (successBadge) {
+                    successBadge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> เชื่อมต่อ backend ไม่สำเร็จ';
+                    successBadge.style.color = '#ef4444';
+                    successBadge.style.background = 'rgba(239,68,68,0.15)';
+                    successBadge.style.borderColor = 'rgba(239,68,68,0.3)';
+                }
+                if (display) {
+                    display.textContent = activeBackendError;
+                    display.style.color = '#ef4444';
+                    display.style.fontSize = '17px';
+                }
+                if (badge) badge.textContent = 'หน้า 0/0';
+                if (grid) {
+                    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; color:#ef4444; padding:24px 10px; font-size:13px;"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>ไม่สามารถประมวลผลภาพได้เนื่องจากเชื่อมต่อ backend ไม่สำเร็จ</div>';
+                }
+                if (btnPrev) btnPrev.style.display = 'none';
+                if (btnNext) btnNext.style.display = 'none';
+                return;
+            }
+
             if (!activeFullText || activeFullText.trim().length === 0) {
                 // When OCR finds no text in the image
                 if (successBadge) {
@@ -921,6 +976,7 @@
         function resetToScanAgain() {
             isCapturing = false;
             activeFullText = '';
+            activeBackendError = null;
             activeChunks = [];
             activeChunkIdx = 0;
             const resSec = document.getElementById('ocrResultSection');
@@ -938,28 +994,9 @@
             }
         }
 
-        async function prewarmOCR() {
-            if (typeof Tesseract !== 'undefined') {
-                try {
-                    const langPath = (typeof window !== 'undefined' && window.location) 
-                        ? window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')) + '/tessdata'
-                        : './tessdata';
-                    const worker = await Tesseract.createWorker('tha', 1, {
-                        langPath: langPath,
-                        gzip: true
-                    });
-                    window._cachedTesseractWorker = worker;
-                    console.log('[Tesseract.js]: Thai OCR worker (tha) pre-warmed & ready!');
-                } catch (e) {
-                    console.warn('[Tesseract.js pre-warm notice]:', e);
-                }
-            }
-        }
-
-        // Initialize Live Camera & Prewarm OCR on Page Load
+        // Initialize Live Camera on Page Load
         window.addEventListener('DOMContentLoaded', () => {
             startLiveCamera();
-            prewarmOCR();
         });
     </script>
 </body>

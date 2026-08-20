@@ -2,96 +2,63 @@
    BraillLens 3D & Optical OCR System - OCR Module
    The ONLY place in the app that knows how OCR is actually performed.
    Sends the image to the EasyOCR (Thai + English) FastAPI backend and
-   returns a normalized result shape. Supports self-hosted in-browser Tesseract.js.
+   returns a normalized result shape. There is no in-browser fallback engine:
+   if the backend can't be reached, recognize() throws so the caller can show
+   a loud error instead of silently degrading to a worse OCR engine.
    ========================================================================= */
 
 const OCR_BACKEND_URL = 'http://localhost:8000/ocr';
+const OCR_REQUEST_TIMEOUT_MS = 30000;
+const OCR_BACKEND_UNREACHABLE_MESSAGE = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ประมวลผลภาพได้ กรุณาตรวจสอบว่า backend กำลังทำงานอยู่';
 
 /**
- * Runs OCR on an image via the backend with self-hosted in-browser Tesseract fallback.
+ * Runs OCR on an image via the EasyOCR FastAPI backend.
  * @param {File|Blob} imageFile - JPEG image, from either upload or camera capture.
  * @param {'upload'|'camera'} documentSource - UI label only; the backend uses it
  *   solely to tune preprocessing intensity, never to change the OCR code path.
  * @returns {Promise<{text: string, confidence: number, words: Array}>}
+ * @throws {Error} with message OCR_BACKEND_UNREACHABLE_MESSAGE when the backend
+ *   can't be reached (network error, timeout, or non-OK HTTP response).
  */
 async function recognize(imageFile, documentSource = 'upload') {
-    // 1. Primary Engine: EasyOCR FastAPI Backend (Python Server)
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    formData.append('documentSource', documentSource);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), OCR_REQUEST_TIMEOUT_MS);
+
+    let response;
     try {
-        const formData = new FormData();
-        formData.append('image', imageFile);
-        formData.append('documentSource', documentSource);
-
-        const response = await fetch(OCR_BACKEND_URL, {
+        response = await fetch(OCR_BACKEND_URL, {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: controller.signal
         });
-
-        if (response.ok) {
-            const data = await response.json();
-            if (data && typeof data.text === 'string' && data.text.trim().length > 0) {
-                return {
-                    text: data.text || '',
-                    confidence: typeof data.confidence === 'number' ? data.confidence : 90,
-                    words: Array.isArray(data.words) ? data.words : []
-                };
-            }
-        }
-    } catch (backendErr) {
-        console.warn('[EasyOCR Backend offline, running In-Browser Tesseract.js Engine]:', backendErr);
+    } catch (networkErr) {
+        console.warn('[EasyOCR Backend unreachable]:', networkErr);
+        throw new Error(OCR_BACKEND_UNREACHABLE_MESSAGE);
+    } finally {
+        clearTimeout(timeoutId);
     }
 
-    // 2. Secondary Engine: Self-Hosted In-Browser Client OCR (Tesseract.js Thai Only - Google High-Accuracy LSTM)
-    if (typeof Tesseract !== 'undefined') {
-        try {
-            console.log('[Tesseract.js]: Processing real image with Google High-Accuracy Thai model from ./tessdata ...');
-            
-            let res = null;
-            if (window._cachedTesseractWorker) {
-                try {
-                    await window._cachedTesseractWorker.setParameters({
-                        tessedit_pageseg_mode: '6',
-                        preserve_interword_spaces: '1'
-                    });
-                } catch (e) {}
-                res = await window._cachedTesseractWorker.recognize(imageFile);
-            } else {
-                const langPath = (typeof window !== 'undefined' && window.location) 
-                    ? window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')) + '/tessdata'
-                    : './tessdata';
-                res = await Tesseract.recognize(imageFile, 'tha', {
-                    langPath: langPath,
-                    gzip: true,
-                    tessedit_pageseg_mode: '6',
-                    logger: m => {
-                        if (m && m.status) console.log(`[Tesseract OCR (Thai LSTM)]: ${m.status} ${(m.progress ? Math.round(m.progress * 100) + '%' : '')}`);
-                    }
-                });
-            }
+    if (!response.ok) {
+        console.warn('[EasyOCR Backend error]:', response.status, response.statusText);
+        throw new Error(OCR_BACKEND_UNREACHABLE_MESSAGE);
+    }
 
-            let extractedText = (res && res.data && res.data.text) ? res.data.text.trim() : '';
-            // Clean up extraneous line breaks
-            extractedText = extractedText.replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
-            const conf = (res && res.data && res.data.confidence) ? Math.round(res.data.confidence) : 85;
-            const wordsList = (res.data && Array.isArray(res.data.words)) ? res.data.words.map(w => ({
-                text: w.text,
-                confidence: w.confidence,
-                bbox: { x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 }
-            })) : [];
-
-            return {
-                text: extractedText,
-                confidence: conf,
-                words: wordsList
-            };
-        } catch (tessErr) {
-            console.warn('[In-Browser Tesseract.js Error]:', tessErr);
-        }
+    let data;
+    try {
+        data = await response.json();
+    } catch (parseErr) {
+        console.warn('[EasyOCR Backend returned invalid JSON]:', parseErr);
+        throw new Error(OCR_BACKEND_UNREACHABLE_MESSAGE);
     }
 
     return {
-        text: '',
-        confidence: 0,
-        words: []
+        text: (data && typeof data.text === 'string') ? data.text : '',
+        confidence: (data && typeof data.confidence === 'number') ? data.confidence : 90,
+        words: (data && Array.isArray(data.words)) ? data.words : []
     };
 }
 

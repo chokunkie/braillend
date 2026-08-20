@@ -179,15 +179,10 @@ async function runOcrPipeline(imageFile, documentSource) {
         try {
             result = await recognize(imageFile, documentSource);
         } catch (apiErr) {
-            console.warn('[OCR Backend Offline / Fallback Result]:', apiErr);
-            result = {
-                text: "สวัสดีครับผมชื่อสมชาย ยินดีที่ได้รู้จักครับ",
-                confidence: 96,
-                words: [
-                    { text: "สวัสดีครับ", confidence: 98, bbox: { x0: 50, y0: 50, x1: 200, y1: 100 } },
-                    { text: "ผมชื่อสมชาย", confidence: 95, bbox: { x0: 220, y0: 50, x1: 400, y1: 100 } }
-                ]
-            };
+            console.warn('[OCR Backend unreachable]:', apiErr);
+            const errMsg = (apiErr && apiErr.message) ? apiErr.message : OCR_BACKEND_UNREACHABLE_MESSAGE;
+            updateOCRProgress(1.0, `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-magenta);"></i> ${errMsg}`, 0);
+            return { text: '', confidence: 0, words: [], accepted: false, backendError: errMsg };
         }
 
         const cleanedText = normalizeOcrText(result.text);
@@ -216,9 +211,9 @@ async function runOcrPipeline(imageFile, documentSource) {
         return { text: cleanedText, confidence: result ? result.confidence : 95, words: result ? result.words : [], accepted: true };
     } catch (err) {
         console.error('[BraillLens OCR Error]:', err);
-        const fallbackText = "สวัสดีครับผมชื่อสมชาย";
-        applyOCRResultToSystem(fallbackText, 95);
-        return { text: fallbackText, confidence: 95, words: [], accepted: true };
+        const errMsg = (err && err.message) ? err.message : OCR_BACKEND_UNREACHABLE_MESSAGE;
+        updateOCRProgress(1.0, `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-magenta);"></i> ${errMsg}`, 0);
+        return { text: '', confidence: 0, words: [], accepted: false, backendError: errMsg };
     } finally {
         isOCROngoing = false;
     }
