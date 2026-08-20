@@ -495,7 +495,7 @@
         <div id="ocrProgressContainer" class="result-card" style="display:none; gap:10px;">
             <div style="display:flex; justify-content:space-between; font-size:12px;">
                 <span id="ocrStatusText"><i class="fa-solid fa-spinner fa-spin"></i> กำลังอ่านข้อความ...</span>
-                <span id="ocrConfidenceScore" style="color:#00ff88; font-weight:700;">CONF: 95%</span>
+                <span id="ocrConfidenceScore" style="color:#00f2fe; font-weight:700;">กำลังประมวลผล...</span>
             </div>
             <div style="background:rgba(255,255,255,0.1); border-radius:10px; height:8px; overflow:hidden;">
                 <div id="ocrProgressBar" style="width:50%; height:100%; background:linear-gradient(90deg,#00f2fe,#00ff88); transition:width 0.3s;"></div>
@@ -911,8 +911,9 @@
                 const cells = convertThaiToBraille(chunk);
                 grid.innerHTML = cells.map(cell => {
                     const char = cell.char || ' ';
+                    const activeList = cell.activeDots || cell.dots || [];
                     const dots = [1, 2, 3, 4, 5, 6].map(d => {
-                        const isActive = cell.dots && cell.dots.includes(d);
+                        const isActive = Array.isArray(activeList) && activeList.includes(d);
                         return `<div class="dot ${isActive ? 'active' : ''}"></div>`;
                     }).join('');
 
