@@ -394,12 +394,6 @@
                 sctx.fillStyle = '#070a13';
                 sctx.fillRect(0, 0, w, h);
 
-                // Tech Grid Lines
-                sctx.strokeStyle = 'rgba(0, 242, 254, 0.05)';
-                sctx.lineWidth = 1;
-                for (let x = 0; x < w; x += 32) { sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, h); sctx.stroke(); }
-                for (let y = 0; y < h; y += 32) { sctx.beginPath(); sctx.moveTo(0, y); sctx.lineTo(w, y); sctx.stroke(); }
-
                 // Outer Cyan Border
                 sctx.strokeStyle = '#00f2fe';
                 sctx.lineWidth = 8;
