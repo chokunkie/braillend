@@ -19,6 +19,7 @@ const jsOcrModulePath = path.join(projectRoot, 'js', 'ocr.js');
 const jsCameraPath = path.join(projectRoot, 'js', 'camera.js');
 const jsTextProcessorPath = path.join(projectRoot, 'js', 'textProcessor.js');
 const jsDemoModePath = path.join(projectRoot, 'js', 'demoMode.js');
+const jsRealSimPath = path.join(projectRoot, 'js', 'real-simulation.js');
 const jsAppPath = path.join(projectRoot, 'js', 'app.js');
 const readmePath = path.join(projectRoot, 'README.md');
 const backendMainPath = path.join(projectRoot, 'backend', 'main.py');
@@ -36,6 +37,7 @@ assert(fs.existsSync(jsOcrModulePath), `Target js/ocr.js not found at ${jsOcrMod
 assert(fs.existsSync(jsCameraPath), `Target js/camera.js not found at ${jsCameraPath}`);
 assert(fs.existsSync(jsTextProcessorPath), `Target js/textProcessor.js not found at ${jsTextProcessorPath}`);
 assert(fs.existsSync(jsDemoModePath), `Target js/demoMode.js not found at ${jsDemoModePath}`);
+assert(fs.existsSync(jsRealSimPath), `Target js/real-simulation.js not found at ${jsRealSimPath}`);
 assert(fs.existsSync(jsAppPath), `Target js/app.js not found at ${jsAppPath}`);
 assert(fs.existsSync(readmePath), `Target README.md not found at ${readmePath}`);
 assert(fs.existsSync(backendMainPath), `Target backend/main.py not found at ${backendMainPath}`);
@@ -53,6 +55,7 @@ const jsOcrModuleContent = fs.readFileSync(jsOcrModulePath, 'utf-8');
 const jsCameraContent = fs.readFileSync(jsCameraPath, 'utf-8');
 const jsTextProcessorContent = fs.readFileSync(jsTextProcessorPath, 'utf-8');
 const jsDemoModeContent = fs.readFileSync(jsDemoModePath, 'utf-8');
+const jsRealSimContent = fs.readFileSync(jsRealSimPath, 'utf-8');
 const jsAppContent = fs.readFileSync(jsAppPath, 'utf-8');
 const readmeContent = fs.readFileSync(readmePath, 'utf-8');
 const backendMainContent = fs.readFileSync(backendMainPath, 'utf-8');
@@ -331,6 +334,14 @@ runTest('Compile js/demoMode.js with Node vm.Script (isolated from real OCR)', (
     assert(jsDemoModeContent.includes('setTimeout'), 'Missing artificial delay simulating an OCR call');
     assert(!/fetch\s*\(/.test(jsDemoModeContent), 'js/demoMode.js must never call the network / real OCR backend');
     assert(/[฀-๿]/.test(jsDemoModeContent), 'Missing a hardcoded Thai sample string');
+});
+
+runTest('Compile js/real-simulation.js with Node vm.Script (Automated Multi-Line Scan & Paging)', () => {
+    new vm.Script(jsRealSimContent, { filename: 'real-simulation.js' });
+    assert(jsRealSimContent.includes('function startRealSimulation'), 'Missing startRealSimulation');
+    assert(jsRealSimContent.includes('function closeRealSimulation'), 'Missing closeRealSimulation');
+    assert(jsRealSimContent.includes('function stepSimLine'), 'Missing stepSimLine');
+    assert(jsRealSimContent.includes('REAL_SIMULATION_LINES'), 'Missing REAL_SIMULATION_LINES array');
 });
 
 runTest('Compile js/app.js with Node vm.Script', () => {

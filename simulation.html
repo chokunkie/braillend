@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BrailleLens 3D Hardware Simulation - Smart Reader Workstation</title>
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome & Google Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+
+    <style>
+        body {
+            background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%);
+            color: #0f172a;
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Prompt', sans-serif;
+        }
+
+        /* 3D WebGL Fullscreen Canvas Container with High-Contrast Studio Spotlight */
+        #webgl-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%);
+        }
+
+        /* Compact Top-Right Floating Control Popup */
+        .compact-control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.94);
+            border: 1px solid rgba(0, 242, 254, 0.35);
+            border-radius: 14px;
+            padding: 16px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: top right;
+        }
+
+        .compact-control-panel.panel-hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.9) translateY(-10px);
+        }
+
+        /* Floating Panel Toggle Pill Button */
+        .panel-toggle-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 90;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            color: #00f2fe;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            transition: all 0.2s;
+        }
+
+        .panel-toggle-btn:hover {
+            background: rgba(0, 242, 254, 0.2);
+            transform: scale(1.05);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #00f2fe;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .panel-exit-btn {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #ef4444;
+            text-decoration: none;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .panel-exit-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        /* Primary Action Start/Restart Button */
+        .compact-start-btn {
+            background: linear-gradient(135deg, #00f2fe, #00ff88);
+            border: none;
+            color: #090d16;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 9px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.35);
+            transition: all 0.2s;
+        }
+
+        .compact-start-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+
+        /* Voice Status Banner */
+        .voice-status-box {
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #38bdf8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            line-height: 1.4;
+        }
+
+        /* Active Text & Pagination Info */
+        .reading-info-box {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .reading-info-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .reading-label {
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .reading-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(0, 242, 254, 0.15);
+            color: #00f2fe;
+            padding: 2px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 242, 254, 0.3);
+        }
+
+        .reading-text {
+            font-size: 14px;
+            font-weight: 700;
+            color: #00f2fe;
+            word-break: break-all;
+        }
+
+        /* Button Group (Prev / Next) */
+        .compact-btn-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .compact-nav-btn {
+            flex: 1;
+            padding: 8px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .compact-btn-back {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #e2e8f0;
+        }
+
+        .compact-btn-back:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .compact-btn-next {
+            background: linear-gradient(135deg, #00f2fe, #4facfe);
+            border: none;
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        .compact-btn-next:hover {
+            opacity: 0.9;
+        }
+
+        /* Top-Left Setup Tip */
+        .setup-tip-badge {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(245, 158, 11, 0.5);
+            padding: 6px 14px;
+            border-radius: 20px;
+            color: #f59e0b;
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(8px);
+            transition: opacity 0.3s;
+        }
+
+        /* Flash Overlay */
+        #flashOverlay {
+            position: absolute;
+            inset: 0;
+            background: #fff;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 200;
+            transition: opacity 0.15s ease-out;
+        }
+
+        #flashOverlay.active {
+            opacity: 0.95;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Small Setup Camera Tip (Top Left) -->
+    <div class="setup-tip-badge" id="setupGuideBanner">
+        <i class="fa-solid fa-arrows-up-down-left-right"></i>
+        <span>ปรับมุมกล้อง 3D ได้อิสระ แล้วกดเริ่มการจำลอง</span>
+    </div>
+
+    <!-- Floating Panel Toggle Pill Button (Always accessible) -->
+    <button class="panel-toggle-btn" id="btnTogglePanel" onclick="toggleControlPanel()" title="แสดง/ซ่อน เมนูควบคุม">
+        <i class="fa-solid fa-eye-slash"></i> <span>ซ่อนเมนู</span>
+    </button>
+
+    <!-- Compact Floating Control Card (Top Right) -->
+    <div class="compact-control-panel" id="compactControlPanel">
+        <div class="panel-header">
+            <div class="panel-title">
+                <i class="fa-solid fa-braille"></i> ตัวอย่างการใช้
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button class="panel-exit-btn" onclick="hideControlPanel()" style="background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); color:#cbd5e1;" title="ซ่อนเมนู">
+                    <i class="fa-solid fa-eye-slash"></i> ซ่อน
+                </button>
+                <a href="index.html" class="panel-exit-btn">
+                    <i class="fa-solid fa-house"></i> หน้าหลัก
+                </a>
+            </div>
+        </div>
+
+        <button class="compact-start-btn" id="mainStartBtn" onclick="triggerSimulationStart()">
+            <i class="fa-solid fa-play"></i> เริ่มแสดงตัวอย่าง
+        </button>
+
+        <div class="voice-status-box">
+            <i class="fa-solid fa-volume-high"></i>
+            <span id="voiceToastMsg">พร้อมสำหรับการจำลอง</span>
+        </div>
+
+        <div class="reading-info-box">
+            <div class="reading-info-top">
+                <span class="reading-label">ข้อความที่แสดง (14 เซลล์)</span>
+                <span class="reading-badge" id="simBadge">หน้า 1/3</span>
+            </div>
+            <div class="reading-text" id="currentTextDisplay">
+                "สวัสดีครับ"
+            </div>
+        </div>
+
+        <div class="compact-btn-group">
+            <button class="compact-nav-btn compact-btn-back" onclick="step3DLine(-1)">
+                <i class="fa-solid fa-backward"></i> ย้อนกลับ
+            </button>
+            <button class="compact-nav-btn compact-btn-next" onclick="step3DLine(1)">
+                ถัดไป <i class="fa-solid fa-forward"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- WebGL 3D Hardware Canvas Container -->
+    <div id="webgl-container"></div>
+    <div id="flashOverlay"></div>
+
+    <!-- Hidden Input Textarea for Braille Engine Sync -->
+    <textarea id="thaiInput" style="display:none;">สวัสดีครับผมชื่อสมชายยินดีที่ได้รู้จักครับ</textarea>
+
+    <!-- Modular Subsystems -->
+    <script src="js/textProcessor.js"></script>
+    <script src="js/braille-engine.js"></script>
+    <script src="js/three-scene.js"></script>
+    <script src="js/voice-guidance.js"></script>
+
+    <script>
+        // Exact Document Text & 14-Cell Chunks
+        const FULL_ESSAY_TEXT = "สวัสดีครับผมชื่อสมชายยินดีที่ได้รู้จักครับ";
+        const ESSAY_CHUNKS = [
+            "สวัสดีครับ",
+            "ผมชื่อสมชาย",
+            "ยินดีที่ได้รู้จักครับ"
+        ];
+
+        let lineIdx = 0;
+        let autoLineInterval = null;
+        let deviceRootGroup = null;
+        let lightCone3D = null;
+        let paperCanvas = null;
+        let paperTexture = null;
+        let paperMesh3D = null;
+        let tableMesh3D = null;
+        let isSimulationRunning = false;
+
+        // Smooth Lerp Animation State
+        let targetDeviceX = 0;
+        let currentDeviceX = 0;
+
+        // Current Screen Mode: 'HUD' (Camera viewfinder with green brackets) or 'TEXT' (Braille readout)
+        let currentScreenMode = 'HUD';
+        let currentHUDStatus = 'กำลังเตรียมพร้อมสแกน...';
+        let currentHUDLocked = false;
+
+        // Override drawScreenContent to enforce custom HUD and Text display in Thai without emojis
+        window.drawScreenContent = function(text) {
+            if (!screenCanvas) return;
+            const sctx = screenCanvas.getContext('2d');
+            const w = 1024;
+            const h = 512;
+
+            sctx.save();
+
+            if (currentScreenMode === 'HUD') {
+                // Background
+                sctx.fillStyle = '#070a13';
+                sctx.fillRect(0, 0, w, h);
+
+                // Tech Grid Lines
+                sctx.strokeStyle = 'rgba(0, 242, 254, 0.05)';
+                sctx.lineWidth = 1;
+                for (let x = 0; x < w; x += 32) { sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, h); sctx.stroke(); }
+                for (let y = 0; y < h; y += 32) { sctx.beginPath(); sctx.moveTo(0, y); sctx.lineTo(w, y); sctx.stroke(); }
+
+                // Outer Cyan Border
+                sctx.strokeStyle = '#00f2fe';
+                sctx.lineWidth = 8;
+                sctx.strokeRect(10, 10, w - 20, h - 20);
+
+                // Top Header Bar
+                sctx.fillStyle = 'rgba(0, 242, 254, 0.15)';
+                sctx.fillRect(14, 14, w - 28, 64);
+
+                sctx.font = "bold 28px Prompt, sans-serif";
+                sctx.fillStyle = '#00f2fe';
+                sctx.fillText("ระบบกล้องสแกนเนอร์ BRAILLELENS", 36, 56);
+
+                // Status Badge
+                if (currentHUDLocked) {
+                    sctx.fillStyle = '#00ff88';
+                    sctx.fillText("ล็อกเป้าหมาย 100%", w - 240, 56);
+                } else {
+                    sctx.fillStyle = '#f59e0b';
+                    sctx.fillText("กำลังค้นหาเอกสาร...", w - 250, 56);
+                }
+
+                // 4-Corner Target Brackets (Green Glowing)
+                const cornerSize = 75;
+                const cornerThick = 14;
+                const marginX = 45;
+                const marginY = 110;
+                sctx.strokeStyle = currentHUDLocked ? '#00ff88' : '#f59e0b';
+                sctx.lineWidth = cornerThick;
+
+                // TL
+                sctx.beginPath();
+                sctx.moveTo(marginX, marginY + cornerSize);
+                sctx.lineTo(marginX, marginY);
+                sctx.lineTo(marginX + cornerSize, marginY);
+                sctx.stroke();
+
+                // TR
+                sctx.beginPath();
+                sctx.moveTo(w - marginX - cornerSize, marginY);
+                sctx.lineTo(w - marginX, marginY);
+                sctx.lineTo(w - marginX, marginY + cornerSize);
+                sctx.stroke();
+
+                // BL
+                sctx.beginPath();
+                sctx.moveTo(marginX, h - 40 - cornerSize);
+                sctx.lineTo(marginX, h - 40);
+                sctx.lineTo(marginX + cornerSize, h - 40);
+                sctx.stroke();
+
+                // BR
+                sctx.beginPath();
+                sctx.moveTo(w - marginX - cornerSize, h - 40);
+                sctx.lineTo(w - marginX, h - 40);
+                sctx.lineTo(w - marginX, h - 40 - cornerSize);
+                sctx.stroke();
+
+                // Center Laser Scanline
+                sctx.strokeStyle = 'rgba(0, 242, 254, 0.75)';
+                sctx.lineWidth = 3;
+                sctx.beginPath();
+                sctx.moveTo(marginX, h / 2 + 15);
+                sctx.lineTo(w - marginX, h / 2 + 15);
+                sctx.stroke();
+
+                // Center Status Text in THAI
+                sctx.font = "bold 34px Prompt, sans-serif";
+                sctx.fillStyle = '#ffffff';
+                sctx.textAlign = 'center';
+                sctx.fillText(currentHUDStatus, w / 2, h / 2 + 24);
+
+            } else {
+                // TEXT MODE (Shows the translated Thai text clearly)
+                sctx.fillStyle = '#070a13';
+                sctx.fillRect(0, 0, w, h);
+
+                // Outer Border
+                sctx.strokeStyle = '#00f2fe';
+                sctx.lineWidth = 6;
+                sctx.strokeRect(8, 8, w - 16, h - 16);
+
+                // Header
+                sctx.fillStyle = 'rgba(0, 242, 254, 0.15)';
+                sctx.fillRect(14, 14, w - 28, 54);
+                sctx.font = "bold 26px Prompt, sans-serif";
+                sctx.fillStyle = '#00f2fe';
+                sctx.fillText("ผลการอ่านข้อความ OCR • แสดงผลที่หมุด 84 พิน", 32, 50);
+
+                // Main Text Box
+                const activeText = text || ESSAY_CHUNKS[lineIdx] || 'HELLO WORLD';
+                sctx.fillStyle = '#111c38';
+                sctx.strokeStyle = '#00ff88';
+                sctx.lineWidth = 2;
+                sctx.fillRect(30, 95, w - 60, 260);
+                sctx.strokeRect(30, 95, w - 60, 260);
+
+                sctx.font = "bold 44px Prompt, sans-serif";
+                sctx.fillStyle = '#00ff88';
+                sctx.textAlign = 'center';
+                sctx.fillText(`"${activeText}"`, w / 2, 235);
+
+                // Telemetry Footer in THAI
+                sctx.font = "bold 24px Prompt, monospace";
+                sctx.fillStyle = '#94a3b8';
+                sctx.textAlign = 'left';
+                sctx.fillText(`แสดงผล 14 เซลล์ | หน้าที่ ${lineIdx + 1}/${ESSAY_CHUNKS.length} [${activeText}]`, 40, 420);
+            }
+
+            sctx.restore();
+            if (screenTexture) screenTexture.needsUpdate = true;
+            if (oledTexture) oledTexture.needsUpdate = true;
+        };
+
+        // Smooth Lerp Animation Loop for Device Movement
+        function updateSmoothDeviceMovement() {
+            currentDeviceX += (targetDeviceX - currentDeviceX) * 0.05;
+            if (deviceRootGroup) {
+                deviceRootGroup.position.x = currentDeviceX;
+            }
+            requestAnimationFrame(updateSmoothDeviceMovement);
+        }
+
+        function setFloatingDeviceX(posX) {
+            targetDeviceX = posX;
+        }
+
+        // Speak Guidance (Voice cues ONLY, no text reading)
+        function speakGuidance(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'th-TH';
+                utter.rate = 0.95;
+                window.speechSynthesis.speak(utter);
+            }
+        }
+
+        // Draw ONLY the clean text "สวัสดีครับผมชื่อสมชายยินดีที่ได้รู้จักครับ" on the Paper
+        function renderPaperTexture(highlightIndex) {
+            if (!paperCanvas) {
+                paperCanvas = document.createElement('canvas');
+                paperCanvas.width = 1024;
+                paperCanvas.height = 600;
+            }
+            const pctx = paperCanvas.getContext('2d');
+
+            // 1. Paper Background
+            pctx.fillStyle = '#faf8f5';
+            pctx.fillRect(0, 0, 1024, 600);
+
+            pctx.strokeStyle = '#e2e8f0';
+            pctx.lineWidth = 14;
+            pctx.strokeRect(16, 16, 1024 - 32, 600 - 32);
+
+            // Left Book Margin Line
+            pctx.fillStyle = '#cbd5e1';
+            pctx.fillRect(24, 24, 12, 600 - 48);
+
+            // 2. Render ONLY the sentence clearly in the center
+            pctx.font = "bold 44px Prompt, sans-serif";
+            pctx.fillStyle = '#0f172a';
+            pctx.textAlign = 'center';
+            pctx.textBaseline = 'middle';
+            
+            // Draw main text
+            pctx.fillText(FULL_ESSAY_TEXT, 1024 / 2, 260);
+
+            // 3. Highlight the active chunk being read
+            const activeChunk = ESSAY_CHUNKS[highlightIndex] || '';
+            pctx.font = "bold 32px Prompt, sans-serif";
+            pctx.fillStyle = '#0284c7';
+            pctx.fillText(`กำลังอ่าน: [ ${activeChunk} ]`, 1024 / 2, 380);
+
+            // Underline highlight bar
+            pctx.fillStyle = '#00f2fe';
+            pctx.fillRect(1024 / 2 - 200, 310, 400, 6);
+
+            if (paperTexture) {
+                paperTexture.needsUpdate = true;
+            }
+        }
+
+        // Build 3D Desk, Document, and Collect All Device Components into a SINGLE unified deviceRootGroup
+        function construct3DEnvironment() {
+            if (!scene) return;
+
+            // 1. 3D Wooden Desk Surface Mesh (Positioned Static at y = -6.5, Stays 100% Fixed!)
+            const tableGeo = new THREE.BoxGeometry(28, 0.4, 22);
+            const tableMat = new THREE.MeshStandardMaterial({
+                color: 0x181613,
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            tableMesh3D = new THREE.Mesh(tableGeo, tableMat);
+            tableMesh3D.position.set(0, -6.5, 0);
+            tableMesh3D.receiveShadow = true;
+            scene.add(tableMesh3D);
+
+            // 2. 3D Document Page with ONLY "สวัสดีครับผมชื่อสมชายยินดีที่ได้รู้จักครับ"
+            renderPaperTexture(0);
+            paperTexture = new THREE.CanvasTexture(paperCanvas);
+            paperTexture.minFilter = THREE.LinearFilter;
+            paperTexture.magFilter = THREE.LinearFilter;
+
+            const paperGeo = new THREE.PlaneGeometry(12.0, 7.0);
+            const paperMat = new THREE.MeshStandardMaterial({
+                map: paperTexture,
+                roughness: 0.9,
+                metalness: 0.0,
+                side: THREE.DoubleSide
+            });
+            paperMesh3D = new THREE.Mesh(paperGeo, paperMat);
+            paperMesh3D.rotation.x = -Math.PI / 2; // Lie flat horizontally on the desk
+            paperMesh3D.position.set(0, -6.25, 0);
+            paperMesh3D.receiveShadow = true;
+            scene.add(paperMesh3D);
+
+            // 3. UNIFY ALL DEVICE HARDWARE MESHES INTO A SINGLE deviceRootGroup
+            deviceRootGroup = new THREE.Group();
+            deviceRootGroup.position.set(0, 4.8, 0);
+
+            // Move all device meshes created by initMain3D into deviceRootGroup
+            const objectsToMove = [];
+            scene.children.forEach(child => {
+                if (child !== tableMesh3D && child !== paperMesh3D && child !== deviceRootGroup) {
+                    objectsToMove.push(child);
+                }
+            });
+
+            objectsToMove.forEach(obj => {
+                scene.remove(obj);
+                deviceRootGroup.add(obj);
+            });
+
+            // 4. Downward-Expanding Light Cone Attached to deviceRootGroup
+            const coneGeo = new THREE.ConeGeometry(6.2, 6.2, 32, 1, true);
+            const coneMat = new THREE.MeshBasicMaterial({
+                color: 0x00f0ff,
+                transparent: true,
+                opacity: 0.22,
+                side: THREE.DoubleSide
+            });
+            lightCone3D = new THREE.Mesh(coneGeo, coneMat);
+            lightCone3D.position.set(0, -7.9, 0);
+            deviceRootGroup.add(lightCone3D);
+
+            // Add the unified deviceRootGroup to the scene
+            scene.add(deviceRootGroup);
+
+            // Start Smooth Movement Loop
+            updateSmoothDeviceMovement();
+
+            // Initial Device Position
+            setFloatingDeviceX(0);
+        }
+
+        // Apply Line Text to 3D Braille Device Model (Directly updates 84 3D Physical Pins!)
+        function applyLineTo3D(index) {
+            if (index < 0) index = 0;
+            if (index >= ESSAY_CHUNKS.length) index = ESSAY_CHUNKS.length - 1;
+            lineIdx = index;
+
+            const text = ESSAY_CHUNKS[index];
+            document.getElementById('currentTextDisplay').textContent = `"${text}"`;
+            document.getElementById('simBadge').textContent = `หน้า ${index + 1}/${ESSAY_CHUNKS.length}`;
+
+            // 1. Update Paper Highlight
+            renderPaperTexture(index);
+
+            // 2. Switch Screen to TEXT mode
+            currentScreenMode = 'TEXT';
+            drawScreenContent(text);
+
+            // 3. Actuate 84 Physical 3D Pins via braille-engine.js!
+            if (typeof currentBrailleChunks !== 'undefined') {
+                currentBrailleChunks = ESSAY_CHUNKS;
+                currentBraillePageIndex = index;
+                currentBrailleFullText = FULL_ESSAY_TEXT;
+                currentLanguageMode = 'thai';
+            }
+
+            if (typeof updatePaginationDisplay === 'function') {
+                updatePaginationDisplay();
+            } else if (typeof updateBrailleDisplay === 'function') {
+                updateBrailleDisplay(text);
+            }
+        }
+
+        // Next / Back Line Paging (Physically updates 84 pins on NEXT & BACK)
+        function step3DLine(delta) {
+            if (autoLineInterval) clearInterval(autoLineInterval);
+            lineIdx = (lineIdx + delta + ESSAY_CHUNKS.length) % ESSAY_CHUNKS.length;
+            applyLineTo3D(lineIdx);
+        }
+
+        // Toggle & Hide Floating Control Panel Functions
+        function toggleControlPanel() {
+            const panel = document.getElementById('compactControlPanel');
+            const toggleBtn = document.getElementById('btnTogglePanel');
+            if (!panel) return;
+            panel.classList.toggle('panel-hidden');
+            const isHidden = panel.classList.contains('panel-hidden');
+            if (toggleBtn) {
+                toggleBtn.innerHTML = isHidden 
+                    ? '<i class="fa-solid fa-sliders"></i> <span>แสดงเมนู</span>' 
+                    : '<i class="fa-solid fa-eye-slash"></i> <span>ซ่อนเมนู</span>';
+            }
+        }
+
+        function hideControlPanel() {
+            const panel = document.getElementById('compactControlPanel');
+            const toggleBtn = document.getElementById('btnTogglePanel');
+            if (panel) panel.classList.add('panel-hidden');
+            if (toggleBtn) toggleBtn.innerHTML = '<i class="fa-solid fa-sliders"></i> <span>แสดงเมนู</span>';
+        }
+
+        // Trigger Interactive Simulation (Generous calm pacing allowing full speech completion)
+        function triggerSimulationStart() {
+            if (autoLineInterval) clearInterval(autoLineInterval);
+            isSimulationRunning = true;
+
+            // Auto-hide control panel so 3D presentation is completely unobstructed!
+            hideControlPanel();
+
+            const startBtn = document.getElementById('mainStartBtn');
+            if (startBtn) {
+                startBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> เล่นอีกครั้ง';
+            }
+
+            const guide = document.getElementById('setupGuideBanner');
+            if (guide) guide.style.opacity = '0';
+
+            // 1. Reset Screen to HUD Mode
+            currentScreenMode = 'HUD';
+            currentHUDStatus = 'กำลังค้นหาเอกสาร...';
+            currentHUDLocked = false;
+            drawScreenContent();
+
+            // 2. Step 1: Smooth Glide Left (0s - 3.2s) -> Voice prompt speaks fully
+            const toast = document.getElementById('voiceToastMsg');
+            if (toast) toast.textContent = 'ขยับกล้องไปทางขวา...';
+            setFloatingDeviceX(-1.5);
+            currentHUDStatus = 'กำลังเล็งไปทางซ้าย...';
+            currentHUDLocked = false;
+            drawScreenContent();
+            speakGuidance('ขยับกล้องไปทางขวา');
+
+            // Step 2: Smooth Glide Right (3.2s - 6.5s) -> Voice prompt speaks fully
+            setTimeout(() => {
+                if (toast) toast.textContent = 'ขยับกล้องไปทางซ้าย...';
+                setFloatingDeviceX(1.5);
+                currentHUDStatus = 'กำลังเล็งไปทางขวา...';
+                currentHUDLocked = false;
+                drawScreenContent();
+                speakGuidance('ขยับกล้องไปทางซ้าย');
+            }, 3200);
+
+            // Step 3: Center Device & 4-Corner Target Lock (6.5s - 9.8s) -> Full sentence spoken
+            setTimeout(() => {
+                setFloatingDeviceX(0);
+                currentHUDStatus = 'ล็อกเป้าหมาย 4 มุมสำเร็จ';
+                currentHUDLocked = true;
+                drawScreenContent();
+                if (toast) toast.textContent = 'เข้ามุมทั้ง 4 เรียบร้อยแล้ว กำลังถ่ายภาพ...';
+                speakGuidance('เข้ามุมทั้ง 4 เรียบร้อยแล้ว ถือค้างไว้นะครับ');
+            }, 6500);
+
+            // Step 4: Shutter Flash & Beep (9.8s)
+            setTimeout(() => {
+                if (typeof playTacticalBeep === 'function') playTacticalBeep(1050, 220);
+                const flash = document.getElementById('flashOverlay');
+                if (flash) {
+                    flash.classList.add('active');
+                    setTimeout(() => flash.classList.remove('active'), 200);
+                }
+            }, 9800);
+
+            // Step 5: Transition Screen to Thai Text Readout & Start Auto-Next Line Paging (10.8s)
+            setTimeout(() => {
+                if (toast) toast.textContent = 'สแกนสำเร็จ พิน 84 หมุดกำลังดันนูน';
+                applyLineTo3D(0);
+
+                // Auto-advance lines every 3.2s continuously
+                autoLineInterval = setInterval(() => {
+                    lineIdx = (lineIdx + 1) % ESSAY_CHUNKS.length;
+                    applyLineTo3D(lineIdx);
+                }, 3200);
+            }, 10800);
+        }
+
+        // Initialize when DOM ready (Loads scene immediately, waits for Start button to run)
+        window.addEventListener('DOMContentLoaded', () => {
+            // 1. Initialize 3D WebGL Hardware Model Scene
+            if (typeof initMain3D === 'function') {
+                initMain3D();
+            }
+
+            // 2. Construct 3D Environment (Desk, Paper with Real Text, Downward Light Beam & Unified Root Group)
+            construct3DEnvironment();
+
+            // 3. Set Responsive Mobile/Desktop Perspective Camera (Isometric fit matching index.html!)
+            const isMobile = window.innerWidth < 768;
+            if (camera) {
+                if (isMobile) {
+                    camera.position.set(7.5, 17.5, 23.5);
+                    camera.fov = 48;
+                    camera.updateProjectionMatrix();
+                } else {
+                    camera.position.set(7.5, 13.5, 17.5);
+                }
+                camera.lookAt(0, -0.8, 0);
+            }
+            if (typeof controls !== 'undefined' && controls) {
+                controls.autoRotate = false; // Strictly OFF
+                controls.target.set(0, -0.8, 0);
+                controls.update();
+            }
+
+            // Set Initial Screen to HUD Mode in Idle State
+            currentScreenMode = 'HUD';
+            currentHUDStatus = 'พร้อมสำหรับการสแกน';
+            currentHUDLocked = false;
+            drawScreenContent();
+        });
+    </script>
+</body>
+</html>
