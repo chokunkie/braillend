@@ -212,8 +212,12 @@ async function runOcrPipeline(imageFile, documentSource) {
 }
 
 /**
- * Connects OCR result to Braille Engine & hardware signals
+ * Connects OCR result to Braille Engine, hardware signals & Result Screen Modal
  */
+let currentResultText = '';
+let currentResultChunkIndex = 0;
+let currentResultChunks = [];
+
 function applyOCRResultToSystem(extractedText, confidence = 95) {
     if (!extractedText) return;
     const inputEl = document.getElementById('thaiInput');
@@ -221,6 +225,81 @@ function applyOCRResultToSystem(extractedText, confidence = 95) {
     if (typeof updateBrailleDisplay === 'function') updateBrailleDisplay(extractedText);
     if (typeof flashDataLED === 'function') flashDataLED();
     updatePowerTelemetry(2.4, 600);
+
+    // Pop up Result Screen Modal
+    showOcrResultScreen(extractedText, confidence);
+}
+
+function showOcrResultScreen(extractedText, confidence = 95) {
+    currentResultText = extractedText || '';
+    if (typeof chunkTextForBraille === 'function') {
+        currentResultChunks = chunkTextForBraille(currentResultText);
+    } else {
+        currentResultChunks = [currentResultText];
+    }
+    currentResultChunkIndex = 0;
+
+    const modal = document.getElementById('ocrResultModal');
+    if (modal) modal.classList.add('active');
+
+    renderResultScreenData();
+}
+
+function renderResultScreenData() {
+    const headline = document.getElementById('resThaiHeadline');
+    const badge = document.getElementById('resPageBadge');
+    const grid = document.getElementById('resBrailleGrid');
+
+    if (headline) headline.textContent = `"${currentResultText}"`;
+    if (badge) badge.textContent = `หน้า ${currentResultChunkIndex + 1}/${currentResultChunks.length}`;
+
+    const chunk = currentResultChunks[currentResultChunkIndex] || '';
+    if (grid && typeof convertThaiToBraille === 'function') {
+        const cells = convertThaiToBraille(chunk);
+        grid.innerHTML = cells.map(cell => {
+            const char = cell.char || ' ';
+            const dots = [1, 2, 3, 4, 5, 6].map(d => {
+                const isActive = cell.dots && cell.dots.includes(d);
+                return `<div class="b-dot ${isActive ? 'active' : ''}"></div>`;
+            }).join('');
+
+            return `<div class="braille-mini-cell">
+                <span class="braille-mini-char">${char === ' ' ? '&nbsp;' : char}</span>
+                <div class="braille-mini-dots">${dots}</div>
+            </div>`;
+        }).join('');
+    }
+}
+
+function resNextPage() {
+    if (currentResultChunkIndex < currentResultChunks.length - 1) {
+        currentResultChunkIndex++;
+        renderResultScreenData();
+        if (typeof nextBraillePage === 'function') nextBraillePage();
+    }
+}
+
+function resPrevPage() {
+    if (currentResultChunkIndex > 0) {
+        currentResultChunkIndex--;
+        renderResultScreenData();
+        if (typeof prevBraillePage === 'function') prevBraillePage();
+    }
+}
+
+function closeOcrResultScreen() {
+    const modal = document.getElementById('ocrResultModal');
+    if (modal) modal.classList.remove('active');
+}
+
+function speakResultText() {
+    if ('speechSynthesis' in window && currentResultText) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(currentResultText);
+        utter.lang = 'th-TH';
+        utter.rate = 0.95;
+        window.speechSynthesis.speak(utter);
+    }
 }
 
 /**
