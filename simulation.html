@@ -824,6 +824,14 @@
             currentHUDStatus = 'พร้อมสำหรับการสแกน';
             currentHUDLocked = false;
             drawScreenContent();
+
+            // Auto-start full simulation if requested via URL
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('autoStart') === 'true' || urlParams.has('autostart')) {
+                setTimeout(() => {
+                    triggerSimulationStart();
+                }, 350);
+            }
         });
     </script>
 </body>

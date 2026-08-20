@@ -167,103 +167,33 @@ function drawScreenContent(text) {
     ctx.fillText("📷 ผลการอ่านข้อความ OCR • แสดงผลที่หมุด 84 พิน", 36, headY + 36);
 
     // 3. Main Text Box
-    const boxX = 16, boxY = 88, boxW = w - 32, boxH = 280;
+    const boxX = 16, boxY = 88, boxW = w - 32, boxH = 290;
     drawRoundRect(ctx, boxX, boxY, boxW, boxH, 12, '#111c38', '#00ff88', 2);
 
-    ctx.font = "bold 46px Prompt, sans-serif";
-    ctx.fillStyle = '#00ff88';
-    ctx.textAlign = 'center';
-    ctx.fillText(`"${displayStr}"`, w / 2, boxY + 155);
-
-    // 4. Telemetry Footer
-    const totalPages = (typeof currentBrailleChunks !== 'undefined' && currentBrailleChunks && currentBrailleChunks.length > 0) ? currentBrailleChunks.length : 1;
-    const currentPage = (typeof currentBraillePageIndex !== 'undefined') ? currentBraillePageIndex + 1 : 1;
-    ctx.font = "bold 24px Prompt, monospace";
-    ctx.fillStyle = '#94a3b8';
-    ctx.textAlign = 'left';
-    ctx.fillText(`● แสดงผล 14 เซลล์ | หน้าที่ ${currentPage}/${totalPages} [${displayStr}]`, 32, 440);
-
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.04)';
-    ctx.lineWidth = 1;
-    for (let gy = boxY + 38; gy < boxY + boxH - 10; gy += 10) {
-        ctx.beginPath(); ctx.moveTo(boxX + 10, gy); ctx.lineTo(boxX + boxW - 10, gy); ctx.stroke();
-    }
-
+    let textToDraw = displayStr;
+    let fontSize = 52;
+    if (textToDraw.length > 10) fontSize = 44;
+    if (textToDraw.length > 16) fontSize = 38;
+    if (textToDraw.length > 24) fontSize = 32;
+    
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
-    ctx.shadowBlur = 18;
-
-    let textToDraw = displayStr;
-    let fontSize = 64;
-    if (textToDraw.length > 10) fontSize = 54;
-    if (textToDraw.length > 16) fontSize = 44;
-    if (textToDraw.length > 22) fontSize = 36;
-    if (textToDraw.length > 30) {
-        textToDraw = textToDraw.substring(0, 28) + '...';
-        fontSize = 32;
-    }
     ctx.font = `bold ${fontSize}px Prompt, sans-serif`;
-    ctx.fillText(textToDraw, w / 2, boxY + boxH / 2 + 10);
+    ctx.fillStyle = '#00ff88';
+    ctx.shadowColor = '#00ff88';
+    ctx.shadowBlur = 12;
+    ctx.fillText(`"${textToDraw}"`, w / 2, boxY + boxH / 2);
     ctx.shadowBlur = 0;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
 
-    // 5. Badges
-    const badgeY = 388, badgeH = 46, badge1W = 270;
-    drawRoundRect(ctx, 16, badgeY, badge1W, badgeH, 8, '#ff6b00', '#ff6b00', 1);
-    ctx.font = "bold 22px Prompt, sans-serif";
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(`⚡ BRAILLE [PG ${currentPage}/${totalPages}]`, 30, badgeY + 31);
-
-    const displayPinText = (activePinCount > 0) ? `${activePinCount} PINS ACTIVE` : '84 PINS ACTIVE';
-    const badge2W = 240;
-    drawRoundRect(ctx, 16 + badge1W + 12, badgeY, badge2W, badgeH, 8, '#2563eb', '#2563eb', 1);
-    ctx.font = "bold 22px Prompt, sans-serif";
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(`📍 ${displayPinText}`, 16 + badge1W + 26, badgeY + 31);
-
-    // 6. Cyan-Green Pulse Wave
-    const waveX = 16 + badge1W + 12 + badge2W + 12;
-    const waveW = w - waveX - 16, waveY = 388, waveH = 108;
-    drawRoundRect(ctx, waveX, waveY, waveW, waveH, 10, 'rgba(19, 30, 58, 0.95)', '#00f0ff', 1.5);
-    ctx.font = "bold 15px 'JetBrains Mono', Prompt, monospace";
-    ctx.fillStyle = '#00ff88';
-    ctx.fillText('SIGNAL PULSE WAVE', waveX + 12, waveY + 22);
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(waveX + 4, waveY + 26, waveW - 8, waveH - 30);
-    ctx.clip();
-
-    const waveGrad = ctx.createLinearGradient(waveX, 0, waveX + waveW, 0);
-    waveGrad.addColorStop(0, '#00f0ff');
-    waveGrad.addColorStop(0.5, '#00ff88');
-    waveGrad.addColorStop(1, '#00ff88');
-
-    ctx.strokeStyle = waveGrad;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#00ff88';
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-
-    const midY = waveY + 26 + (waveH - 30) / 2;
-    const activeBoost = (activePinCount > 0) ? 1.5 : 1.0;
-    for (let x = 0; x < waveW; x += 3) {
-        const sampleX = x + pulseAnimFrame * 24;
-        let sinVal = Math.sin(sampleX * 0.05) * 6 * activeBoost;
-        const pulsePeriod = (sampleX % 115);
-        if (pulsePeriod > 35 && pulsePeriod < 45) sinVal -= 18 * activeBoost;
-        else if (pulsePeriod >= 45 && pulsePeriod < 60) sinVal += 22 * activeBoost;
-        else if (pulsePeriod >= 60 && pulsePeriod < 70) sinVal -= 12 * activeBoost;
-        const drawY = midY + sinVal;
-        if (x === 0) ctx.moveTo(waveX + x, drawY);
-        else ctx.lineTo(waveX + x, drawY);
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.restore();
+    // 4. Telemetry Footer
+    const totalPages = (typeof currentBrailleChunks !== 'undefined' && currentBrailleChunks && currentBrailleChunks.length > 0) ? currentBrailleChunks.length : 1;
+    const currentPage = (typeof currentBraillePageIndex !== 'undefined') ? currentBraillePageIndex + 1 : 1;
+    drawRoundRect(ctx, 16, 400, w - 32, 85, 8, 'rgba(19, 30, 58, 0.95)', 'rgba(0, 242, 254, 0.3)', 1);
+    ctx.font = "bold 26px Prompt, monospace";
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText(`● แสดงผล 14 เซลล์ | หน้าที่ ${currentPage}/${totalPages} | พิน 84 หมุดพร้อมทำงาน`, 36, 452);
     ctx.restore();
 
     if (screenTexture) screenTexture.needsUpdate = true;
