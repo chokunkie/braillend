@@ -417,6 +417,9 @@
                 <button class="cam-toggle-pill active" id="btnToggleAutoCapture" onclick="if(typeof toggleAutoCapture==='function')toggleAutoCapture();">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> <span id="autoCaptureText">ออโต้ชัตเตอร์: เปิด</span>
                 </button>
+                <button class="cam-toggle-pill active" id="btnOcrLangToggle" onclick="toggleOcrLang();" title="ไทยล้วน แม่นกว่าเมื่อเอกสารไม่มีภาษาอังกฤษ">
+                    <i class="fa-solid fa-language"></i> <span id="ocrLangText">ภาษา: ไทย+อังกฤษ</span>
+                </button>
             </div>
 
             <!-- Viewfinder with 4-Corner Guides -->
@@ -653,7 +656,7 @@
             }
         }
 
-        // Live Camera Capture & Process (Strictly Single-Shot Lock!)
+        // Live Camera Capture & Process (Burst -> sharpest frame wins)
         async function captureAndProcess() {
             if (isCapturing) return; // Prevent rapid multi-capture loop
             isCapturing = true;
@@ -661,29 +664,38 @@
             const video = document.getElementById('cameraVideo');
             const photoPreview = document.getElementById('resultPhotoPreview');
             let capturedDataUrl = '';
-            let file = null;
+            let files = [];
 
-            // 1. CAPTURE FRAME FROM LIVE VIDEO FIRST (BEFORE STOPPING STREAM!)
+            // 1. BURST-CAPTURE FRAMES FROM LIVE VIDEO (BEFORE STOPPING STREAM!)
             if (video && (video.videoWidth > 0 || video.readyState >= 2)) {
+                try {
+                    files = (typeof captureBurstFrames === 'function')
+                        ? await captureBurstFrames(3, 110, 0.95)
+                        : [];
+                } catch (e) {
+                    files = [];
+                }
+
                 const w = video.videoWidth || 640;
                 const h = video.videoHeight || 480;
                 const offCanvas = document.createElement('canvas');
                 offCanvas.width = w;
                 offCanvas.height = h;
-                const ctx = offCanvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, w, h);
+                offCanvas.getContext('2d').drawImage(video, 0, 0, w, h);
                 capturedDataUrl = offCanvas.toDataURL('image/jpeg', 0.95);
-                
-                try {
-                    const res = await fetch(capturedDataUrl);
-                    const blob = await res.blob();
-                    file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
-                } catch (e) {
-                    file = null;
+
+                if (files.length === 0) {
+                    try {
+                        const res = await fetch(capturedDataUrl);
+                        const blob = await res.blob();
+                        files = [new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' })];
+                    } catch (e) {
+                        files = [];
+                    }
                 }
             }
 
-            // 2. NOW SAFELY STOP CAMERA STREAM & VOICE GUIDANCE AFTER FRAME IS SAVED
+            // 2. NOW SAFELY STOP CAMERA STREAM & VOICE GUIDANCE AFTER FRAMES ARE SAVED
             stopCameraStream();
             if (typeof stopLiveVoiceGuidance === 'function') stopLiveVoiceGuidance();
 
@@ -696,8 +708,8 @@
             if (typeof playTacticalBeep === 'function') playTacticalBeep(1050, 220);
             if (typeof speakVoiceGuidance === 'function') speakVoiceGuidance('ถ่ายภาพแล้ว กำลังอ่านข้อความ...', true);
 
-            // 5. SEND REAL IMAGE TO OCR PIPELINE
-            processOCRFile(file, capturedDataUrl);
+            // 5. SEND REAL IMAGE(S) TO OCR PIPELINE
+            processOCRFiles(files, capturedDataUrl);
         }
 
         // Global alias so Auto-Capture in voice-guidance.js triggers single shot
@@ -737,23 +749,59 @@
         let activeConfidence = 0;
         let activeWords = [];
 
-        // Unified OCR Execution - Strictly returns real detected text (No fake mock text)
-        async function processOCRFile(file, imagePreviewSrc) {
+        // OCR language mode (Thai-only is more accurate on pure-Thai pages).
+        window.__ocrLang = 'th+en';
+
+        function applyOcrLangUI() {
+            const t = document.getElementById('ocrLangText');
+            const thai = window.__ocrLang === 'th';
+            if (t) t.innerText = thai ? 'ภาษา: ไทยล้วน' : 'ภาษา: ไทย+อังกฤษ';
+        }
+
+        function toggleOcrLang() {
+            window.__ocrLang = (window.__ocrLang === 'th') ? 'th+en' : 'th';
+            try { localStorage.setItem('brailbox.ocrLang', window.__ocrLang); } catch (e) {}
+            applyOcrLangUI();
+            if (typeof speakVoiceGuidance === 'function') {
+                speakVoiceGuidance(window.__ocrLang === 'th' ? 'โหมดภาษาไทยล้วน' : 'โหมดภาษาไทยและอังกฤษ', true);
+            }
+        }
+
+        function restoreOcrLang() {
+            try {
+                const v = localStorage.getItem('brailbox.ocrLang');
+                if (v === 'th' || v === 'th+en') window.__ocrLang = v;
+            } catch (e) {}
+            applyOcrLangUI();
+        }
+
+        // Unified OCR Execution - burst-aware, backend-deskew-aware. Strictly
+        // returns real detected text (no fake mock text).
+        async function processOCRFiles(files, imagePreviewSrc) {
             const prog = document.getElementById('ocrProgressContainer');
             if (prog) prog.style.display = 'flex';
 
             let detectedText = "";
             let confidence = 0;
             let words = [];
+            let previewSrc = imagePreviewSrc;
 
-            if (file) {
+            const list = (files || []).filter(Boolean);
+            const lang = window.__ocrLang || 'th+en';
+            const source = currentMode === 'camera' ? 'camera' : 'upload';
+
+            if (list.length > 0) {
                 try {
-                    const res = await recognize(file, currentMode === 'camera' ? 'camera' : 'upload');
+                    const res = (list.length > 1 && typeof recognizeBest === 'function')
+                        ? await recognizeBest(list, source, lang)
+                        : await recognize(list[0], source, lang);
                     if (res && res.text && res.text.trim()) {
                         detectedText = res.text.trim();
                         confidence = res.confidence || 90;
                         words = res.words || [];
                     }
+                    // Backend perspective-corrected the page - draw boxes on that.
+                    if (res && res.warpedImage) previewSrc = res.warpedImage;
                 } catch (e) {
                     console.warn('[OCR Backend response]:', e);
                 }
@@ -764,7 +812,11 @@
             }
 
             if (prog) prog.style.display = 'none';
-            displayOCRResult(detectedText, imagePreviewSrc, confidence, words);
+            displayOCRResult(detectedText, previewSrc, confidence, words);
+        }
+
+        async function processOCRFile(file, imagePreviewSrc) {
+            return processOCRFiles(file ? [file] : [], imagePreviewSrc);
         }
 
         // Display Result in UI
@@ -974,6 +1026,8 @@
 
         // Initialize Live Camera & Prewarm OCR on Page Load
         window.addEventListener('DOMContentLoaded', () => {
+            restoreOcrLang();
+            if (typeof syncGuidanceButtons === 'function') syncGuidanceButtons();
             startLiveCamera();
             prewarmOCR();
         });

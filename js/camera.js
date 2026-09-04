@@ -64,6 +64,7 @@ function stopCameraStream() {
         cameraStream.getTracks().forEach(track => track.stop());
         cameraStream = null;
     }
+    _torchOn = false;
     const video = document.getElementById('cameraVideo');
     if (video) video.srcObject = null;
 }
@@ -170,4 +171,81 @@ function captureFrameToFile(quality = 0.92) {
             resolve(file);
         }, 'image/jpeg', quality);
     });
+}
+
+/**
+ * Grabs `count` full-resolution frames from the live video a few milliseconds
+ * apart, as JPEG Files. The OCR layer picks the sharpest one after the fact
+ * (see recognizeBest in js/ocr.js) - a hand-held shot nearly always has one
+ * frame better than the rest. Full frame, not the viewfinder crop: the
+ * backend now finds and deskews the real page itself.
+ */
+function captureBurstFrames(count = 3, gapMs = 110, quality = 0.95) {
+    const video = document.getElementById('cameraVideo');
+    if (!video || (video.videoWidth <= 0 && video.readyState < 2)) {
+        return Promise.resolve([]);
+    }
+    const w = video.videoWidth || 1080;
+    const h = video.videoHeight || 1920;
+
+    const grab = () => new Promise((resolve) => {
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        c.getContext('2d', { willReadFrequently: true }).drawImage(video, 0, 0, w, h);
+        c.toBlob((blob) => {
+            resolve(blob ? new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' }) : null);
+        }, 'image/jpeg', quality);
+    });
+
+    return new Promise(async (resolve) => {
+        const frames = [];
+        for (let i = 0; i < Math.max(1, count); i++) {
+            frames.push(await grab());
+            if (i < count - 1) await new Promise(r => setTimeout(r, gapMs));
+        }
+        resolve(frames.filter(Boolean));
+    });
+}
+
+/**
+ * Torch / flashlight control via the active video track. Support is spotty
+ * (mostly Android Chrome on the rear camera), so every call is guarded and
+ * failures are swallowed - the caller treats torch as a best-effort assist.
+ */
+function getActiveVideoTrack() {
+    if (!cameraStream) return null;
+    const tracks = cameraStream.getVideoTracks ? cameraStream.getVideoTracks() : [];
+    return tracks && tracks.length ? tracks[0] : null;
+}
+
+function cameraSupportsTorch() {
+    try {
+        const track = getActiveVideoTrack();
+        if (!track || !track.getCapabilities) return false;
+        return !!track.getCapabilities().torch;
+    } catch (e) {
+        return false;
+    }
+}
+
+let _torchOn = false;
+
+async function setTorch(on) {
+    try {
+        const track = getActiveVideoTrack();
+        if (!track || !track.applyConstraints) return false;
+        if (!cameraSupportsTorch()) return false;
+        if (_torchOn === !!on) return true;
+        await track.applyConstraints({ advanced: [{ torch: !!on }] });
+        _torchOn = !!on;
+        return true;
+    } catch (e) {
+        console.warn('[Torch not available]:', e);
+        return false;
+    }
+}
+
+function isTorchOn() {
+    return _torchOn;
 }

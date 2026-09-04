@@ -12,14 +12,17 @@ const OCR_BACKEND_URL = 'http://localhost:8000/ocr';
  * @param {File|Blob} imageFile - JPEG image, from either upload or camera capture.
  * @param {'upload'|'camera'} documentSource - UI label only; the backend uses it
  *   solely to tune preprocessing intensity, never to change the OCR code path.
- * @returns {Promise<{text: string, confidence: number, words: Array}>}
+ * @param {'th+en'|'th'} lang - which EasyOCR language set to run. 'th' (Thai
+ *   only) is more accurate on pure-Thai pages; 'th+en' handles mixed text.
+ * @returns {Promise<{text: string, confidence: number, words: Array, warpedImage?: string}>}
  */
-async function recognize(imageFile, documentSource = 'upload') {
+async function recognize(imageFile, documentSource = 'upload', lang = 'th+en') {
     // 1. Primary Engine: EasyOCR FastAPI Backend (Python Server)
     try {
         const formData = new FormData();
         formData.append('image', imageFile);
         formData.append('documentSource', documentSource);
+        formData.append('lang', lang === 'th' ? 'th' : 'th+en');
 
         const response = await fetch(OCR_BACKEND_URL, {
             method: 'POST',
@@ -32,7 +35,9 @@ async function recognize(imageFile, documentSource = 'upload') {
                 return {
                     text: data.text || '',
                     confidence: typeof data.confidence === 'number' ? data.confidence : 90,
-                    words: Array.isArray(data.words) ? data.words : []
+                    words: Array.isArray(data.words) ? data.words : [],
+                    warped: !!data.warped,
+                    warpedImage: typeof data.warpedImage === 'string' ? data.warpedImage : null
                 };
             }
         }
@@ -93,6 +98,32 @@ async function recognize(imageFile, documentSource = 'upload') {
         confidence: 0,
         words: []
     };
+}
+
+/**
+ * Burst helper: runs recognize() on several frames of the same shot and
+ * returns the best result (highest confidence with non-empty text). A hand-
+ * held capture almost always has one frame sharper than the rest; picking it
+ * after the fact is cheaper and more reliable than trying to nail the single
+ * perfect moment of the shutter.
+ * @param {Array<File|Blob>} imageFiles
+ * @returns {Promise<{text: string, confidence: number, words: Array, warpedImage?: string}>}
+ */
+async function recognizeBest(imageFiles, documentSource = 'camera', lang = 'th+en') {
+    const files = (imageFiles || []).filter(Boolean);
+    if (files.length === 0) return { text: '', confidence: 0, words: [] };
+    if (files.length === 1) return recognize(files[0], documentSource, lang);
+
+    const results = await Promise.all(
+        files.map(f => recognize(f, documentSource, lang).catch(() => ({ text: '', confidence: 0, words: [] })))
+    );
+
+    let best = null;
+    for (const r of results) {
+        if (!r || !r.text || !r.text.trim()) continue;
+        if (!best || (r.confidence || 0) > (best.confidence || 0)) best = r;
+    }
+    return best || results[0] || { text: '', confidence: 0, words: [] };
 }
 
 /**

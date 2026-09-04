@@ -66,7 +66,7 @@ def run_one_image(reader, image_path: Path, source: str) -> tuple:
     """Returns (rows, final_text, overall_confidence, error_or_None)."""
     try:
         image_bytes = image_path.read_bytes()
-        processed, scale = preprocess(image_bytes, document_source=source)
+        processed, scale, _warped = preprocess(image_bytes, document_source=source)
     except Exception as exc:
         return [], "", 0.0, f"preprocessing failed: {exc}"
 

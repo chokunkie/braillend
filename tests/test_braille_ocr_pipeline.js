@@ -416,16 +416,18 @@ runTest('Viewfinder Crop Coordinate Calculation & 85% Fallback in js/camera.js',
 });
 
 runTest('Backend Preprocessing Pipeline (Resize, CLAHE, Adaptive Threshold, Source-Aware Denoise)', () => {
-    assert(backendPreprocessingContent.includes('MIN_SHORT_SIDE = 640'), 'Missing 640px minimum short-side resize target');
+    assert(backendPreprocessingContent.includes('MIN_SHORT_SIDE = 1100'), 'Missing 1100px minimum short-side resize target (raised from 640 for Thai x-height)');
     assert(backendPreprocessingContent.includes('createCLAHE'), 'Missing CLAHE contrast enhancement');
     assert(backendPreprocessingContent.includes('adaptiveThreshold'), 'Missing adaptive threshold for uneven lighting');
     assert(backendPreprocessingContent.includes('_is_lighting_uneven'), 'Missing lighting-unevenness heuristic gating the adaptive threshold');
     assert(backendPreprocessingContent.includes('fastNlMeansDenoising'), 'Missing denoise step');
     assert(backendPreprocessingContent.includes('document_source == "camera"'), 'Denoise strength must be tuned by documentSource (camera vs upload)');
+    assert(backendPreprocessingContent.includes('detect_document_quad') && backendPreprocessingContent.includes('warpPerspective'), 'Missing document quad detection + perspective (deskew) warp');
 });
 
 runTest('EasyOCR Engine Configuration (Thai + English, Beamsearch, Per-Word Boxes)', () => {
-    assert(backendOcrEngineContent.includes("easyocr.Reader([\"th\", \"en\"]"), "EasyOCR must load both 'th' and 'en'");
+    assert(backendOcrEngineContent.includes('"th"') && backendOcrEngineContent.includes('"en"'), "EasyOCR must still support the th+en language set");
+    assert(backendOcrEngineContent.includes('_LANG_SETS') && backendOcrEngineContent.includes('def get_reader'), 'Missing per-language reader cache (th vs th+en) for Thai-only accuracy mode');
     assert(backendOcrEngineContent.includes('decoder="beamsearch"'), 'Missing decoder=\"beamsearch\" for accuracy');
     assert(backendOcrEngineContent.includes('paragraph=False'), 'Missing paragraph=False for per-word bounding boxes');
     assert(backendOcrEngineContent.includes('_bbox_to_rect'), 'Missing conversion of EasyOCR polygon bbox to axis-aligned rect');
@@ -547,6 +549,53 @@ runTest('3D Hardware Interactive Tactical Buttons (Prev, Next, Mode) & Raycaster
     assert(jsThreeContent.includes('btn3DNextGroup'), 'Missing btn3DNextGroup in three-scene.js');
     assert(jsThreeContent.includes('btn3DModeGroup'), 'Missing btn3DModeGroup in three-scene.js');
     assert(jsThreeContent.includes('press3DButton(target.interactiveType)'), 'Missing 3D button click press dispatcher');
+});
+
+runTest('Text-presence gate rejects non-text scenes & keeps text (js/voice-guidance.js)', () => {
+    assert(jsVoiceContent.includes('function detectTextLikeStructure'), 'Missing detectTextLikeStructure()');
+    assert(jsVoiceContent.includes('if (!textStruct.isText)'), 'analyzeLiveCameraFrame must bail out (no auto-capture) when the frame is not text-like');
+    assert(jsVoiceContent.includes('ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษนะครับ'), 'Missing distinct no-text Thai prompt');
+    assert(jsVoiceContent.includes('กล้องเจอคน'), 'Missing "camera sees a person" Thai prompt');
+    assert(jsVoiceContent.includes('computeSkinRatio'), 'Missing skin-tone ratio helper for person detection');
+
+    const ctx = vm.createContext({ Math, Uint8Array, Int32Array, Date, setInterval: () => 0, clearInterval: () => {}, console });
+    vm.runInContext(jsVoiceContent, ctx);
+    const w = 120, h = 160;
+
+    const blank = new Uint8Array(w * h).fill(200);
+    assert.strictEqual(ctx.detectTextLikeStructure(blank, w, h).isText, false, 'Blank frame must not read as text');
+
+    const txt = new Uint8Array(w * h).fill(210);
+    for (let r = 0; r < 6; r++) {
+        const y = 15 + r * 22;
+        for (let g = 0; g < 14; g++) {
+            const x0 = 8 + g * 8;
+            for (let dy = 0; dy < 7; dy++) for (let dx = 0; dx < 5; dx++) txt[(y + dy) * w + (x0 + dx)] = 20;
+        }
+    }
+    assert.strictEqual(ctx.detectTextLikeStructure(txt, w, h).isText, true, 'Rows of glyph-sized blobs must read as text');
+
+    const blob = new Uint8Array(w * h).fill(200);
+    for (let y = 30; y < 130; y++) for (let x = 30; x < 90; x++) blob[y * w + x] = 90;
+    assert.strictEqual(ctx.detectTextLikeStructure(blob, w, h).isText, false, 'One large blob (a face/object) must not read as text');
+});
+
+runTest('Continuous navigation sonar + haptics + dark/glare guards (js/voice-guidance.js)', () => {
+    assert(jsVoiceContent.includes('function startNavSonar') && jsVoiceContent.includes('function updateNavSonar'), 'Missing navigation sonar engine');
+    assert(jsVoiceContent.includes('function vibrate'), 'Missing vibrate() haptic helper');
+    assert(jsVoiceContent.includes('แสงน้อยไป'), 'Missing too-dark Thai prompt');
+    assert(jsVoiceContent.includes('แสงสะท้อน'), 'Missing glare Thai prompt');
+    assert(jsVoiceContent.includes('มีอะไรบังกล้องอยู่'), 'Missing lens-covered Thai prompt');
+    assert(jsVoiceContent.includes('function maybeAutoTorch') && jsVoiceContent.includes('setTorch'), 'Missing auto-torch in low light');
+    assert(jsCameraContent.includes('function setTorch') && jsCameraContent.includes('function captureBurstFrames'), 'js/camera.js missing torch + burst-capture helpers');
+    assert(jsOcrModuleContent.includes('async function recognizeBest'), 'js/ocr.js missing recognizeBest() burst picker');
+    assert(jsOcrModuleContent.includes("formData.append('lang'"), 'recognize() must pass the OCR language set to the backend');
+});
+
+runTest('Guidance toggle states persist to localStorage (js/voice-guidance.js)', () => {
+    assert(jsVoiceContent.includes('function saveGuidancePrefs') && jsVoiceContent.includes('function loadGuidancePrefs'), 'Missing guidance-prefs persistence');
+    assert(jsVoiceContent.includes('GUIDANCE_PREFS_KEY'), 'Missing localStorage key for guidance prefs');
+    assert(jsVoiceContent.includes('function syncGuidanceButtons'), 'Missing syncGuidanceButtons() to reflect restored state onto the UI');
 });
 
 // -------------------------------------------------------------

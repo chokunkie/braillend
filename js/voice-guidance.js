@@ -26,6 +26,314 @@ const ANALYSIS_INTERVAL_MS = 300;         // Live stream analysis cadence (300ms
 const FOCUS_BLURRY_THRESHOLD = 80;        // Score < 80: BLURRY
 const FOCUS_SHARP_THRESHOLD = 160;        // Score >= 160: SHARP 100%
 
+// --- "is there actually TEXT in frame?" + environment guards ---------------
+// The old check only asked "are there lots of edges + enough contrast?",
+// which a face, a plant, a keyboard or a patterned shirt all pass. These
+// gate auto-capture on a positive text signal and call out the specific
+// thing that's wrong (dark / glare / lens covered / it's a person).
+const TEXT_MIN_COMPONENTS = 12;           // glyph-sized blobs needed to call it text
+const TEXT_MIN_ROWS = 2;                  // ...arranged in at least this many rows
+const TEXT_DENSE_SINGLE_LINE = 22;        // ...or this many blobs on one dense line
+const NO_TEXT_ANNOUNCE_MS = 1800;         // wait this long with no text before speaking
+const DARK_LUMA_THRESHOLD = 48;           // mean luma below this = too dark
+const GLARE_FRACTION_THRESHOLD = 0.16;    // blown-out pixel fraction above this = glare
+const LENS_COVERED_CONTRAST = 12;         // contrast range below this + few strokes = covered
+const SKIN_RATIO_THRESHOLD = 0.35;        // skin-tone pixel fraction above this = a person
+const AUTO_TORCH_DARK_MS = 1500;          // stay dark this long before auto-enabling torch
+
+let noTextSince = null;
+let darkSince = null;
+const GUIDANCE_PREFS_KEY = 'brailbox.guidancePrefs';
+
+/**
+ * Fires a short device vibration if supported (silent no-op otherwise).
+ */
+function vibrate(pattern) {
+    try {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern);
+    } catch (e) { /* ignore */ }
+}
+
+// --- continuous navigation "sonar" ----------------------------------------
+// A blind user cannot see the alignment bars, and full spoken sentences are
+// far too slow to steer by. This is a parking-sensor style tone: blips get
+// faster and higher as the framing improves, and turn into a steady fast
+// double-blip when everything is locked and the shutter is about to fire.
+let navSonar = { ctx: null, timer: null, lastBlip: 0, progress: 0, ready: false, active: false };
+
+function ensureNavAudioCtx() {
+    if (navSonar.ctx) return navSonar.ctx;
+    try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        navSonar.ctx = new AC();
+    } catch (e) {
+        return null;
+    }
+    return navSonar.ctx;
+}
+
+function navBlip(frequency, durationSec, volume) {
+    const ctx = ensureNavAudioCtx();
+    if (!ctx) return;
+    try {
+        if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(frequency, ctx.currentTime);
+        gain.gain.setValueAtTime(volume, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0008, ctx.currentTime + durationSec);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + durationSec);
+    } catch (e) { /* ignore */ }
+}
+
+function startNavSonar() {
+    if (navSonar.active) return;
+    navSonar.active = true;
+    navSonar.progress = 0;
+    navSonar.ready = false;
+    navSonar.lastBlip = 0;
+    navSonar.timer = setInterval(() => {
+        if (!navSonar.active || !isVoiceGuidanceEnabled) return;
+        const now = Date.now();
+        const p = Math.max(0, Math.min(1, navSonar.progress));
+        if (navSonar.ready) {
+            if (now - navSonar.lastBlip >= 140) {
+                navBlip(1180, 0.09, 0.14);
+                navSonar.lastBlip = now;
+            }
+            return;
+        }
+        const period = 520 - p * 430;            // 520ms far -> 90ms locked
+        if (now - navSonar.lastBlip >= period) {
+            navBlip(560 + p * 560, 0.06, 0.10);  // 560Hz far -> ~1120Hz locked
+            navSonar.lastBlip = now;
+        }
+    }, 40);
+}
+
+function updateNavSonar(progress01, ready = false) {
+    navSonar.progress = (typeof progress01 === 'number' && isFinite(progress01)) ? progress01 : 0;
+    navSonar.ready = !!ready;
+}
+
+function stopNavSonar() {
+    navSonar.active = false;
+    if (navSonar.timer) {
+        clearInterval(navSonar.timer);
+        navSonar.timer = null;
+    }
+}
+
+/**
+ * Auto-enables the camera torch when the scene has been too dark for a
+ * moment, and turns it back off once there's enough light. Best-effort:
+ * only acts when js/camera.js reports torch support.
+ */
+function maybeAutoTorch(meanLuma) {
+    if (typeof cameraSupportsTorch !== 'function' || !cameraSupportsTorch()) return;
+    const now = Date.now();
+    if (meanLuma < DARK_LUMA_THRESHOLD) {
+        if (!darkSince) darkSince = now;
+        if (now - darkSince > AUTO_TORCH_DARK_MS && typeof isTorchOn === 'function' && !isTorchOn()) {
+            if (typeof setTorch === 'function') setTorch(true);
+        }
+    } else if (meanLuma > 95) {
+        darkSince = null;
+        if (typeof isTorchOn === 'function' && isTorchOn() && typeof setTorch === 'function') {
+            setTorch(false);
+        }
+    }
+}
+
+/**
+ * Skin-tone pixel fraction over the whole sampled frame. Crude RGB rule
+ * (good enough to tell "a person is filling the frame" from "a sheet of
+ * paper"); warm wood/paper can nudge it up, so the threshold that uses it
+ * is deliberately high.
+ */
+function computeSkinRatio(data, totalPixels) {
+    let skin = 0;
+    for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        if (r > 95 && g > 40 && b > 20 && (mx - mn) > 15 && Math.abs(r - g) > 15 && r > g && r > b) {
+            skin++;
+        }
+    }
+    return totalPixels > 0 ? skin / totalPixels : 0;
+}
+
+/**
+ * Decides whether the sampled luma buffer actually looks like lines of text
+ * (many similar, glyph-sized blobs arranged in rows) rather than an
+ * arbitrary high-edge scene. Runs on the small analysis sample so it's cheap
+ * enough for the 300ms loop.
+ */
+function detectTextLikeStructure(luma, w, h) {
+    const n = w * h;
+    if (n <= 0) return { isText: false, rows: 0, components: 0 };
+
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += luma[i];
+    const mean = sum / n;
+    const inkLevel = mean * 0.80;
+
+    let bin = detectTextLikeStructure._bin;
+    let labels = detectTextLikeStructure._labels;
+    if (!bin || bin.length !== n) {
+        bin = detectTextLikeStructure._bin = new Uint8Array(n);
+        labels = detectTextLikeStructure._labels = new Int32Array(n);
+    } else {
+        labels.fill(0);
+    }
+
+    let inkCount = 0;
+    for (let i = 0; i < n; i++) {
+        const isInk = luma[i] < inkLevel ? 1 : 0;
+        bin[i] = isInk;
+        inkCount += isInk;
+    }
+    const inkFrac = inkCount / n;
+    if (inkFrac < 0.012 || inkFrac > 0.45) return { isText: false, rows: 0, components: 0 };
+
+    const stack = detectTextLikeStructure._stack || (detectTextLikeStructure._stack = []);
+    const glyphs = [];
+    let label = 0;
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const start = y * w + x;
+            if (bin[start] !== 1 || labels[start] !== 0) continue;
+            label++;
+            let minx = x, maxx = x, miny = y, maxy = y, area = 0;
+            stack.length = 0;
+            stack.push(start);
+            labels[start] = label;
+            while (stack.length) {
+                const c = stack.pop();
+                const cx = c % w;
+                const cy = (c - cx) / w;
+                area++;
+                if (cx < minx) minx = cx;
+                if (cx > maxx) maxx = cx;
+                if (cy < miny) miny = cy;
+                if (cy > maxy) maxy = cy;
+                if (cx > 0 && bin[c - 1] === 1 && labels[c - 1] === 0) { labels[c - 1] = label; stack.push(c - 1); }
+                if (cx < w - 1 && bin[c + 1] === 1 && labels[c + 1] === 0) { labels[c + 1] = label; stack.push(c + 1); }
+                if (cy > 0 && bin[c - w] === 1 && labels[c - w] === 0) { labels[c - w] = label; stack.push(c - w); }
+                if (cy < h - 1 && bin[c + w] === 1 && labels[c + w] === 0) { labels[c + w] = label; stack.push(c + w); }
+            }
+
+            const bw = maxx - minx + 1;
+            const bh = maxy - miny + 1;
+            if (area < 3) continue;
+            if (bh < 2 || bh > h * 0.5) continue;           // border / hand / huge blob
+            if (bw > w * 0.6) continue;                      // long rule / table line
+            if (area / (bw * bh) < 0.08) continue;           // sparse outline, not a glyph
+            glyphs.push({ cy: (miny + maxy) / 2, h: bh });
+        }
+    }
+
+    if (glyphs.length < TEXT_MIN_COMPONENTS) {
+        return { isText: false, rows: 0, components: glyphs.length };
+    }
+
+    const heights = glyphs.map(g => g.h).sort((a, b) => a - b);
+    const medH = heights[Math.floor(heights.length / 2)] || 4;
+    const tol = Math.max(3, medH * 0.7);
+    glyphs.sort((a, b) => a.cy - b.cy);
+
+    const rows = [];
+    let cur = [glyphs[0]];
+    for (let i = 1; i < glyphs.length; i++) {
+        if (glyphs[i].cy - cur[cur.length - 1].cy <= tol) cur.push(glyphs[i]);
+        else { rows.push(cur); cur = [glyphs[i]]; }
+    }
+    rows.push(cur);
+    const goodRows = rows.filter(r => r.length >= 3).length;
+
+    const isText = goodRows >= TEXT_MIN_ROWS || (goodRows >= 1 && glyphs.length >= TEXT_DENSE_SINGLE_LINE);
+    return { isText, rows: goodRows, components: glyphs.length };
+}
+
+/**
+ * Prerecorded-clip playback with a speech-synthesis fallback. Devices
+ * without a Thai TTS voice (common on desktop Chrome / some Android builds)
+ * otherwise get garbled or silent guidance; a bundled clip in
+ * assets/audio/<key>.mp3 is crisp, consistent and offline. Missing clips
+ * simply fall through to speakVoiceGuidance().
+ */
+const CUE_AUDIO_BASE = 'assets/audio/';
+const _cueAudioCache = {};
+
+function playCue(key, thaiFallbackText, force = false) {
+    if (!isVoiceGuidanceEnabled && !force) return;
+    try {
+        let clip = _cueAudioCache[key];
+        if (clip === undefined) {
+            clip = new Audio(CUE_AUDIO_BASE + key + '.mp3');
+            clip.preload = 'auto';
+            _cueAudioCache[key] = clip;
+        }
+        if (clip && !clip.error && clip.readyState >= 2) {
+            clip.currentTime = 0;
+            const p = clip.play();
+            if (p && p.catch) p.catch(() => speakVoiceGuidance(thaiFallbackText, force));
+            updateVoiceStatusHUD(thaiFallbackText);
+            return;
+        }
+    } catch (e) { /* fall through to TTS */ }
+    speakVoiceGuidance(thaiFallbackText, force);
+}
+
+/**
+ * Persist / restore the Voice + Auto-Capture toggle states so the user's
+ * choice survives a page reload.
+ */
+function saveGuidancePrefs() {
+    try {
+        localStorage.setItem(GUIDANCE_PREFS_KEY, JSON.stringify({
+            voice: isVoiceGuidanceEnabled,
+            autoCapture: isAutoCaptureEnabled
+        }));
+    } catch (e) { /* ignore */ }
+}
+
+function loadGuidancePrefs() {
+    try {
+        const raw = localStorage.getItem(GUIDANCE_PREFS_KEY);
+        if (!raw) return;
+        const prefs = JSON.parse(raw);
+        if (typeof prefs.voice === 'boolean') isVoiceGuidanceEnabled = prefs.voice;
+        if (typeof prefs.autoCapture === 'boolean') isAutoCaptureEnabled = prefs.autoCapture;
+    } catch (e) { /* ignore */ }
+}
+
+/**
+ * Reflects the current toggle states onto the on-screen buttons. Call after
+ * loadGuidancePrefs() once the DOM is ready.
+ */
+function syncGuidanceButtons() {
+    const vBtn = document.getElementById('btnToggleVoiceGuidance');
+    const vTxt = document.getElementById('voiceGuidanceText');
+    if (vBtn) vBtn.classList.toggle('active', isVoiceGuidanceEnabled);
+    if (vTxt) vTxt.innerText = isVoiceGuidanceEnabled ? 'เสียงแนะนำ: เปิด' : 'เสียงแนะนำ: ปิด';
+
+    const aBtn = document.getElementById('btnToggleAutoCapture');
+    const aTxt = document.getElementById('autoCaptureText');
+    if (aBtn) aBtn.classList.toggle('active', isAutoCaptureEnabled);
+    if (aTxt) aTxt.innerText = isAutoCaptureEnabled ? 'ออโต้ชัตเตอร์: เปิด' : 'ออโต้ชัตเตอร์: ปิด';
+}
+
+if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    loadGuidancePrefs();
+}
+
 /**
  * Calculates Laplacian Variance Focus Score using 3x3 Laplacian Kernel:
  * Kernel: [0, 1, 0; 1, -4, 1; 0, 1, 0]
@@ -315,12 +623,16 @@ function analyzeLiveCameraFrame() {
         const currentLuma = new Uint8Array(totalPixels);
         let minLuma = 255;
         let maxLuma = 0;
+        let sumLuma = 0;
+        let overexposedCount = 0;
 
         for (let i = 0, p = 0; i < data.length; i += 4, p++) {
             const luma = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
             currentLuma[p] = luma;
             if (luma < minLuma) minLuma = luma;
             if (luma > maxLuma) maxLuma = luma;
+            sumLuma += luma;
+            if (luma >= 246) overexposedCount++;
 
             if (prevAnalysisFrame) {
                 totalDiff += Math.abs(luma - prevAnalysisFrame[p]);
@@ -332,6 +644,13 @@ function analyzeLiveCameraFrame() {
 
         const contrastRange = maxLuma - minLuma;
         const strokeThreshold = Math.max(16, contrastRange * 0.15);
+
+        // Scene-quality metrics for the accessibility guards below.
+        const meanLuma = sumLuma / totalPixels;
+        const overexposedFrac = overexposedCount / totalPixels;
+        const skinRatio = computeSkinRatio(data, totalPixels);
+        const textStruct = detectTextLikeStructure(currentLuma, sampleW, sampleH);
+        maybeAutoTorch(meanLuma);
 
         // 4 Target Corner Zones in Frame (Top-Left, Top-Right, Bottom-Left, Bottom-Right)
         const zoneTL = { x0: Math.round(sampleW * 0.08), x1: Math.round(sampleW * 0.38), y0: Math.round(sampleH * 0.08), y1: Math.round(sampleH * 0.40) };
@@ -379,6 +698,73 @@ function analyzeLiveCameraFrame() {
 
         const hasDocument = (totalStrokes >= MIN_TOTAL_STROKES) && (contrastRange >= 18);
 
+        // --- Accessibility guards: call out the specific problem, and never
+        //     let auto-capture fire on a scene that isn't actually text. ---
+
+        // 1. Something is covering the lens (near-uniform, few edges).
+        if (contrastRange < LENS_COVERED_CONTRAST && totalStrokes < 10) {
+            updateCornerTargetHUD(false, false, false, false);
+            updateFocusHUD(0);
+            stabilityStartTime = null;
+            hasSpokenPreCaptureWarning = false;
+            updateNavSonar(0);
+            vibrate(60);
+            speakVoiceGuidance('มีอะไรบังกล้องอยู่ ขยับกล้องออกหน่อยนะครับ');
+            updateVoiceStatusHUD('มีอะไรบังกล้องอยู่ ขยับกล้องออกหน่อย', 'alert');
+            return;
+        }
+
+        // 2. Too dark to read (torch auto-enabled above if the device has one).
+        if (meanLuma < DARK_LUMA_THRESHOLD) {
+            updateCornerTargetHUD(false, false, false, false);
+            updateFocusHUD(0);
+            stabilityStartTime = null;
+            hasSpokenPreCaptureWarning = false;
+            updateNavSonar(0);
+            speakVoiceGuidance('แสงน้อยไป ลองเปิดไฟหรือหาที่ที่สว่างกว่านี้นะครับ');
+            updateVoiceStatusHUD('💡 แสงน้อยไป ลองเปิดไฟหรือหาที่สว่างกว่านี้', 'alert');
+            return;
+        }
+
+        // 3. Glare / reflection washing out the page.
+        if (overexposedFrac > GLARE_FRACTION_THRESHOLD) {
+            updateCornerTargetHUD(false, false, false, false);
+            stabilityStartTime = null;
+            hasSpokenPreCaptureWarning = false;
+            updateNavSonar(0);
+            speakVoiceGuidance('มีแสงสะท้อนบนหน้ากระดาษ เอียงหนังสือหนีแสงหน่อยนะครับ');
+            updateVoiceStatusHUD('✨ มีแสงสะท้อน เอียงหนังสือหนีแสงหน่อย', 'warning');
+            return;
+        }
+
+        // 4. It's a person, not a document.
+        if (skinRatio > SKIN_RATIO_THRESHOLD && !textStruct.isText) {
+            updateCornerTargetHUD(false, false, false, false);
+            updateFocusHUD(0);
+            stabilityStartTime = null;
+            hasSpokenPreCaptureWarning = false;
+            updateNavSonar(0);
+            speakVoiceGuidance('กล้องเจอคน ยังไม่เจอเอกสาร ลองเล็งกล้องไปที่หนังสือนะครับ');
+            updateVoiceStatusHUD('🧑 กล้องเจอคน ไม่ใช่เอกสาร', 'alert');
+            return;
+        }
+
+        // 5. Edges/contrast present but no text-like row structure -> not text.
+        if (!textStruct.isText) {
+            updateCornerTargetHUD(false, false, false, false);
+            updateFocusHUD(0);
+            stabilityStartTime = null;
+            hasSpokenPreCaptureWarning = false;
+            updateNavSonar(0);
+            if (!noTextSince) noTextSince = Date.now();
+            if (Date.now() - noTextSince >= NO_TEXT_ANNOUNCE_MS) {
+                speakVoiceGuidance('ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษนะครับ');
+            }
+            updateVoiceStatusHUD('🔎 ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษ', 'warning');
+            return;
+        }
+        noTextSince = null;
+
         if (!hasDocument) {
             updateCornerTargetHUD(false, false, false, false);
             updateFocusHUD(0);
@@ -397,11 +783,18 @@ function analyzeLiveCameraFrame() {
         // Immediate Visual Feedback on Viewfinder Brackets
         updateCornerTargetHUD(lockedTL, lockedTR, lockedBL, lockedBR);
 
+        // Continuous navigation tone: blip rate/pitch track how many corners
+        // are in, so the user can steer without waiting for a spoken sentence.
+        const lockedCount = (lockedTL ? 1 : 0) + (lockedTR ? 1 : 0) + (lockedBL ? 1 : 0) + (lockedBR ? 1 : 0);
+
         const isCameraStable = (avgMotionDiff < MOTION_DIFF_THRESHOLD);
         const isFocusSharp = (focusScore >= FOCUS_SHARP_THRESHOLD);
         const isFocusBlurry = (focusScore < FOCUS_BLURRY_THRESHOLD);
 
         if (lockedTL && lockedTR && lockedBL && lockedBR) {
+            // Framing done - sonar now tracks focus (0..1 up to the sharp threshold).
+            const focusProgress = Math.max(0, Math.min(1, focusScore / FOCUS_SHARP_THRESHOLD));
+            updateNavSonar(0.75 + focusProgress * 0.25, isCameraStable && isFocusSharp);
             // All 4 Corners Locked! Check Focus Gating
             if (isFocusBlurry) {
                 // Focus Gating: Image is blurry (Score < 80) -> Prompt user to hold steady
@@ -440,8 +833,10 @@ function analyzeLiveCameraFrame() {
                         stabilityStartTime = null;
 
                         const executeShutter = () => {
+                            stopNavSonar();
                             playTacticalBeep(1050, 220);
-                            speakVoiceGuidance('ถ่ายภาพสำเร็จ กำลังอ่านข้อความภาษาอังกฤษ...', true);
+                            vibrate([80, 40, 80]);
+                            playCue('capture-success', 'ถ่ายภาพสำเร็จ กำลังอ่านข้อความภาษาอังกฤษ...', true);
                             updateVoiceStatusHUD('📸 ลั่นชัตเตอร์อัตโนมัติสำเร็จ!', 'success');
 
                             if (typeof captureCameraSnapshot === 'function') {
@@ -474,6 +869,8 @@ function analyzeLiveCameraFrame() {
             // One or more corners are out of target bracket
             stabilityStartTime = null;
             hasSpokenPreCaptureWarning = false;
+            updateNavSonar(lockedCount / 4);
+            vibrate(35);
 
             if (!lockedTL && !lockedTR && !lockedBL && !lockedBR) {
                 speakVoiceGuidance('ยังไม่เข้ามุม กรุณาขยับหนังสือให้ตรงกรอบ 4 มุม');
@@ -522,11 +919,14 @@ function startLiveVoiceGuidance() {
     prevAnalysisFrame = null;
     lastSpokenText = '';
     lastSpokenTime = 0;
+    noTextSince = null;
+    darkSince = null;
     updateCornerTargetHUD(false, false, false, false);
     updateFocusHUD(0);
+    startNavSonar();
 
     if (isVoiceGuidanceEnabled) {
-        speakVoiceGuidance('เปิดกล้องแล้ว เล็งเอกสารให้ตรงกับกรอบ 4 มุม...');
+        speakVoiceGuidance('เปิดกล้องแล้ว ถือกล้องเหนือหนังสือ ห่างประมาณหนึ่งช่วงแขน แล้วเล็งให้ตรงกรอบ 4 มุม...');
     }
 
     voiceAnalysisTimer = setInterval(analyzeLiveCameraFrame, ANALYSIS_INTERVAL_MS);
@@ -544,6 +944,10 @@ function stopLiveVoiceGuidance() {
     hasSpokenPreCaptureWarning = false;
     isAutoCapturing = false;
     prevAnalysisFrame = null;
+    noTextSince = null;
+    darkSince = null;
+    stopNavSonar();
+    if (typeof setTorch === 'function') setTorch(false);
     updateCornerTargetHUD(false, false, false, false);
     updateFocusHUD(0);
     if (typeof window !== 'undefined' && ('speechSynthesis' in window)) {
@@ -567,15 +971,17 @@ function toggleVoiceGuidance(forcedState = null) {
     if (btn) {
         if (isVoiceGuidanceEnabled) {
             btn.classList.add('active');
-            if (textEl) textEl.innerText = 'Voice: ON';
+            if (textEl) textEl.innerText = 'เสียงแนะนำ: เปิด';
         } else {
             btn.classList.remove('active');
-            if (textEl) textEl.innerText = 'Voice: OFF';
+            if (textEl) textEl.innerText = 'เสียงแนะนำ: ปิด';
             if (typeof window !== 'undefined' && ('speechSynthesis' in window)) {
                 window.speechSynthesis.cancel();
             }
         }
     }
+
+    saveGuidancePrefs();
 
     if (isVoiceGuidanceEnabled) {
         speakVoiceGuidance('เปิดระบบเสียงแนะนำแล้ว', true);
@@ -599,12 +1005,14 @@ function toggleAutoCapture(forcedState = null) {
     if (btn) {
         if (isAutoCaptureEnabled) {
             btn.classList.add('active');
-            if (textEl) textEl.innerText = 'Auto-Capture: ON';
+            if (textEl) textEl.innerText = 'ออโต้ชัตเตอร์: เปิด';
         } else {
             btn.classList.remove('active');
-            if (textEl) textEl.innerText = 'Auto-Capture: OFF';
+            if (textEl) textEl.innerText = 'ออโต้ชัตเตอร์: ปิด';
         }
     }
+
+    saveGuidancePrefs();
 
     if (isVoiceGuidanceEnabled) {
         speakVoiceGuidance(isAutoCaptureEnabled ? 'เปิดระบบถ่ายภาพอัตโนมัติ' : 'ปิดระบบถ่ายภาพอัตโนมัติ', true);

@@ -17,17 +17,28 @@ app.add_middleware(
 
 
 @app.post("/ocr")
-async def ocr(image: UploadFile = File(...), documentSource: str = Form("upload")):
+async def ocr(
+    image: UploadFile = File(...),
+    documentSource: str = Form("upload"),
+    lang: str = Form("th+en"),
+):
     image_bytes = await image.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Empty image upload")
 
     try:
-        processed, scale = preprocess(image_bytes, document_source=documentSource)
+        processed, scale, warped_preview = preprocess(
+            image_bytes, document_source=documentSource
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not process image: {exc}")
 
-    result = run_ocr(processed, scale=scale)
+    result = run_ocr(processed, scale=scale, lang=lang)
+    if warped_preview:
+        # Perspective-corrected page; the frontend uses this as the preview
+        # it draws bounding boxes on so the boxes line up with the text.
+        result["warped"] = True
+        result["warpedImage"] = warped_preview
     return result
 
 

@@ -9,14 +9,28 @@ from typing import Any, Dict, List
 
 import easyocr
 
-_reader = None
+# One EasyOCR reader per language set, built lazily and reused (loading the
+# recognition models is expensive). "th+en" is the default; "th" is offered
+# for Thai-only documents, where dropping the English character set removes a
+# whole class of confusions (e.g. ก/n, ล/a, ธ/6) and measurably lifts
+# accuracy on pure-Thai pages.
+_readers: Dict[str, "easyocr.Reader"] = {}
+
+_LANG_SETS = {
+    "th": ["th"],
+    "tha": ["th"],
+    "th+en": ["th", "en"],
+    "tha+eng": ["th", "en"],
+}
 
 
-def get_reader() -> "easyocr.Reader":
-    global _reader
-    if _reader is None:
-        _reader = easyocr.Reader(["th", "en"], gpu=False, verbose=False)
-    return _reader
+def get_reader(lang: str = "th+en") -> "easyocr.Reader":
+    key = lang if lang in _LANG_SETS else "th+en"
+    if key not in _readers:
+        langs = _LANG_SETS[key]
+        # NOTE: default path is still easyocr.Reader(["th", "en"], ...).
+        _readers[key] = easyocr.Reader(langs, gpu=False, verbose=False)
+    return _readers[key]
 
 
 def _bbox_to_rect(points: List[List[float]], scale: float) -> Dict[str, float]:
@@ -32,8 +46,8 @@ def _bbox_to_rect(points: List[List[float]], scale: float) -> Dict[str, float]:
     }
 
 
-def run_ocr(image, scale: float = 1.0) -> Dict[str, Any]:
-    reader = get_reader()
+def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
+    reader = get_reader(lang)
     try:
         raw_results = reader.readtext(image, y_ths=0.5, x_ths=1.0, paragraph=False)
     except Exception:

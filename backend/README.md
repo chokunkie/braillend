@@ -2,8 +2,11 @@
 
 FastAPI service that replaces the old in-browser Tesseract.js OCR with
 EasyOCR, focused on Thai accuracy. Preprocesses images with OpenCV/Pillow
-(resize, CLAHE contrast, adaptive threshold when lighting is uneven, and
-source-aware denoising) before running EasyOCR.
+(document-quad detection + perspective warp to deskew, resize so the short
+side is >= 1100px, CLAHE contrast, adaptive threshold when lighting is
+uneven, and source-aware denoising) before running EasyOCR. A reader is
+cached per language set - `th+en` (default) or `th` only, which is more
+accurate on pure-Thai pages.
 
 ## Setup
 
@@ -35,6 +38,7 @@ frontend is hardcoded to POST to `http://localhost:8000/ocr` - update
 `POST /ocr` - multipart form:
 - `image`: image file (JPEG/PNG)
 - `documentSource`: `"upload"` or `"camera"` (tunes preprocessing intensity only)
+- `lang`: `"th+en"` (default) or `"th"` (Thai-only recognition)
 
 Response:
 ```json
@@ -43,8 +47,13 @@ Response:
   "confidence": 87.5,
   "words": [
     { "text": "string", "bbox": { "x0": 0, "y0": 0, "x1": 0, "y1": 0 }, "confidence": 91.2 }
-  ]
+  ],
+  "warped": true,
+  "warpedImage": "data:image/jpeg;base64,..."
 }
 ```
+
+`warped` / `warpedImage` are present only when a document quad was found and
+perspective-corrected; bbox coordinates are then in the warped image's space.
 
 `GET /health` - liveness check.
