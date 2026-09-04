@@ -5,7 +5,7 @@
 
 // Voice Guidance, 4-Corner Target Lock & Auto-Capture State Variables
 let isVoiceGuidanceEnabled = true;
-let isAutoCaptureEnabled = true;
+let isAutoCaptureEnabled = false;  // default to manual shutter; user can opt into auto-capture
 let voiceAnalysisTimer = null;
 let lastSpokenText = '';
 let lastSpokenTime = 0;
@@ -14,13 +14,17 @@ let hasSpokenPreCaptureWarning = false;
 let isAutoCapturing = false;
 let prevAnalysisFrame = null;
 let isAnalysisRunning = false;
+let guidanceStartTime = null;
 
 // Audio & Speech Constants
 const SPEECH_THROTTLE_MS = 2500;          // Minimum delay between speech utterances
-const STABILITY_REQUIRED_MS = 1000;       // 1.0 second stability required for auto-capture
-const PRE_CAPTURE_WARNING_MS = 500;       // 0.5s pre-capture warning before shutter trigger
+const STABILITY_REQUIRED_MS = 1500;       // 1.5 second stability required for auto-capture
+const PRE_CAPTURE_WARNING_MS = 600;       // 0.6s pre-capture warning before shutter trigger
+const CAPTURE_ARM_DELAY_MS = 2000;        // no auto-shutter during the first 2s after the camera opens
+                                           // (lets autofocus settle + gives the user time to aim before
+                                           // the shutter can fire at all - see analyzeLiveCameraFrame)
 const MOTION_DIFF_THRESHOLD = 24.0;       // Frame difference threshold for camera motion
-const CORNER_STROKE_THRESHOLD = 0.012;    // Minimum edge density in target corner zone
+const CORNER_STROKE_THRESHOLD = 0.02;     // Minimum edge density in target corner zone
 const MIN_TOTAL_STROKES = 35;             // Minimum strokes to confirm document presence
 const ANALYSIS_INTERVAL_MS = 300;         // Live stream analysis cadence (300ms)
 const FOCUS_BLURRY_THRESHOLD = 80;        // Score < 80: BLURRY
@@ -44,6 +48,44 @@ const AUTO_TORCH_DARK_MS = 1500;          // stay dark this long before auto-ena
 let noTextSince = null;
 let darkSince = null;
 const GUIDANCE_PREFS_KEY = 'brailbox.guidancePrefs';
+
+// --- speechSynthesis "unlock" ------------------------------------------
+// The camera + guidance loop on camera.html starts automatically on
+// DOMContentLoaded (no click involved), and every later announcement is
+// fired from a setInterval tick - neither has a user gesture attached.
+// Some browsers (notably iOS Safari, and various in-app WebViews) silently
+// drop speechSynthesis.speak() calls made without one, while WebAudio-based
+// beeps keep working because an AudioContext only needs to be unlocked
+// ONCE and then stays "running" for the rest of the page's life. Net
+// effect without this: beeps work, voice guidance never makes a sound, and
+// nothing errors because onerror wasn't even wired to report it (see
+// speakVoiceGuidance below). Fix: prime speechSynthesis on the very first
+// real tap/click/key anywhere on the page, from directly inside that
+// trusted event handler.
+let speechSynthesisUnlocked = false;
+
+function unlockSpeechSynthesis() {
+    if (speechSynthesisUnlocked) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    speechSynthesisUnlocked = true;
+    try {
+        const primer = new SpeechSynthesisUtterance(' ');
+        primer.volume = 0.01;
+        primer.lang = 'th-TH';
+        window.speechSynthesis.speak(primer);
+    } catch (e) { /* ignore - worst case, later speak() calls still try */ }
+}
+
+if (typeof document !== 'undefined') {
+    var UNLOCK_EVENTS = ['pointerdown', 'touchstart', 'click', 'keydown'];
+    var handleFirstGesture = function () {
+        unlockSpeechSynthesis();
+        UNLOCK_EVENTS.forEach(function (evt) { document.removeEventListener(evt, handleFirstGesture); });
+    };
+    UNLOCK_EVENTS.forEach(function (evt) {
+        document.addEventListener(evt, handleFirstGesture, { passive: true });
+    });
+}
 
 /**
  * Fires a short device vibration if supported (silent no-op otherwise).
@@ -428,36 +470,53 @@ function speakVoiceGuidance(text, force = false, onEndCallback = null) {
         return;
     }
 
+    // Opportunistic unlock: harmless if already unlocked, and covers the
+    // case where this very call happens to be inside a genuine user gesture
+    // (e.g. the manual capture button) even before the page-wide listener fired.
+    unlockSpeechSynthesis();
+
     try {
         window.speechSynthesis.cancel(); // Cancel any ongoing speech to avoid lag
 
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'th-TH';
-        utterance.rate = 1.05;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
+        const speakAttempt = (useVoiceMatch, isRetry) => {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.05;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
 
-        // Select Thai voice if available
-        const voices = window.speechSynthesis.getVoices();
-        const thVoice = voices.find(v => (v.lang && (v.lang.includes('th') || v.lang.includes('TH'))));
-        if (thVoice) {
-            utterance.voice = thVoice;
-        }
-
-        utterance.onend = () => {
-            lastSpokenTime = Date.now();
-            if (typeof onEndCallback === 'function') {
-                onEndCallback();
+            if (useVoiceMatch) {
+                utterance.lang = 'th-TH';
+                const voices = window.speechSynthesis.getVoices();
+                const thVoice = voices.find(v => (v.lang && (v.lang.includes('th') || v.lang.includes('TH'))));
+                if (thVoice) utterance.voice = thVoice;
             }
-        };
-        utterance.onerror = () => {
-            lastSpokenTime = Date.now();
-            if (typeof onEndCallback === 'function') {
-                onEndCallback();
-            }
+            // else: leave lang/voice unset entirely so the engine picks
+            // whatever default it already knows works - a retry after a
+            // 'language-unavailable'/'voice-unavailable' failure.
+
+            utterance.onend = () => {
+                lastSpokenTime = Date.now();
+                if (typeof onEndCallback === 'function') onEndCallback();
+            };
+            utterance.onerror = (ev) => {
+                const errType = ev && ev.error;
+                console.warn('[VoiceGuidance SpeechSynthesis Error]:', errType || ev);
+                lastSpokenTime = Date.now();
+                if (!isRetry && useVoiceMatch &&
+                    (errType === 'language-unavailable' || errType === 'voice-unavailable' ||
+                     errType === 'synthesis-failed' || errType === 'synthesis-unavailable')) {
+                    // The th-TH voice/lang itself is the problem - retry once
+                    // with the engine's own default so SOMETHING is audible.
+                    speakAttempt(false, true);
+                    return;
+                }
+                if (typeof onEndCallback === 'function') onEndCallback();
+            };
+
+            window.speechSynthesis.speak(utterance);
         };
 
-        window.speechSynthesis.speak(utterance);
+        speakAttempt(true, false);
         lastSpokenText = text;
         lastSpokenTime = now;
 
@@ -585,6 +644,17 @@ function updateCornerTargetHUD(tl, tr, bl, br, hasDocument = true) {
  * Scans for edge & stroke density in Top-Left, Top-Right, Bottom-Left, Bottom-Right target brackets
  * Evaluates Laplacian Variance Focus Score & Applies Focus Gating (Score >= 160)
  */
+/**
+ * True once CAPTURE_ARM_DELAY_MS has passed since the camera stream/guidance
+ * loop started. Auto-capture is fully disabled before that, however good the
+ * frame looks - without this, a document that happens to already be framed
+ * the instant the camera opens can satisfy the corner+focus+stability gates
+ * within a second and fire the shutter before the user is ready.
+ */
+function isCaptureArmed() {
+    return !guidanceStartTime || (Date.now() - guidanceStartTime) >= CAPTURE_ARM_DELAY_MS;
+}
+
 function analyzeLiveCameraFrame() {
     const video = document.getElementById('cameraVideo');
     if (!video || video.readyState < 2 || video.paused || video.ended) {
@@ -807,6 +877,23 @@ function analyzeLiveCameraFrame() {
                 stabilityStartTime = null;
                 hasSpokenPreCaptureWarning = false;
                 updateVoiceStatusHUD(`🔍 กำลังปรับความคมชัด (Score ${Math.round(focusScore)}/160)...`, 'warning');
+            } else if (isCameraStable && isFocusSharp && !isAutoCaptureEnabled) {
+                // Manual-shutter mode (the default): framing/focus/stability
+                // are all good, but nothing should self-trigger - tell the
+                // user to press the shutter themselves instead of running
+                // the auto-capture countdown language, which would promise a
+                // photo that never gets taken.
+                stabilityStartTime = null;
+                hasSpokenPreCaptureWarning = false;
+                speakVoiceGuidance('ตัวอักษรชัดเจนแล้ว กดปุ่มถ่ายภาพได้เลยครับ');
+                updateVoiceStatusHUD('🎯 ตัวอักษรชัดเจนแล้ว กดปุ่มถ่ายภาพได้เลยครับ', 'success');
+            } else if (isCameraStable && isFocusSharp && !isCaptureArmed()) {
+                // Everything else checks out, but we're still inside the
+                // post-open warm-up window - never let the shutter fire this
+                // fast, even if the frame happened to look perfect on tick 1.
+                stabilityStartTime = null;
+                hasSpokenPreCaptureWarning = false;
+                updateVoiceStatusHUD('🎯 เจอกรอบแล้ว กำลังเตรียมกล้อง รอสักครู่...', 'success');
             } else if (isCameraStable && isFocusSharp) {
                 // Focus Gating PASSED (Score >= 160) + 4-Corners Locked + Camera Stable!
                 if (!stabilityStartTime) {
@@ -921,6 +1008,7 @@ function startLiveVoiceGuidance() {
     lastSpokenTime = 0;
     noTextSince = null;
     darkSince = null;
+    guidanceStartTime = Date.now();
     updateCornerTargetHUD(false, false, false, false);
     updateFocusHUD(0);
     startNavSonar();
@@ -946,6 +1034,7 @@ function stopLiveVoiceGuidance() {
     prevAnalysisFrame = null;
     noTextSince = null;
     darkSince = null;
+    guidanceStartTime = null;
     stopNavSonar();
     if (typeof setTorch === 'function') setTorch(false);
     updateCornerTargetHUD(false, false, false, false);

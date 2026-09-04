@@ -504,7 +504,7 @@ runTest('4-Corner Target Detection Engine & Directional Guidance Voice Prompts',
 });
 
 runTest('4-Corner Target Locked Bracket Density Scanning & HUD Synchronization', () => {
-    assert(jsVoiceContent.includes('CORNER_STROKE_THRESHOLD = 0.012'), 'Missing CORNER_STROKE_THRESHOLD constant');
+    assert(jsVoiceContent.includes('CORNER_STROKE_THRESHOLD = 0.02'), 'Missing CORNER_STROKE_THRESHOLD constant');
     assert(jsVoiceContent.includes('zoneTL'), 'Missing zoneTL corner target boundary definition');
     assert(jsVoiceContent.includes('zoneTR'), 'Missing zoneTR corner target boundary definition');
     assert(jsVoiceContent.includes('zoneBL'), 'Missing zoneBL corner target boundary definition');
@@ -531,17 +531,44 @@ runTest('Real-Time 4-Corner Target Alignment Percentage Math & 100% Lock Banner'
     assert(jsVoiceContent.includes('locked-100'), 'Missing locked-100 class toggle on 100% alignment');
 });
 
-runTest('Auto-Capture Stability Timing Math (1.0s Rapid Shutter Requirement)', () => {
-    const STABILITY_REQUIRED_MS = 1000;
+runTest('Auto-Capture Stability Timing Math (1.5s Rapid Shutter Requirement)', () => {
+    const STABILITY_REQUIRED_MS = 1500;
     const startTime = 10000;
-    const checkTime = 11000;
+    const checkTime = 11500;
     const elapsed = checkTime - startTime;
     assert.strictEqual(elapsed >= STABILITY_REQUIRED_MS, true, 'Stability elapsed time check failed');
-    assert(jsVoiceContent.includes('STABILITY_REQUIRED_MS = 1000'), 'js/voice-guidance.js must use 1000ms stability threshold');
+    assert(jsVoiceContent.includes('STABILITY_REQUIRED_MS = 1500'), 'js/voice-guidance.js must use 1500ms stability threshold');
 });
 
-runTest('Pre-Capture Voice Warning (0.5s Warning Before Shutter & Speech Callback)', () => {
-    assert(jsVoiceContent.includes('PRE_CAPTURE_WARNING_MS = 500'), 'Missing PRE_CAPTURE_WARNING_MS constant');
+runTest('Capture Arm Delay (no auto-shutter in the first 2s after the camera opens)', () => {
+    // Regression guard: a document already framed the instant the camera
+    // opens must not be able to satisfy corner+focus+stability and fire the
+    // shutter before the user has had a chance to actually aim.
+    assert(jsVoiceContent.includes('CAPTURE_ARM_DELAY_MS = 2000'), 'Missing CAPTURE_ARM_DELAY_MS constant');
+    assert(jsVoiceContent.includes('function isCaptureArmed'), 'Missing isCaptureArmed() helper');
+    assert(jsVoiceContent.includes('!isCaptureArmed()'), 'Auto-capture branch must be gated on isCaptureArmed()');
+    assert(jsVoiceContent.includes('guidanceStartTime = Date.now()'), 'startLiveVoiceGuidance must stamp guidanceStartTime');
+
+    // guidanceStartTime is a top-level `let`, which (like THAI_BRAILLE_MAP's
+    // `const` case above) is not reachable as a sandbox global property -
+    // bridge it with an appended setter sharing the same script scope.
+    const sandbox = { Date };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(jsVoiceContent + '\nfunction __setGuidanceStart__(t) { guidanceStartTime = t; }', ctx);
+    ctx.__setGuidanceStart__(10000);
+    const realNow = Date.now;
+    try {
+        Date.now = () => 11000; // 1s after camera opened - still inside warm-up
+        assert.strictEqual(ctx.isCaptureArmed(), false, 'must not be armed 1s after opening (< 2s warm-up)');
+        Date.now = () => 12500; // 2.5s after camera opened - warm-up elapsed
+        assert.strictEqual(ctx.isCaptureArmed(), true, 'must be armed once the 2s warm-up has elapsed');
+    } finally {
+        Date.now = realNow;
+    }
+});
+
+runTest('Pre-Capture Voice Warning (0.6s Warning Before Shutter & Speech Callback)', () => {
+    assert(jsVoiceContent.includes('PRE_CAPTURE_WARNING_MS = 600'), 'Missing PRE_CAPTURE_WARNING_MS constant');
     assert(jsVoiceContent.includes('กำลังถ่ายภาพ อยู่นิ่งๆ นะครับ') || jsVoiceContent.includes('อยู่นิ่งๆ นะครับ'), 'Missing pre-capture Thai warning text');
     assert(jsVoiceContent.includes('hasSpokenPreCaptureWarning'), 'Missing hasSpokenPreCaptureWarning flag');
     assert(jsVoiceContent.includes('speakVoiceGuidance(text, force = false, onEndCallback = null)'), 'Missing onEndCallback parameter in speakVoiceGuidance');
@@ -553,6 +580,73 @@ runTest('Voice Guidance & Auto-Capture Toggle States', () => {
     assert(jsVoiceContent.includes('toggleAutoCapture'), 'Missing toggleAutoCapture function');
     assert(jsOcrContent.includes('btnToggleVoiceGuidance'), 'Missing btnToggleVoiceGuidance binding');
     assert(jsOcrContent.includes('btnToggleAutoCapture'), 'Missing btnToggleAutoCapture binding');
+});
+
+runTest('Auto-Capture defaults to OFF (manual shutter is the default)', () => {
+    assert(jsVoiceContent.includes('let isAutoCaptureEnabled = false'), 'isAutoCaptureEnabled must default to false');
+
+    // The static markup must match the JS default so there's no flash of
+    // the wrong toggle state before syncGuidanceButtons() runs on load.
+    const cameraHtmlContent = fs.readFileSync(path.join(projectRoot, 'camera.html'), 'utf-8');
+    const btnMatch = cameraHtmlContent.match(/<button[^>]*id="btnToggleAutoCapture"[^>]*>/);
+    assert(btnMatch, 'Missing btnToggleAutoCapture button markup');
+    assert(!/\bactive\b/.test(btnMatch[0]), 'btnToggleAutoCapture must not start with the active class');
+    assert(cameraHtmlContent.includes('<span id="autoCaptureText">ออโต้ชัตเตอร์: ปิด</span>'),
+        'autoCaptureText must start as ปิด (off)');
+
+    // Manual mode must tell the user to press the shutter, not run the
+    // auto-capture countdown language (which would promise a photo that
+    // never gets taken while isAutoCaptureEnabled is false).
+    assert(jsVoiceContent.includes('!isAutoCaptureEnabled'), 'analyzeLiveCameraFrame must branch on manual mode');
+    assert(jsVoiceContent.includes('กดปุ่มถ่ายภาพได้เลยครับ'), 'Missing manual-shutter-ready voice prompt');
+});
+
+runTest('speechSynthesis unlock on first user gesture (beeps-but-no-voice regression guard)', () => {
+    // Regression guard for a real report: the camera+guidance loop starts on
+    // DOMContentLoaded (no click involved) and re-fires every 300ms from a
+    // setInterval tick, so speechSynthesis.speak() calls never have a user
+    // gesture attached. Some browsers/WebViews silently drop speak() without
+    // one, while WebAudio beeps keep working (an AudioContext only needs
+    // unlocking once). Fix: prime speechSynthesis from the first real tap.
+    assert(jsVoiceContent.includes('function unlockSpeechSynthesis'), 'Missing unlockSpeechSynthesis()');
+    assert(jsVoiceContent.includes("document.addEventListener(evt, handleFirstGesture"),
+        'Must attach a document-level first-gesture listener to unlock speechSynthesis');
+    const speakFnBody = jsVoiceContent.slice(jsVoiceContent.indexOf('function speakVoiceGuidance'));
+    assert(speakFnBody.startsWith('function speakVoiceGuidance') && speakFnBody.includes('unlockSpeechSynthesis();'),
+        'speakVoiceGuidance must also opportunistically call unlockSpeechSynthesis()');
+
+    const events = {};
+    const fakeDocument = {
+        addEventListener: (evt, fn) => { (events[evt] = events[evt] || []).push(fn); },
+        removeEventListener: (evt, fn) => {
+            if (events[evt]) events[evt] = events[evt].filter(f => f !== fn);
+        }
+    };
+    let spokenUtterances = [];
+    const fakeSpeechSynthesis = {
+        speak: (u) => spokenUtterances.push(u),
+        cancel: () => {},
+        getVoices: () => []
+    };
+    const sandbox = {
+        document: fakeDocument,
+        window: { speechSynthesis: fakeSpeechSynthesis },
+        speechSynthesis: fakeSpeechSynthesis,
+        SpeechSynthesisUtterance: function (text) { this.text = text; },
+        console: { warn: () => {} },
+        Date, setInterval: () => 0, clearInterval: () => {}
+    };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(jsVoiceContent, ctx);
+
+    assert(events.click && events.click.length > 0, 'No click listener registered to unlock speech');
+    assert.strictEqual(spokenUtterances.length, 0, 'Must not speak before any user gesture');
+
+    // Simulate the user's first tap anywhere on the page.
+    events.click.slice().forEach(fn => fn());
+
+    assert.strictEqual(spokenUtterances.length, 1, 'First gesture must prime speechSynthesis with one utterance');
+    assert.strictEqual(events.click.length, 0, 'Listener must remove itself after the first gesture (once-only)');
 });
 
 runTest('3x3 Gaussian Denoise Noise Reduction Filter Kernel Math Simulation', () => {
@@ -667,6 +761,25 @@ runTest('js/textProcessor.js normalizeOcrText() - NFC Normalization & Thai Prese
     // Whitespace collapses, but case is never forced (Thai has no case; must not corrupt mixed-language text).
     assert.strictEqual(ctx.normalizeOcrText('  Hello   สวัสดี  '), 'Hello สวัสดี');
     assert.strictEqual(ctx.normalizeOcrText(''), '');
+});
+
+runTest('js/textProcessor.js stripOrphanCombiningMarks() - drops noise, keeps real stacks', () => {
+    const sandbox = { normalizeOcrText: null };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(jsTextProcessorContent, ctx);
+
+    // Regression guard for the PCB-photo bug report: EasyOCR misread stray
+    // marks on a cluttered background as Thai combining characters with no
+    // consonant base ("ืุe" -- no consonant precedes ื or ุ).
+    assert.strictEqual(ctx.normalizeOcrText('เขา . ืุe j02 รับเหมาก่อเรื่อง'),
+        'เขา . e j02 รับเหมาก่อเรื่อง', 'Orphan ื/ุ must be dropped, everything else untouched');
+
+    // A legitimate multi-mark stack (consonant + vowel + tone) must survive.
+    assert.strictEqual(ctx.normalizeOcrText('กี่'), 'กี่', 'Real consonant+vowel+tone stack must not be touched');
+    assert.strictEqual(ctx.normalizeOcrText('ก่อน้ำ'), 'ก่อน้ำ', 'Real multi-syllable tone stacking must not be touched');
+
+    // A leading orphan mark with nothing else in the token disappears entirely.
+    assert.strictEqual(ctx.normalizeOcrText('ืุe'), 'e', 'Orphan-only prefix must be fully dropped');
 });
 
 runTest('English & Thai Braille Character Map Lookup (via js/thai-braille-tables.js)', () => {

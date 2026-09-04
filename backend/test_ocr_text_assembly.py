@@ -15,7 +15,7 @@ width). See the module docstring in ocr_engine.py for the rationale.
 
 import sys
 
-from ocr_engine import assemble_text, _line_char_width, _group_into_lines
+from ocr_engine import assemble_text, _line_char_width, _group_into_lines, filter_confident_words, _MIN_WORD_CONFIDENCE
 
 
 def word(text, x0, y0, x1, y1):
@@ -132,6 +132,49 @@ degenerate_line = [
     {"text": "", "bbox": {"x0": 0, "y0": 0, "x1": 10, "y1": 22}},   # height 22
 ]
 check("char-width fallback uses median height, not outlier", _line_char_width(degenerate_line), 22.0)
+
+# ---------------------------------------------------------------------------
+# Case 8: confidence-based noise filtering. Regression guard for the exact
+# bug report -- a real label ("รับเหมาก่อเรื่อง") photographed on a PCB came
+# back as "เขา . ืุe j02 รับเหมาก่อเรื่อง": EasyOCR misread solder pads /
+# silkscreen above the label as low-confidence junk boxes, glued onto the
+# correctly-read label text by assemble_text(). filter_confident_words()
+# must drop the junk before assembly without touching the real line.
+# ---------------------------------------------------------------------------
+def word_conf(text, x0, y0, x1, y1, confidence):
+    w = word(text, x0, y0, x1, y1)
+    w["confidence"] = confidence
+    return w
+
+
+noisy_case = [
+    word_conf("เขา", 40, 20, 90, 45, 22.0),      # misread PCB silkscreen
+    word_conf(".", 100, 30, 108, 38, 15.0),       # stray solder-pad dot
+    word_conf("ืุe", 120, 25, 150, 50, 18.0),     # misread component marking
+    word_conf("j02", 160, 25, 200, 50, 61.0),     # partial label text, lower conf
+    word_conf("รับเหมาก่อเรื่อง", 40, 300, 400, 360, 94.0),  # the real label
+]
+kept = filter_confident_words(noisy_case)
+check(
+    "confidence filter drops PCB noise, keeps the real label + partial text",
+    sorted(w["text"] for w in kept),
+    sorted(["j02", "รับเหมาก่อเรื่อง"]),
+)
+check(
+    "assembled text after filtering has no junk prefix",
+    assemble_text(kept),
+    "j02 รับเหมาก่อเรื่อง",
+)
+check(
+    "all-noise input filters down to nothing",
+    filter_confident_words([word_conf("xx", 0, 0, 5, 5, 5.0)]),
+    [],
+)
+check(
+    "a word exactly at the threshold is kept (>=, not >)",
+    len(filter_confident_words([word_conf("ok", 0, 0, 5, 5, _MIN_WORD_CONFIDENCE)])),
+    1,
+)
 
 print()
 print(f"{passed} passed, {failed} failed")

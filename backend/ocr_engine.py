@@ -46,6 +46,23 @@ def _bbox_to_rect(points: List[List[float]], scale: float) -> Dict[str, float]:
     }
 
 
+# Detections below this per-word confidence are treated as detector noise
+# (stray marks on cluttered backgrounds -- solder pads, silkscreen, glare --
+# misread as text) and excluded from the assembled text, though they're
+# still returned in `words` so the inspector UI can show what was seen and
+# rejected. Text run through a real camera/PCB shot regularly produces a
+# handful of these alongside a correctly-read line; averaging them into the
+# one overall-confidence gate let a good line get diluted by attached noise
+# instead of being isolated and dropped on its own.
+_MIN_WORD_CONFIDENCE = 35.0
+
+
+def filter_confident_words(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Drops detections below _MIN_WORD_CONFIDENCE - the noise this filters
+    out never reaches assemble_text() or the overall-confidence average."""
+    return [w for w in words if w["confidence"] >= _MIN_WORD_CONFIDENCE]
+
+
 def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
     reader = get_reader(lang)
     try:
@@ -54,25 +71,25 @@ def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
         raw_results = reader.readtext(image, decoder="beamsearch", paragraph=False)
 
     words = []
-    confidences = []
     for bbox_points, text, confidence in raw_results:
         text = text.strip()
         if not text:
             continue
-        conf_pct = float(confidence) * 100.0
         words.append(
             {
                 "text": text,
                 "bbox": _bbox_to_rect(bbox_points, scale),
-                "confidence": conf_pct,
+                "confidence": float(confidence) * 100.0,
             }
         )
-        confidences.append(conf_pct)
 
-    overall_confidence = (sum(confidences) / len(confidences)) if confidences else 0.0
+    kept_words = filter_confident_words(words)
+    overall_confidence = (
+        (sum(w["confidence"] for w in kept_words) / len(kept_words)) if kept_words else 0.0
+    )
 
     return {
-        "text": assemble_text(words),
+        "text": assemble_text(kept_words),
         "confidence": overall_confidence,
         "words": words,
     }
