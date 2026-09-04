@@ -318,6 +318,8 @@
         .b-dots {
             display: grid;
             grid-template-columns: repeat(2, 7px);
+            grid-template-rows: repeat(3, 7px);
+            grid-auto-flow: column;   /* dots 1,2,3 down the left column; 4,5,6 down the right */
             grid-gap: 4px 5px;
         }
 
@@ -604,6 +606,9 @@
     <script src="js/camera.js"></script>
     <script src="js/ocr.js"></script>
     <script src="js/demoMode.js"></script>
+    <script src="js/thai-braille-tables.js"></script>
+    <script src="js/thai-wordlist.js"></script>
+    <script src="js/thai-braille.js"></script>
     <script src="js/braille-engine.js"></script>
     <script src="js/voice-guidance.js"></script>
     <script src="js/ocr-engine.js"></script>
@@ -827,7 +832,7 @@
             if (activeFullText && typeof chunkTextForBraille === 'function') {
                 activeChunks = chunkTextForBraille(activeFullText);
             } else {
-                activeChunks = activeFullText ? [activeFullText] : [];
+                activeChunks = activeFullText ? [{ cells: [], text: activeFullText }] : [];
             }
             activeChunkIdx = 0;
 
@@ -958,19 +963,19 @@
             if (btnPrev) btnPrev.style.display = 'inline-flex';
             if (btnNext) btnNext.style.display = 'inline-flex';
 
-            const chunk = activeChunks[activeChunkIdx] || '';
-            if (grid && typeof convertThaiToBraille === 'function') {
-                const cells = convertThaiToBraille(chunk);
-                grid.innerHTML = cells.map(cell => {
-                    const char = cell.char || ' ';
-                    const activeList = cell.activeDots || cell.dots || [];
+            const page = activeChunks[activeChunkIdx] || { cells: [], text: '' };
+            const pageCells = page.cells || [];
+            if (grid) {
+                grid.innerHTML = pageCells.map(cell => {
+                    const char = (cell.source !== undefined ? cell.source : cell.char) || ' ';
+                    const activeList = cell.dots || cell.activeDots || [];
                     const dots = [1, 2, 3, 4, 5, 6].map(d => {
                         const isActive = Array.isArray(activeList) && activeList.includes(d);
                         return `<div class="dot ${isActive ? 'active' : ''}"></div>`;
                     }).join('');
 
                     return `<div class="b-cell">
-                        <span class="b-char">${char === ' ' ? '&nbsp;' : char}</span>
+                        <span class="b-char">${char === ' ' || char === '' ? '&nbsp;' : char}</span>
                         <div class="b-dots">${dots}</div>
                     </div>`;
                 }).join('');

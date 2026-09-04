@@ -348,6 +348,9 @@
 
     <!-- Modular Subsystems -->
     <script src="js/textProcessor.js"></script>
+    <script src="js/thai-braille-tables.js"></script>
+    <script src="js/thai-wordlist.js"></script>
+    <script src="js/thai-braille.js"></script>
     <script src="js/braille-engine.js"></script>
     <script src="js/three-scene.js"></script>
     <script src="js/voice-guidance.js"></script>
@@ -669,10 +672,14 @@
             drawScreenContent(text);
 
             // 3. Actuate 84 Physical 3D Pins via braille-engine.js!
+            //    Feed the current line through the Thai Braille engine; its
+            //    own pages (>14 cells) are handled by the pagination display.
             if (typeof currentBrailleChunks !== 'undefined') {
-                currentBrailleChunks = ESSAY_CHUNKS;
-                currentBraillePageIndex = index;
-                currentBrailleFullText = FULL_ESSAY_TEXT;
+                currentBrailleChunks = (typeof chunkTextForBraille === 'function')
+                    ? chunkTextForBraille(text)
+                    : [{ cells: [], text: text }];
+                currentBraillePageIndex = 0;
+                currentBrailleFullText = text;
                 currentLanguageMode = 'thai';
             }
 

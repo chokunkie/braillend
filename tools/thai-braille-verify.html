@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ตรวจทานตาราง Thai Braille — BrailBox</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f172a; --card:#1e293b; --ink:#e2e8f0; --muted:#94a3b8;
+          --dot-on:#38bdf8; --dot-off:#334155; --flag:#f59e0b; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f1f5f9; --card:#fff; --ink:#0f172a; --muted:#64748b; --dot-on:#0284c7; --dot-off:#cbd5e1; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--ink);
+         font-family: -apple-system, "Segoe UI", "Noto Sans Thai", sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.lead { color:var(--muted); margin:0 0 20px; max-width:70ch; line-height:1.5; }
+  h2 { font-size:15px; margin:28px 0 10px; border-bottom:1px solid var(--dot-off); padding-bottom:6px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:10px; }
+  .cell { background:var(--card); border-radius:10px; padding:10px 12px; display:flex; gap:12px; align-items:center;
+          border:1px solid transparent; min-width:0; }
+  .cell.flag { border-color:var(--flag); }
+  .glyph { font-size:28px; min-width:1.4em; text-align:center; flex:none; }
+  .meta { font-size:11px; color:var(--muted); line-height:1.4; min-width:0; }
+  .meta .ref { color:var(--ink); }
+  .flag-tag { color:var(--flag); font-weight:700; }
+  .braille { display:flex; gap:3px; }
+  .braille .col { display:flex; flex-direction:column; gap:3px; }
+  .braille .d { width:9px; height:9px; border-radius:50%; background:var(--dot-off); }
+  .braille .d.on { background:var(--dot-on); }
+  .multi { display:flex; gap:8px; align-items:center; }
+  .plus { color:var(--muted); font-size:12px; }
+  .count { color:var(--muted); font-weight:400; font-size:12px; }
+</style>
+</head>
+<body>
+<h1>ตรวจทานตาราง Thai Braille</h1>
+<p class="lead">
+  เรนเดอร์ทุก entry ใน <code>js/thai-braille-tables.js</code> เป็นจุดเบรลล์
+  เพื่อเทียบกับชาร์ตราชบัณฑิตยสภาทีละตัว จุดที่ทึบ = จุดนูน.
+  กรอบสีเหลือง = ยังไม่ได้ตรวจกับชาร์ตกระดาษ (มี <code>// VERIFY</code>).
+  ถ้าตัวไหนผิด แก้ที่ <code>js/thai-braille-tables.js</code> แล้ว reload หน้านี้.
+</p>
+<div id="root"></div>
+
+<script src="../js/thai-braille-tables.js"></script>
+<script>
+const T = window.THAI_BRAILLE_TABLES;
+
+function cellEl(dots) {
+  const wrap = document.createElement('div');
+  wrap.className = 'braille';
+  // columns: dots 1-2-3 | 4-5-6
+  [[1,2,3],[4,5,6]].forEach(col => {
+    const c = document.createElement('div');
+    c.className = 'col';
+    col.forEach(n => {
+      const d = document.createElement('div');
+      d.className = 'd' + (dots.includes(n) ? ' on' : '');
+      c.appendChild(d);
+    });
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+function render(sectionTitle, entries) {
+  const h = document.createElement('h2');
+  const n = entries.length;
+  h.innerHTML = sectionTitle + ' <span class="count">(' + n + ')</span>';
+  document.getElementById('root').appendChild(h);
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  entries.forEach(([key, entry]) => {
+    const cell = document.createElement('div');
+    const isFlagged = (entry.chartRef || '') && false; // flags come from source comments; approximate below
+    cell.className = 'cell';
+    const glyph = document.createElement('div');
+    glyph.className = 'glyph';
+    glyph.textContent = key === ' ' ? '␣' : key;
+    const multi = document.createElement('div');
+    multi.className = 'multi';
+    multi.style.flex = 'none';
+    (entry.cells || []).forEach((g, i) => {
+      if (i) { const p = document.createElement('span'); p.className='plus'; p.textContent='+'; multi.appendChild(p); }
+      multi.appendChild(cellEl(g));
+    });
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = '<span class="ref">' + (entry.chartRef || '?') + '</span><br>'
+      + (entry.cells || []).map(g => 'จุด ' + (g.join(',') || '—')).join('  |  ');
+    cell.appendChild(glyph);
+    cell.appendChild(multi);
+    cell.appendChild(meta);
+    grid.appendChild(cell);
+  });
+  document.getElementById('root').appendChild(grid);
+}
+
+const ent = o => Object.entries(o);
+render('พยัญชนะไทย (44)', ent(T.THAI_CONSONANTS));
+render('สระเดี่ยว / รูปเดียว', ent(T.THAI_SIMPLE_VOWELS));
+render('สระประสม (คีย์ canonical, อ = ช่องพยัญชนะ)', ent(T.THAI_COMPOUND_VOWELS));
+render('ฤ ฤๅ ฦ ฦๅ', ent(T.THAI_RU_LU));
+render('วรรณยุกต์', ent(T.THAI_TONES));
+render('เครื่องหมายอื่น', ent(T.THAI_MARKS));
+render('เครื่องหมายนำ (เลข / ตัวใหญ่)', ent(T.BRAILLE_INDICATORS));
+render('ตัวเลข', ent(T.DIGITS));
+render('เครื่องหมายวรรคตอน', ent(T.PUNCTUATION));
+render('อักษรอังกฤษ a–z', ent(T.LATIN_LETTERS).map(([k,v]) => [k, {cells:v, chartRef:'a-z == A-Z cell'}]));
+</script>
+</body>
+</html>

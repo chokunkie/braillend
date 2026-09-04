@@ -8,6 +8,10 @@
     <!-- Three.js and OrbitControls from reliable CDNs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Shared Thai Braille transliteration engine (single source of truth) -->
+    <script src="js/thai-braille-tables.js"></script>
+    <script src="js/thai-wordlist.js"></script>
+    <script src="js/thai-braille.js"></script>
     <!-- FontAwesome for high-tech icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts: Prompt & JetBrains Mono -->
@@ -882,41 +886,9 @@
 
     <!-- Application Script -->
     <script>
-        /* THAI BRAILLE DICTIONARY & TRANSLATION ENGINE */
-        const THAI_BRAILLE_MAP = {
-            // Consonants
-            'ก': [1, 2, 4, 5], 'ข': [1, 3], 'ฃ': [1, 3], 'ค': [1, 3, 6], 'ฅ': [1, 3, 6], 'ฆ': [1, 2, 3, 4, 6],
-            'ง': [1, 3, 4, 5, 6], 'จ': [1, 4], 'ฉ': [1, 4, 6], 'ช': [1, 4, 5], 'ซ': [1, 3, 5, 6], 'ฌ': [1, 2, 3, 4, 5],
-            'ญ': [1, 2, 4, 6], 'ฎ': [1, 2, 3, 4, 5, 6], 'ฏ': [2, 3, 4, 5, 6], 'ฐ': [1, 2, 5, 6], 'ฑ': [1, 2, 4, 5, 6],
-            'ฒ': [1, 3, 4, 6], 'ณ': [1, 3, 4, 5], 'ด': [1, 4, 5], 'ต': [2, 3, 4, 5], 'ถ': [1, 2, 3, 4],
-            'ท': [1, 2, 5], 'ธ': [2, 3, 4, 6], 'น': [1, 3, 4, 5], 'บ': [1, 2], 'ป': [1, 2, 3, 4],
-            'ผ': [1, 2, 3, 6], 'ฝ': [1, 2, 4], 'พ': [1, 2, 3, 5], 'ฟ': [1, 2, 4, 5], 'ภ': [1, 2, 3, 4, 5],
-            'ม': [1, 3, 4], 'ย': [1, 3, 4, 5, 6], 'ร': [1, 2, 3, 5], 'ล': [1, 2, 3], 'ว': [2, 4, 5, 6],
-            'ศ': [1, 2, 3, 4, 6], 'ษ': [1, 2, 3, 5, 6], 'ส': [2, 3, 4], 'ห': [1, 2, 5], 'ฬ': [1, 2, 3, 4, 5],
-            'อ': [1, 3, 5], 'ฮ': [1, 2, 3, 4, 5, 6],
-
-            // Vowels & Tones
-            'ะ': [1], 'า': [3, 4, 5], 'ิ': [2, 4], 'ี': [3, 5], 'ึ': [2, 4, 6], 'ื': [1, 2, 4, 6],
-            'ุ': [1, 3, 6], 'ู': [1, 2, 5, 6], 'เ': [1, 5], 'แ': [1, 2, 6], 'โ': [1, 3, 5],
-            'ใ': [1, 3, 4, 6], 'ไ': [1, 2, 3, 4], 'ำ': [2, 3, 6], '็': [2, 5], '่': [1], '้': [2, 3],
-            '๊': [2, 3, 5], '๋': [2, 3, 6], '์': [3, 6],
-
-            // English Uppercase / Lowercase
-            'A': [1], 'a': [1], 'B': [1, 2], 'b': [1, 2], 'C': [1, 4], 'c': [1, 4], 'D': [1, 4, 5], 'd': [1, 4, 5],
-            'E': [1, 5], 'e': [1, 5], 'F': [1, 2, 4], 'f': [1, 2, 4], 'G': [1, 2, 4, 5], 'g': [1, 2, 4, 5],
-            'H': [1, 2, 5], 'h': [1, 2, 5], 'I': [2, 4], 'i': [2, 4], 'J': [2, 4, 5], 'j': [2, 4, 5],
-            'K': [1, 3], 'k': [1, 3], 'L': [1, 2, 3], 'l': [1, 2, 3], 'M': [1, 3, 4], 'm': [1, 3, 4],
-            'N': [1, 3, 4, 5], 'n': [1, 3, 4, 5], 'O': [1, 3, 5], 'o': [1, 3, 5], 'P': [1, 2, 3, 4], 'p': [1, 2, 3, 4],
-            'Q': [1, 2, 3, 4, 5], 'q': [1, 2, 3, 4, 5], 'R': [1, 2, 3, 5], 'r': [1, 2, 3, 5], 'S': [2, 3, 4], 's': [2, 3, 4],
-            'T': [2, 3, 4, 5], 't': [2, 3, 4, 5], 'U': [1, 3, 6], 'u': [1, 3, 6], 'V': [1, 2, 3, 6], 'v': [1, 2, 3, 6],
-            'W': [2, 4, 5, 6], 'w': [2, 4, 5, 6], 'X': [1, 3, 4, 6], 'x': [1, 3, 4, 6], 'Y': [1, 3, 4, 5, 6], 'y': [1, 3, 4, 5, 6],
-            'Z': [1, 3, 5, 6], 'z': [1, 3, 5, 6],
-
-            // Numbers (0-9)
-            '1': [1], '2': [1, 2], '3': [1, 4], '4': [1, 4, 5], '5': [1, 5],
-            '6': [1, 2, 4], '7': [1, 2, 4, 5], '8': [1, 2, 5], '9': [2, 4], '0': [2, 4, 5],
-            '#': [3, 4, 5, 6] // Number sign prefix
-        };
+        /* Thai Braille tables + transliteration now come from the shared
+           modules loaded in <head> (js/thai-braille-tables.js, js/thai-braille.js).
+           This standalone demo shows a single 14-cell page only. */
 
         // State variables
         let scene, camera, renderer, controls;
@@ -2197,16 +2169,19 @@
 
         /* THAI TRANSLATION ENGINE & UI BUILDER */
         function convertThaiToBraille(text) {
-            const chars = Array.from(text || '');
+            // Delegate to the shared Thai Braille engine, then pad/truncate to
+            // the fixed 14-cell hardware page this standalone demo renders.
+            const produced = (typeof textToBrailleCells === 'function')
+                ? textToBrailleCells(text)
+                : Array.from(text || '').map(ch => ({ source: ch, dots: [] }));
             const cells = [];
             for (let c = 0; c < 14; c++) {
-                const char = chars[c] || ' ';
-                const activeDots = THAI_BRAILLE_MAP[char] || [];
-                const dotsBool = [1, 2, 3, 4, 5, 6].map(dot => activeDots.includes(dot));
+                const src = produced[c];
+                const activeDots = src ? (src.dots || []) : [];
                 cells.push({
-                    char: char,
+                    char: src ? (src.source || ' ') : ' ',
                     activeDots: activeDots,
-                    dotsBool: dotsBool
+                    dotsBool: [1, 2, 3, 4, 5, 6].map(dot => activeDots.includes(dot))
                 });
             }
             return cells;

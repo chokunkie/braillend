@@ -248,7 +248,7 @@ function showOcrResultScreen(extractedText, confidence = 95) {
     if (typeof chunkTextForBraille === 'function') {
         currentResultChunks = chunkTextForBraille(currentResultText);
     } else {
-        currentResultChunks = [currentResultText];
+        currentResultChunks = [{ cells: [], text: currentResultText }];
     }
     currentResultChunkIndex = 0;
 
@@ -272,18 +272,19 @@ function renderResultScreenData() {
     if (headline) headline.textContent = `"${currentResultText}"`;
     if (badge) badge.textContent = `หน้า ${currentResultChunkIndex + 1}/${currentResultChunks.length}`;
 
-    const chunk = currentResultChunks[currentResultChunkIndex] || '';
-    if (grid && typeof convertThaiToBraille === 'function') {
-        const cells = convertThaiToBraille(chunk);
-        grid.innerHTML = cells.map(cell => {
-            const char = cell.char || ' ';
+    const page = currentResultChunks[currentResultChunkIndex] || { cells: [], text: '' };
+    const pageCells = page.cells || [];
+    if (grid) {
+        grid.innerHTML = pageCells.map(cell => {
+            const char = (cell.source !== undefined ? cell.source : cell.char) || ' ';
+            const activeList = cell.dots || cell.activeDots || [];
             const dots = [1, 2, 3, 4, 5, 6].map(d => {
-                const isActive = cell.dots && cell.dots.includes(d);
+                const isActive = Array.isArray(activeList) && activeList.includes(d);
                 return `<div class="b-dot ${isActive ? 'active' : ''}"></div>`;
             }).join('');
 
             return `<div class="braille-mini-cell">
-                <span class="braille-mini-char">${char === ' ' ? '&nbsp;' : char}</span>
+                <span class="braille-mini-char">${char === ' ' || char === '' ? '&nbsp;' : char}</span>
                 <div class="braille-mini-dots">${dots}</div>
             </div>`;
         }).join('');

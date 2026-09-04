@@ -173,7 +173,6 @@ function apply3DSimLine(index) {
     if (thaiInput) {
         thaiInput.value = text;
         if (typeof updateBrailleDisplay === 'function') updateBrailleDisplay(text);
-        if (typeof processTranslation === 'function') processTranslation();
     }
 
     // Update 3D screen texture

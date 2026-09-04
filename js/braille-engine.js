@@ -3,89 +3,65 @@
    Version: 3.1.0 (Modular Braille Core)
    ========================================================================= */
 
-/* THAI & INTERNATIONAL BRAILLE DICTIONARY */
-const THAI_BRAILLE_MAP = {
-    // Consonants
-    'ก': [1, 2, 4, 5], 'ข': [1, 3], 'ฃ': [1, 3], 'ค': [1, 3, 6], 'ฅ': [1, 3, 6], 'ฆ': [1, 2, 3, 4, 6],
-    'ง': [1, 3, 4, 5, 6], 'จ': [1, 4], 'ฉ': [1, 4, 6], 'ช': [1, 4, 5], 'ซ': [1, 3, 5, 6], 'ฌ': [1, 2, 3, 4, 5],
-    'ญ': [1, 2, 4, 6], 'ฎ': [1, 2, 3, 4, 5, 6], 'ฏ': [2, 3, 4, 5, 6], 'ฐ': [1, 2, 5, 6], 'ฑ': [1, 2, 4, 5, 6],
-    'ฒ': [1, 3, 4, 6], 'ณ': [1, 3, 4, 5], 'ด': [1, 4, 5], 'ต': [2, 3, 4, 5], 'ถ': [1, 2, 3, 4],
-    'ท': [2, 3, 4, 5, 6], 'ธ': [2, 3, 4, 6], 'น': [1, 3, 4, 5], 'บ': [1, 2], 'ป': [1, 2, 3, 4],
-    'ผ': [1, 2, 3, 6], 'ฝ': [1, 2, 4], 'พ': [1, 2, 3, 5], 'ฟ': [1, 2, 4, 5], 'ภ': [1, 2, 3, 4, 5],
-    'ม': [1, 3, 4], 'ย': [1, 3, 4, 5, 6], 'ร': [1, 2, 3, 5], 'ล': [1, 2, 3], 'ว': [2, 4, 5, 6],
-    'ศ': [1, 2, 3, 4, 6], 'ษ': [1, 2, 3, 5, 6], 'ส': [2, 3, 4], 'ห': [1, 2, 5], 'ฬ': [1, 2, 3, 4, 5],
-    'อ': [1, 3, 5], 'ฮ': [1, 2, 3, 4, 5, 6],
-
-    // Vowels & Tones
-    'ะ': [1], 'า': [3, 4, 5], 'ิ': [2, 4], 'ี': [3, 5], 'ึ': [2, 4, 6], 'ื': [1, 2, 4, 6],
-    'ุ': [1, 3, 6], 'ู': [1, 2, 5, 6], 'เ': [1, 5], 'แ': [1, 2, 6], 'โ': [1, 3, 5],
-    'ใ': [1, 3, 4, 6], 'ไ': [1, 2, 3, 4], 'ำ': [2, 3, 6], '็': [2, 5], '่': [3, 5], '้': [2, 5, 6],
-    '๊': [2, 3, 5, 6], '๋': [2, 3, 6], '์': [3, 5, 6],
-
-    // English Uppercase / Lowercase
-    'A': [1], 'a': [1], 'B': [1, 2], 'b': [1, 2], 'C': [1, 4], 'c': [1, 4], 'D': [1, 4, 5], 'd': [1, 4, 5],
-    'E': [1, 5], 'e': [1, 5], 'F': [1, 2, 4], 'f': [1, 2, 4], 'G': [1, 2, 4, 5], 'g': [1, 2, 4, 5],
-    'H': [1, 2, 5], 'h': [1, 2, 5], 'I': [2, 4], 'i': [2, 4], 'J': [2, 4, 5], 'j': [2, 4, 5],
-    'K': [1, 3], 'k': [1, 3], 'L': [1, 2, 3], 'l': [1, 2, 3], 'M': [1, 3, 4], 'm': [1, 3, 4],
-    'N': [1, 3, 4, 5], 'n': [1, 3, 4, 5], 'O': [1, 3, 5], 'o': [1, 3, 5], 'P': [1, 2, 3, 4], 'p': [1, 2, 3, 4],
-    'Q': [1, 2, 3, 4, 5], 'q': [1, 2, 3, 4, 5], 'R': [1, 2, 3, 5], 'r': [1, 2, 3, 5], 'S': [2, 3, 4], 's': [2, 3, 4],
-    'T': [2, 3, 4, 5], 't': [2, 3, 4, 5], 'U': [1, 3, 6], 'u': [1, 3, 6], 'V': [1, 2, 3, 6], 'v': [1, 2, 3, 6],
-    'W': [2, 4, 5, 6], 'w': [2, 4, 5, 6], 'X': [1, 3, 4, 6], 'x': [1, 3, 4, 6], 'Y': [1, 3, 4, 5, 6], 'y': [1, 3, 4, 5, 6],
-    'Z': [1, 3, 5, 6], 'z': [1, 3, 5, 6],
-
-    // Numbers (0-9)
-    '1': [1], '2': [1, 2], '3': [1, 4], '4': [1, 4, 5], '5': [1, 5],
-    '6': [1, 2, 4], '7': [1, 2, 4, 5], '8': [1, 2, 5], '9': [2, 4], '0': [2, 4, 5],
-    '#': [3, 4, 5, 6] // Number sign prefix
-};
+/* The Thai/English character -> braille dot tables now live in
+   js/thai-braille-tables.js (single source of truth) and are consumed by the
+   transliteration engine in js/thai-braille.js. This file only orchestrates
+   the DOM + 84-pin hardware model. */
 
 // Global Translation & Pagination States
 let currentText = 'HELLO WORLD';
-let currentBrailleChunks = ['HELLO WORLD'];
+let currentBrailleChunks = [];   // Page[] : { cells: Cell[], text: string }
 let currentBraillePageIndex = 0;
 let currentBrailleFullText = 'HELLO WORLD';
 let currentLanguageMode = 'eng';
 
 /**
- * Converts input text into 14-cell Braille dot activation data structures
+ * Converts text to Braille CELLS via the Thai Braille engine (js/thai-braille.js).
+ * Returns a VARIABLE-length array of cells: { dots, source, kind, char, activeDots }.
+ * (`char`/`activeDots` are back-compat aliases of `source`/`dots`.)
+ */
+function textToCells(text) {
+    if (typeof textToBrailleCells === 'function') {
+        return textToBrailleCells(text);
+    }
+    // Defensive fallback if the engine failed to load - blank cells.
+    return Array.from(text || '').map(ch => ({
+        dots: [], source: ch, kind: 'unknown', char: ch, activeDots: []
+    }));
+}
+
+/**
+ * DEPRECATED shim: legacy callers that still expect exactly 14 fixed cells.
+ * New code should use textToCells() + paginateBrailleCells().
  */
 function convertThaiToBraille(text) {
-    const chars = Array.from(text || '');
+    const produced = textToCells(text);
     const cells = [];
     for (let c = 0; c < 14; c++) {
-        const char = chars[c] || ' ';
-        let activeDots = THAI_BRAILLE_MAP[char];
-        if (!activeDots) {
-            if (char.toUpperCase() in THAI_BRAILLE_MAP) {
-                activeDots = THAI_BRAILLE_MAP[char.toUpperCase()];
-            } else if (char.toLowerCase() in THAI_BRAILLE_MAP) {
-                activeDots = THAI_BRAILLE_MAP[char.toLowerCase()];
-            } else {
-                activeDots = [];
-            }
-        }
-        const dotsBool = [1, 2, 3, 4, 5, 6].map(dot => activeDots.includes(dot));
+        const src = produced[c];
+        const activeDots = src ? src.dots : [];
         cells.push({
-            char: char,
+            char: src ? src.source : ' ',
+            source: src ? src.source : ' ',
             activeDots: activeDots,
-            dotsBool: dotsBool
+            dots: activeDots,
+            dotsBool: [1, 2, 3, 4, 5, 6].map(dot => activeDots.includes(dot))
         });
     }
     return cells;
 }
 
 /**
- * Splits arbitrary length text into 14-character pagination chunks
+ * Splits arbitrary-length text into Braille PAGES of 14 cells each.
+ * Returns Page[] where Page = { cells: Cell[], text: string }.
+ * NOTE: pages are keyed by braille-cell count, not input-character count -
+ * one Thai syllable can span several cells.
  */
 function chunkTextForBraille(text) {
-    const chars = Array.from(text || '');
-    if (chars.length === 0) return [''];
-    const chunks = [];
-    const CHUNK_SIZE = 14;
-    for (let i = 0; i < chars.length; i += CHUNK_SIZE) {
-        chunks.push(chars.slice(i, i + CHUNK_SIZE).join(''));
+    if (typeof paginateBrailleCells === 'function') {
+        return paginateBrailleCells(textToCells(text), 14);
     }
-    return chunks;
+    return [{ cells: [], text: String(text || '') }];
 }
 
 /**
@@ -93,7 +69,7 @@ function chunkTextForBraille(text) {
  */
 function updatePaginationDisplay() {
     if (!currentBrailleChunks || currentBrailleChunks.length === 0) {
-        currentBrailleChunks = [''];
+        currentBrailleChunks = [{ cells: [], text: '' }];
     }
 
     const totalPages = Math.max(1, currentBrailleChunks.length);
@@ -101,10 +77,23 @@ function updatePaginationDisplay() {
     if (currentBraillePageIndex >= totalPages) currentBraillePageIndex = totalPages - 1;
 
     const currentPage = currentBraillePageIndex + 1;
-    const currentChunk = currentBrailleChunks[currentBraillePageIndex] || '';
-    const totalChars = Array.from(currentBrailleFullText || '').length;
-    const startCharIdx = totalChars === 0 ? 0 : currentBraillePageIndex * 14 + 1;
-    const endCharIdx = totalChars === 0 ? 0 : Math.min((currentBraillePageIndex + 1) * 14, totalChars);
+    // A page is { cells: Cell[], text: string }. Tolerate a bare string too
+    // (legacy callers that assign currentBrailleChunks directly).
+    let page = currentBrailleChunks[currentBraillePageIndex];
+    if (typeof page === 'string') page = { cells: textToCells(page), text: page };
+    if (!page) page = { cells: [], text: '' };
+    const pageCells = page.cells || [];
+    const currentChunk = page.text || '';
+
+    // Running braille-CELL offset of this page (not character offset).
+    let cellsBeforePage = 0;
+    for (let p = 0; p < currentBraillePageIndex; p++) {
+        const pc = currentBrailleChunks[p];
+        cellsBeforePage += (pc && pc.cells) ? pc.cells.length : 0;
+    }
+    const totalCells = currentBrailleChunks.reduce(
+        (n, pc) => n + ((pc && pc.cells) ? pc.cells.length : 0), 0);
+    const startCellIdx = totalCells === 0 ? 0 : cellsBeforePage + 1;
 
     // 1. Update UI Elements (Page indicator & Prev/Next button states)
     const pageIndicator = document.getElementById('pageIndicator');
@@ -130,17 +119,18 @@ function updatePaginationDisplay() {
         flashDataLED();
     }
 
-    // 3. Convert current 14-char chunk to Braille cells data
-    const cellsData = convertThaiToBraille(currentChunk);
+    // 3. Braille cells for the current page (variable count, <= 14)
+    const cellsData = pageCells;
     const dotOrder = [1, 4, 2, 5, 3, 6];
 
-    // 4. Update 3D target array for 84 pins
+    // 4. Update 3D target array for 84 pins (hardware is fixed 14 cells x 6)
     if (typeof pinTargetY !== 'undefined' && typeof pinTargetCamAngle !== 'undefined') {
         for (let c = 0; c < 14; c++) {
-            const cell = cellsData[c];
+            const cell = cellsData[c] || { dots: [] };
+            const dots = cell.dots || cell.activeDots || [];
             for (let k = 0; k < 6; k++) {
                 const dotNum = dotOrder[k];
-                const isActive = cell.activeDots.includes(dotNum);
+                const isActive = dots.includes(dotNum);
                 const globalPinIdx = c * 6 + k;
 
                 const targetY = isActive ? 0.13 : 0.0;
@@ -166,7 +156,9 @@ function updatePaginationDisplay() {
     if (gridContainer) {
         gridContainer.innerHTML = '';
         for (let c = 0; c < 14; c++) {
-            const cell = cellsData[c];
+            const cell = cellsData[c] || { dots: [], source: '' };
+            const dots = cell.dots || cell.activeDots || [];
+            const src = (cell.source !== undefined ? cell.source : cell.char) || '';
             const card = document.createElement('div');
             card.className = 'cell-card';
             card.id = `cell-card-${c}`;
@@ -174,18 +166,20 @@ function updatePaginationDisplay() {
 
             let dotsHTML = '';
             for (let d of dotOrder) {
-                const act = cell.activeDots.includes(d) ? 'active' : '';
+                const act = dots.includes(d) ? 'active' : '';
                 dotsHTML += `<div class="dot-pin ${act}"></div>`;
             }
 
-            const charNumberLabel = (totalChars > 0 && c < currentChunk.length)
-                ? `CELL #${c + 1} [${startCharIdx + c}]`
+            const hasCell = c < cellsData.length;
+            const charNumberLabel = hasCell
+                ? `CELL #${c + 1} [${startCellIdx + c}]`
                 : `CELL #${c + 1}`;
+            const charLabel = (src === '' || src === ' ') ? '&nbsp;' : src;
 
             card.innerHTML = `
                 <div class="cell-info">
                     <div class="cell-idx">${charNumberLabel}</div>
-                    <div class="cell-char">${cell.char === ' ' ? '&nbsp;' : cell.char}</div>
+                    <div class="cell-char">${charLabel}</div>
                 </div>
                 <div class="cell-dots-grid">
                     ${dotsHTML}

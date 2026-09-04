@@ -51,7 +51,10 @@ braillend/
 │   └── styles.css                       # `css/styles.css` สไตล์ชีต Cyberpunk-Tactical Theme (Dark/Light Mode)
 ├── js/
 │   ├── app.js                           # `js/app.js` Entry Point: เริ่มต้นระบบและผูก Event Listeners
-│   ├── braille-engine.js                # `js/braille-engine.js` พจนานุกรมเบรลล์, 14-Cell Chunking, และ Pagination
+│   ├── thai-braille-tables.js           # `js/thai-braille-tables.js` ตารางจุดเบรลล์ไทย/อังกฤษ (แหล่งความจริงเดียว, ทุก entry มี chartRef)
+│   ├── thai-braille.js                  # `js/thai-braille.js` เอนจินถอดอักษรเบรลล์ไทย: ตัดพยางค์/ตัดคำ → เรียงสระหน้า+วรรณยุกต์ → เซลล์
+│   ├── thai-wordlist.js                 # `js/thai-wordlist.js` คลังคำไทย ~7000 คำ (TNC/PyThaiNLP) สำหรับเว้นวรรคระหว่างคำ
+│   ├── braille-engine.js                # `js/braille-engine.js` DOM + 84-Pin Hardware + Pagination (ใช้เอนจินด้านบน)
 │   ├── voice-guidance.js                # `js/voice-guidance.js` ระบบเสียงแนะนำภาษาไทยและการตรวจจับเป้าหมาย 4 มุม
 │   ├── camera.js                        # `js/camera.js` Camera Stream Lifecycle, Viewfinder Crop, Frame Capture (Client-only)
 │   ├── ocr.js                           # `js/ocr.js` OCR Module - ONLY place that calls the backend `/ocr` endpoint
@@ -65,8 +68,12 @@ braillend/
 │   ├── ocr_engine.py                    # EasyOCR (`th`+`en`) wrapper
 │   ├── requirements.txt                 # Backend Python dependencies
 │   └── README.md                        # Backend setup & run instructions
+├── tools/
+│   └── thai-braille-verify.html         # หน้าเรนเดอร์ตารางเบรลล์ทั้งหมดเป็นจุด เพื่อตรวจทานกับชาร์ตราชบัณฑิตยสภา
 └── tests/
-    └── test_braille_ocr_pipeline.js     # `tests/test_braille_ocr_pipeline.js` Autonomous QA Test Suite
+    ├── test_braille_ocr_pipeline.js         # `tests/test_braille_ocr_pipeline.js` Autonomous QA Test Suite
+    ├── test_thai_braille_transliteration.js # ชุดทดสอบเอนจินเบรลล์ไทย (เรียงสระ, สระประสม, โอะลดรูป, เว้นวรรค)
+    └── fixtures/thai-braille-chart-cases.js # คอร์ปัสทดสอบ (input ไทย → เซลล์เบรลล์ที่ถูกต้อง) ถอดจากชาร์ต
 ```
 
 ---
@@ -87,7 +94,35 @@ graph TD
     TextProc --> Braille["Braille Engine & 3D Tactile Matrix\n(14 Cells / 84 Actuator Pins)"]
 ```
 
-### 4.2 กลไก Bistable Electro-Cam 0W Power Latch
+### 4.2 การถอดอักษรเบรลล์ไทย (Thai Braille Transliteration)
+
+`js/thai-braille.js` แปลงข้อความ (ไทย/อังกฤษ/ตัวเลขปนกัน) เป็นสตรีมของ **เซลล์เบรลล์**
+ตามหลักอักษรเบรลล์ไทย (ราชบัณฑิตยสภา) ไม่ใช่การ map ทีละอักษร:
+
+```mermaid
+graph LR
+    In["ข้อความ"] --> NFC["NFC Normalize"]
+    NFC --> Runs["แยกช่วง ไทย / อังกฤษ / ตัวเลข"]
+    Runs --> Words["ตัดคำ (maximal matching + js/thai-wordlist.js)"]
+    Words --> Syl["ตัดพยางค์ (FSM)"]
+    Syl --> Order["เรียงลำดับเบรลล์:\nพยัญชนะต้น → สระ → ตัวสะกด → วรรณยุกต์"]
+    Order --> Cells["Cell[] { dots, source, kind }"]
+```
+
+| หลักการ | การจัดการ |
+|---|---|
+| **สระหน้า** (เ แ โ ใ ไ) | ย้ายไปเขียนหลังพยัญชนะต้น: `เก่ง` → ก·เ·ง·่ |
+| **สระประสม** (เ–าะ, เ–ีย, เ–ือ, –ัว, เ–อ ฯลฯ) | รวมเป็นเซลล์เฉพาะ วางหลังพยัญชนะต้น |
+| **วรรณยุกต์** | ย้ายไปท้ายพยางค์เสมอ |
+| **สระโอะลดรูป** | เขียนเต็มในเบรลล์: `คน` → ค·โอะ·น (เฉพาะคำที่รู้จัก/อยู่ในคลังคำ) |
+| **เครื่องหมายนำเลข / อักษรตัวใหญ่** | เติมอัตโนมัติหน้ากลุ่มตัวเลข / หน้าอักษรพิมพ์ใหญ่ |
+| **เว้นวรรคระหว่างคำ** | ตัดคำด้วยคลังคำ ~7000 คำ แล้วแทรกเซลล์ว่างระหว่างคำ |
+| **ยกเว้น เ–็– / แ–็–** | เขียนเรียงตามรูป ไม่จัดลำดับใหม่ (ตามหลัก) |
+
+ค่าจุดในตาราง `js/thai-braille-tables.js` ทุกตัวมี `chartRef` เปิด
+`tools/thai-braille-verify.html` เพื่อเทียบกับชาร์ตกระดาษได้
+
+### 4.3 กลไก Bistable Electro-Cam 0W Power Latch
 1. **State 1 (สภาวะพัก - Idle Down)**: ไฟฟ้า 0.0W หมุดอยู่ระดับ 0.0mm ไม่กินไฟ
 2. **State 2 (จ่ายไฟพัลส์ - Actuation Pulse)**: จ่ายไฟพัลส์ 50ms (2.4W / 0.48A) สนามแม่เหล็กหมุนลูกเบี้ยว 180° ดันหมุดขึ้น 1.2mm
 3. **State 3 (ตัดไฟล็อกตำแหน่ง - 0W Bistable Latch)**: ตัดกระแสไฟ 100% (0.0W) ลูกเบี้ยวล็อกตำแหน่งหมุดค้างไว้โดยไม่ต้องจ่ายไฟเลี้ยง

@@ -108,6 +108,12 @@ runTest('Modular Stylesheet & Script Tags in index.html (including OCR module sp
     assert(indexContent.includes('<script src="js/camera.js"></script>'), 'Missing js/camera.js script tag');
     assert(indexContent.includes('<script src="js/ocr.js"></script>'), 'Missing js/ocr.js script tag');
     assert(indexContent.includes('<script src="js/demoMode.js"></script>'), 'Missing js/demoMode.js script tag');
+    assert(indexContent.includes('<script src="js/thai-braille-tables.js"></script>'), 'Missing js/thai-braille-tables.js script tag');
+    assert(indexContent.includes('<script src="js/thai-wordlist.js"></script>'), 'Missing js/thai-wordlist.js script tag');
+    assert(indexContent.includes('<script src="js/thai-braille.js"></script>'), 'Missing js/thai-braille.js script tag');
+    assert(indexContent.indexOf('js/thai-braille-tables.js') < indexContent.indexOf('js/thai-braille.js'), 'thai-braille-tables.js must load before thai-braille.js');
+    assert(indexContent.indexOf('js/thai-wordlist.js') < indexContent.indexOf('js/thai-braille.js'), 'thai-wordlist.js must load before thai-braille.js');
+    assert(indexContent.indexOf('js/thai-braille.js') < indexContent.indexOf('js/braille-engine.js'), 'thai-braille.js must load before braille-engine.js');
     assert(indexContent.includes('<script src="js/braille-engine.js"></script>'), 'Missing js/braille-engine.js script tag');
     assert(indexContent.includes('<script src="js/three-scene.js"></script>'), 'Missing js/three-scene.js script tag');
     assert(indexContent.includes('<script src="js/voice-guidance.js"></script>'), 'Missing js/voice-guidance.js script tag');
@@ -257,11 +263,33 @@ console.log('\n--- SUITE 4: JavaScript Modules ES6+ Syntax & Compilation ---');
 
 runTest('Compile js/braille-engine.js with Node vm.Script', () => {
     new vm.Script(jsBrailleContent, { filename: 'braille-engine.js' });
-    assert(jsBrailleContent.includes('THAI_BRAILLE_MAP'), 'Missing THAI_BRAILLE_MAP');
-    assert(jsBrailleContent.includes('function convertThaiToBraille'), 'Missing convertThaiToBraille');
+    assert(jsBrailleContent.includes('function convertThaiToBraille'), 'Missing convertThaiToBraille (back-compat shim)');
     assert(jsBrailleContent.includes('function chunkTextForBraille'), 'Missing chunkTextForBraille');
     assert(jsBrailleContent.includes('function updatePaginationDisplay'), 'Missing updatePaginationDisplay');
     assert(jsBrailleContent.includes('function toggleLanguageMode'), 'Missing toggleLanguageMode');
+    assert(!jsBrailleContent.includes('const THAI_BRAILLE_MAP'), 'THAI_BRAILLE_MAP should be gone - tables now live in js/thai-braille-tables.js');
+});
+
+runTest('Compile js/thai-braille-tables.js + js/thai-braille.js with Node vm.Script', () => {
+    const tablesSrc = fs.readFileSync(path.join(projectRoot, 'js', 'thai-braille-tables.js'), 'utf-8');
+    const engineSrc = fs.readFileSync(path.join(projectRoot, 'js', 'thai-braille.js'), 'utf-8');
+    new vm.Script(tablesSrc, { filename: 'thai-braille-tables.js' });
+    new vm.Script(engineSrc, { filename: 'thai-braille.js' });
+    const tables = require(path.join(projectRoot, 'js', 'thai-braille-tables.js'));
+    const engine = require(path.join(projectRoot, 'js', 'thai-braille.js'));
+    assert.strictEqual(Object.keys(tables.THAI_CONSONANTS).length, 44, 'expected 44 Thai consonants');
+    assert.strictEqual(typeof engine.textToBrailleCells, 'function', 'Missing textToBrailleCells');
+    assert.strictEqual(typeof engine.paginateBrailleCells, 'function', 'Missing paginateBrailleCells');
+});
+
+runTest('Compile js/thai-wordlist.js + Thai word-spacing produces space cells', () => {
+    const wlSrc = fs.readFileSync(path.join(projectRoot, 'js', 'thai-wordlist.js'), 'utf-8');
+    new vm.Script(wlSrc, { filename: 'thai-wordlist.js' });
+    const wl = require(path.join(projectRoot, 'js', 'thai-wordlist.js'));
+    assert(wl.set && wl.size > 1000, 'wordlist should carry a few thousand words');
+    const engine = require(path.join(projectRoot, 'js', 'thai-braille.js'));
+    const spaces = engine.textToBrailleCells('สวัสดีครับ').filter(c => c.kind === 'space').length;
+    assert.strictEqual(spaces, 1, 'สวัสดีครับ must split into สวัสดี | ครับ (1 space cell)');
 });
 
 runTest('Compile js/three-scene.js with Node vm.Script', () => {
@@ -603,31 +631,24 @@ runTest('Guidance toggle states persist to localStorage (js/voice-guidance.js)',
 // -------------------------------------------------------------
 console.log('\n--- SUITE 6: 14-Cell Pagination Logic & Language Mode Switcher ---');
 
-runTest('14-Cell Text Chunking Algorithm (Empty, Short, Multi-Page)', () => {
-    function chunkText(text) {
-        const chars = Array.from(text || '');
-        if (chars.length === 0) return [''];
-        const chunks = [];
-        const CHUNK_SIZE = 14;
-        for (let i = 0; i < chars.length; i += CHUNK_SIZE) {
-            chunks.push(chars.slice(i, i + CHUNK_SIZE).join(''));
-        }
-        return chunks;
-    }
+runTest('14-Cell Pagination by braille-CELL count (Empty, Exact, Multi-Page)', () => {
+    // Pagination is now keyed by braille cell count, not input codepoint
+    // count (one Thai syllable can span several cells). Pages are
+    // { cells: Cell[], text: string }.
+    const { paginateBrailleCells } = require(path.join(projectRoot, 'js', 'thai-braille.js'));
+    const mk = n => Array.from({ length: n }, (_, i) => ({ dots: [1], source: String(i % 10), kind: 'digit' }));
 
-    const emptyChunks = chunkText('');
-    assert.strictEqual(emptyChunks.length, 1);
-    assert.strictEqual(emptyChunks[0], '');
+    const empty = paginateBrailleCells([], 14);
+    assert.strictEqual(empty.length, 1);
+    assert.strictEqual(empty[0].cells.length, 0);
 
-    const exact14 = chunkText('12345678901234');
+    const exact14 = paginateBrailleCells(mk(14), 14);
     assert.strictEqual(exact14.length, 1);
-    assert.strictEqual(exact14[0], '12345678901234');
+    assert.strictEqual(exact14[0].cells.length, 14);
 
-    const exact28 = chunkText('12345678901234ABCDEFGHIJKLMNOP');
-    assert.strictEqual(exact28.length, 3);
-    assert.strictEqual(exact28[0].length, 14);
-    assert.strictEqual(exact28[1].length, 14);
-    assert.strictEqual(exact28[2].length, 2);
+    const thirty = paginateBrailleCells(mk(30), 14);
+    assert.deepStrictEqual(thirty.map(p => p.cells.length), [14, 14, 2]);
+    thirty.forEach(p => assert(p.cells.length <= 14, 'no page may exceed 14 cells'));
 });
 
 runTest('js/textProcessor.js normalizeOcrText() - NFC Normalization & Thai Preservation', () => {
@@ -648,62 +669,40 @@ runTest('js/textProcessor.js normalizeOcrText() - NFC Normalization & Thai Prese
     assert.strictEqual(ctx.normalizeOcrText(''), '');
 });
 
-runTest('English & Thai Braille Character Map Lookup', () => {
-    assert(jsBrailleContent.includes("'A': [1]"), "Missing Braille mapping for 'A'");
-    assert(jsBrailleContent.includes("'B': [1, 2]"), "Missing Braille mapping for 'B'");
-    assert(jsBrailleContent.includes("'ก': [1, 2, 4, 5]"), "Missing Braille mapping for 'ก'");
-    assert(jsBrailleContent.includes("'า': [3, 4, 5]"), "Missing Braille mapping for 'า'");
+runTest('English & Thai Braille Character Map Lookup (via js/thai-braille-tables.js)', () => {
+    const T = require(path.join(projectRoot, 'js', 'thai-braille-tables.js'));
+    const join = groups => groups.map(g => g.join('')).join('|');
+    assert.strictEqual(join(T.LATIN_LETTERS['a']), '1', "Latin 'a' must be dot 1");
+    assert.strictEqual(join(T.LATIN_LETTERS['b']), '12', "Latin 'b' must be dots 1,2");
+    assert.strictEqual(join(T.THAI_CONSONANTS['ก'].cells), '1245', "'ก' must be dots 1,2,4,5");
+    // 'า' was previously an RTGS-derived [3,4,5]; the chart value is dots 1,6.
+    assert.strictEqual(join(T.THAI_SIMPLE_VOWELS['า'].cells), '16', "'า' must be dots 1,6 (chart), not the old [3,4,5]");
 });
 
 runTest('ท (tho thahan) vs ห (ho hip) Braille Patterns Must Not Collide', () => {
-    // Regression guard for a real bug: ท was previously mis-assigned ห's
-    // dot pattern ([1,2,5]), silently rendering every ท as if it were ห.
-    // Verified against Thai Braille's actual Unicode braille glyphs on
-    // Wikipedia (ท = U+283E = dots 2,3,4,5,6; ห = U+2813 = dots 1,2,5),
-    // decoded directly from the Braille Patterns block bitmask. Pinned as
-    // two independent assertions plus an inequality check so a future
-    // edit can't quietly swap them back to matching.
-    const sandbox = {};
-    const ctx = vm.createContext(sandbox);
-    // THAI_BRAILLE_MAP is declared with `const`, which (unlike `var`) does not
-    // attach to the vm context's global object -- bridge it explicitly.
-    vm.runInContext(jsBrailleContent + '\nvar __THAI_BRAILLE_MAP__ = THAI_BRAILLE_MAP;', ctx);
-
-    // Compared as joined strings, not assert.deepStrictEqual: arrays built
-    // inside a vm.createContext sandbox belong to a separate realm (their
-    // own Array constructor/prototype), which fails deepStrictEqual's
-    // prototype-identity check even when the element values are identical.
-    const thoPattern = ctx.__THAI_BRAILLE_MAP__['ท'].join(',');
-    const hoPattern = ctx.__THAI_BRAILLE_MAP__['ห'].join(',');
-
-    assert.strictEqual(thoPattern, '2,3,4,5,6', 'ท must map to dots 2,3,4,5,6');
-    assert.strictEqual(hoPattern, '1,2,5', 'ห must map to dots 1,2,5');
-    assert.notStrictEqual(thoPattern, hoPattern,
-        'ท and ห are both common consonants and must never share a dot pattern');
+    // Regression guard for a real bug: ท was once mis-assigned ห's dot
+    // pattern ([1,2,5]). Verified against the Unicode braille glyphs
+    // (ท = U+283E = dots 2,3,4,5,6; ห = U+2813 = dots 1,2,5).
+    const T = require(path.join(projectRoot, 'js', 'thai-braille-tables.js'));
+    const tho = T.THAI_CONSONANTS['ท'].cells.map(g => g.join(',')).join('|');
+    const ho = T.THAI_CONSONANTS['ห'].cells.map(g => g.join(',')).join('|');
+    assert.strictEqual(tho, '2,3,4,5,6', 'ท must map to dots 2,3,4,5,6');
+    assert.strictEqual(ho, '1,2,5', 'ห must map to dots 1,2,5');
+    assert.notStrictEqual(tho, ho, 'ท and ห must never share a dot pattern');
 });
 
 runTest('Thai Tone Mark Braille Patterns (mai ek/tho/tri, thanthakhat)', () => {
-    // Regression guard for 4 more confirmed mismatches found the same way
-    // as ท/ห: fetched each mark's actual Unicode braille glyph from
-    // Wikipedia's Thai Braille article and manually decoded the codepoint
-    // against the Braille Patterns block bitmask (bit0=dot1 ... bit5=dot6).
-    //   ่  mai ek       U+2814 -> 0x14 -> dots 3,5
-    //   ้  mai tho      U+2832 -> 0x32 -> dots 2,5,6
-    //   ๊  mai tri      U+2836 -> 0x36 -> dots 2,3,5,6
-    //   ์  thanthakhat  U+2834 -> 0x34 -> dots 3,5,6
-    // ๋ mai chattawa (U+2826 -> dots 2,3,6) was already correct and is left
-    // as-is; not re-pinned here since js/braille-engine.js didn't change
-    // for it. Each mark gets its own independent assertion so a future
-    // edit that silently reverts just one of them still fails loudly.
-    const sandbox2 = {};
-    const ctx2 = vm.createContext(sandbox2);
-    vm.runInContext(jsBrailleContent + '\nvar __THAI_BRAILLE_MAP__ = THAI_BRAILLE_MAP;', ctx2);
-    const map = ctx2.__THAI_BRAILLE_MAP__;
-
-    assert.strictEqual(map['่'].join(','), '3,5', 'mai ek must map to dots 3,5');
-    assert.strictEqual(map['้'].join(','), '2,5,6', 'mai tho must map to dots 2,5,6');
-    assert.strictEqual(map['๊'].join(','), '2,3,5,6', 'mai tri must map to dots 2,3,5,6');
-    assert.strictEqual(map['์'].join(','), '3,5,6', 'thanthakhat must map to dots 3,5,6');
+    // Values decoded from the Unicode braille glyphs:
+    //   ่ mai ek U+2814 -> 3,5 | ้ mai tho U+2832 -> 2,5,6
+    //   ๊ mai tri U+2836 -> 2,3,5,6 | ๋ mai chattawa U+2826 -> 2,3,6
+    //   ์ thanthakhat U+2834 -> 3,5,6
+    const T = require(path.join(projectRoot, 'js', 'thai-braille-tables.js'));
+    const j = e => e.cells.map(g => g.join(',')).join('|');
+    assert.strictEqual(j(T.THAI_TONES['่']), '3,5', 'mai ek must map to dots 3,5');
+    assert.strictEqual(j(T.THAI_TONES['้']), '2,5,6', 'mai tho must map to dots 2,5,6');
+    assert.strictEqual(j(T.THAI_TONES['๊']), '2,3,5,6', 'mai tri must map to dots 2,3,5,6');
+    assert.strictEqual(j(T.THAI_TONES['๋']), '2,3,6', 'mai chattawa must map to dots 2,3,6');
+    assert.strictEqual(j(T.THAI_MARKS['์']), '3,5,6', 'thanthakhat must map to dots 3,5,6');
 });
 
 runTest('Single-Language Mode Switcher State Transitions (Default ENG)', () => {

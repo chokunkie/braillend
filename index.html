@@ -279,6 +279,8 @@
         .braille-mini-dots {
             display: grid;
             grid-template-columns: repeat(2, 6px);
+            grid-template-rows: repeat(3, 6px);
+            grid-auto-flow: column;   /* dots 1,2,3 down the left column; 4,5,6 down the right */
             grid-gap: 3px 4px;
         }
 
@@ -596,6 +598,9 @@
     <script src="js/camera.js"></script>
     <script src="js/ocr.js"></script>
     <script src="js/demoMode.js"></script>
+    <script src="js/thai-braille-tables.js"></script>
+    <script src="js/thai-wordlist.js"></script>
+    <script src="js/thai-braille.js"></script>
     <script src="js/braille-engine.js"></script>
     <script src="js/three-scene.js"></script>
     <script src="js/voice-guidance.js"></script>
