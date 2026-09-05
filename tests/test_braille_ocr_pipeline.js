@@ -601,6 +601,22 @@ runTest('Auto-Capture defaults to OFF (manual shutter is the default)', () => {
     assert(jsVoiceContent.includes('กดปุ่มถ่ายภาพได้เลยครับ'), 'Missing manual-shutter-ready voice prompt');
 });
 
+runTest('Stop-reading button next to every read-aloud button (long OCR text must be interruptible)', () => {
+    const cameraHtmlContent = fs.readFileSync(path.join(projectRoot, 'camera.html'), 'utf-8');
+
+    // camera.html: speakResult() + its own stop button/function.
+    assert(cameraHtmlContent.includes('onclick="stopSpeakingResult()"'), 'camera.html missing stop-reading button');
+    assert(cameraHtmlContent.includes('function stopSpeakingResult()') &&
+        cameraHtmlContent.includes('window.speechSynthesis.cancel()'),
+        'camera.html missing stopSpeakingResult() calling speechSynthesis.cancel()');
+
+    // index.html + js/ocr-engine.js: speakResultText() result modal.
+    assert(indexContent.includes('onclick="stopSpeakingResult()"'), 'index.html missing stop-reading button');
+    assert(jsOcrContent.includes('function stopSpeakingResult()') &&
+        jsOcrContent.includes('window.speechSynthesis.cancel()'),
+        'js/ocr-engine.js missing stopSpeakingResult() calling speechSynthesis.cancel()');
+});
+
 runTest('speechSynthesis unlock on first user gesture (beeps-but-no-voice regression guard)', () => {
     // Regression guard for a real report: the camera+guidance loop starts on
     // DOMContentLoaded (no click involved) and re-fires every 300ms from a

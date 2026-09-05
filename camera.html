@@ -528,9 +528,14 @@
             <div class="result-card">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span style="font-size:13px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-font"></i> ข้อความที่ตรวจจับได้ (Detected Text)</span>
-                    <button class="btn-action-secondary" onclick="speakResult()" style="padding:6px 12px; font-size:12px;">
-                        <i class="fa-solid fa-volume-high"></i> อ่านออกเสียง
-                    </button>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn-action-secondary" onclick="speakResult()" style="padding:6px 12px; font-size:12px;">
+                            <i class="fa-solid fa-volume-high"></i> อ่านออกเสียง
+                        </button>
+                        <button class="btn-action-secondary" onclick="stopSpeakingResult()" style="padding:6px 12px; font-size:12px;">
+                            <i class="fa-solid fa-stop"></i> หยุด
+                        </button>
+                    </div>
                 </div>
                 <div class="result-headline" id="detectedTextDisplay">
                     "สวัสดีครับผมชื่อสมชาย ยินดีที่ได้รู้จักครับ"
@@ -1008,6 +1013,14 @@
                 utter.lang = 'th-TH';
                 utter.rate = 0.95;
                 window.speechSynthesis.speak(utter);
+            }
+        }
+
+        // Stops read-aloud playback immediately (long detected text could
+        // otherwise keep reading for a while with no way to cut it short).
+        function stopSpeakingResult() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
             }
         }
 

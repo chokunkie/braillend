@@ -325,6 +325,14 @@ function speakResultText() {
     }
 }
 
+// Stops read-aloud playback immediately (long detected text could
+// otherwise keep reading for a while with no way to cut it short).
+function stopSpeakingResult() {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+    }
+}
+
 /**
  * Hardware Telemetry Power Pulse Simulator
  */
