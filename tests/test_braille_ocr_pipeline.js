@@ -427,7 +427,7 @@ runTest('Laplacian Variance Focus Detection 3x3 Kernel Math & Thresholds', () =>
 runTest('Focus Voice Guidance Prompts & Focus Gating Protection', () => {
     assert(jsVoiceContent.includes('ภาพยังเบลออยู่ ถือกล้องนิ่งๆ อีกนิดนะครับ'), 'Missing blurry voice prompt');
     assert(jsVoiceContent.includes('ตัวอักษรชัดเจนแล้ว ถือค้างไว้นะครับ...'), 'Missing sharp voice prompt');
-    assert(jsVoiceContent.includes('focusScore >= FOCUS_SHARP_THRESHOLD'), 'Auto-Capture must gate shutter trigger on focusScore >= FOCUS_SHARP_THRESHOLD (160)');
+    assert(/m\.focus >= FOCUS_SHARP_THRESHOLD\b/.test(jsVoiceContent), 'Auto-Capture must gate the shutter trigger on the (smoothed) focus score >= FOCUS_SHARP_THRESHOLD (160)');
 });
 
 runTest('Real-time Focus Status HUD Format & Score Display', () => {
@@ -510,7 +510,7 @@ runTest('4-Corner Target Locked Bracket Density Scanning & HUD Synchronization',
     assert(jsVoiceContent.includes('zoneBL'), 'Missing zoneBL corner target boundary definition');
     assert(jsVoiceContent.includes('zoneBR'), 'Missing zoneBR corner target boundary definition');
     assert(jsVoiceContent.includes('densityTL = countTL / Math.max(1, pixelsTL)'), 'Missing densityTL calculation');
-    assert(jsVoiceContent.includes('updateCornerTargetHUD(lockedTL, lockedTR, lockedBL, lockedBR)'), 'Missing updateCornerTargetHUD invocation');
+    assert(/updateCornerTargetHUD\(lockedTL, lockedTR, lockedBL, lockedBR\b/.test(jsVoiceContent), 'Missing updateCornerTargetHUD invocation');
 });
 
 runTest('Real-Time 4-Corner Target Alignment Percentage Math & 100% Lock Banner', () => {
@@ -691,7 +691,12 @@ runTest('3D Hardware Interactive Tactical Buttons (Prev, Next, Mode) & Raycaster
 
 runTest('Text-presence gate rejects non-text scenes & keeps text (js/voice-guidance.js)', () => {
     assert(jsVoiceContent.includes('function detectTextLikeStructure'), 'Missing detectTextLikeStructure()');
-    assert(jsVoiceContent.includes('if (!textStruct.isText)'), 'analyzeLiveCameraFrame must bail out (no auto-capture) when the frame is not text-like');
+    assert(jsVoiceContent.includes('textStruct.rows') && jsVoiceContent.includes('textStruct.components'),
+        'analyzeLiveCameraFrame must feed detectTextLikeStructure output into its text-confidence gate');
+    assert(jsVoiceContent.includes("textConfidence === 'no'"),
+        'analyzeLiveCameraFrame must bail out (no auto-capture) when text confidence is "no"');
+    assert(jsVoiceContent.includes("textConfidence !== 'confident'") && jsVoiceContent.includes("textConfidence = 'confident'"),
+        'analyzeLiveCameraFrame must treat "confident" text specially (person guard) - 3-level confidence, not a boolean');
     assert(jsVoiceContent.includes('ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษนะครับ'), 'Missing distinct no-text Thai prompt');
     assert(jsVoiceContent.includes('กล้องเจอคน'), 'Missing "camera sees a person" Thai prompt');
     assert(jsVoiceContent.includes('computeSkinRatio'), 'Missing skin-tone ratio helper for person detection');
@@ -716,6 +721,42 @@ runTest('Text-presence gate rejects non-text scenes & keeps text (js/voice-guida
     const blob = new Uint8Array(w * h).fill(200);
     for (let y = 30; y < 130; y++) for (let x = 30; x < 90; x++) blob[y * w + x] = 90;
     assert.strictEqual(ctx.detectTextLikeStructure(blob, w, h).isText, false, 'One large blob (a face/object) must not read as text');
+});
+
+runTest('Camera guidance is temporally smoothed + debounced (anti-flicker)', () => {
+    assert(jsVoiceContent.includes('function smoothFrameMetrics') && jsVoiceContent.includes('function ema'),
+        'Missing EMA metric smoothing');
+    assert(jsVoiceContent.includes('function commitGuidance'),
+        'Missing commitGuidance() state-commit debounce');
+    assert(jsVoiceContent.includes('hasDocumentSticky'),
+        'Missing hysteresis latch for document presence');
+    assert(jsVoiceContent.includes('DOC_STROKES_ENTER') && jsVoiceContent.includes('DOC_STROKES_EXIT'),
+        'Document detection must have separate enter/exit thresholds (hysteresis)');
+    assert(jsVoiceContent.includes('resetGuidanceSmoothing()') &&
+        (jsVoiceContent.match(/resetGuidanceSmoothing\(\)/g) || []).length >= 3,
+        'resetGuidanceSmoothing() must be defined and called on both start and stop of the guidance loop');
+
+    // Exercise the pure logic (EMA + the commit-debounce state machine). The
+    // module's own updateVoiceStatusHUD/speakVoiceGuidance no-op without a DOM,
+    // which is fine here - we're asserting the returned commit decision.
+    const ctx = vm.createContext({
+        Math, Uint8Array, Int32Array, Date, setInterval: () => 0, clearInterval: () => {}, console
+    });
+    vm.runInContext(jsVoiceContent + '\nvar __api = { ema, commitGuidance, resetGuidanceSmoothing };', ctx);
+    const { ema, commitGuidance, resetGuidanceSmoothing } = ctx.__api;
+
+    // EMA: first sample passes through, later samples are pulled toward it.
+    assert.strictEqual(ema(null, 10), 10, 'first EMA sample must pass through');
+    const mixed = ema(10, 20);
+    assert(mixed > 10 && mixed < 20, 'EMA must blend previous and current');
+
+    // commitGuidance: a state must repeat before it commits; changing state resets the count.
+    resetGuidanceSmoothing();
+    assert.strictEqual(commitGuidance('a', 'msg-a'), false, 'first tick of a state must NOT commit');
+    assert.strictEqual(commitGuidance('a', 'msg-a'), true, 'second consecutive tick commits');
+    assert.strictEqual(commitGuidance('a', 'msg-a'), true, 'staying in the same state stays committed');
+    assert.strictEqual(commitGuidance('b', 'msg-b'), false, 'switching state resets the debounce');
+    assert.strictEqual(commitGuidance('c', 'msg-c', null, null, true), true, 'force=true bypasses the debounce');
 });
 
 runTest('Continuous navigation sonar + haptics + dark/glare guards (js/voice-guidance.js)', () => {
