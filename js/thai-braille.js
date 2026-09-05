@@ -388,7 +388,43 @@
             }
         }
         flush();
-        return result.length ? result : [{ text: run, isWord: false }];
+        return collapseAmbiguousShortMatches(result.length ? result : [{ text: run, isWord: false }]);
+    }
+
+    // A short (<=2 char) dictionary match sitting directly next to text the
+    // dictionary couldn't resolve at all is more likely a coincidental
+    // substring of one unknown word/name (ฐิติพร -> "ติ" and "พร" both
+    // happen to be real words on their own) than a genuine word starting or
+    // ending right there. Merge it into the adjacent unmatched fragment
+    // instead of treating it as its own word - under-segmenting (no space)
+    // is the safer failure mode for Braille output than inventing a space
+    // in the middle of a name. Repeats until stable, since a merge can
+    // create a new fragment-adjacency on the other side.
+    function collapseAmbiguousShortMatches(tokens) {
+        var changed = true;
+        while (changed) {
+            changed = false;
+            for (var i = 0; i < tokens.length; i++) {
+                var t = tokens[i];
+                if (!t.isWord || Array.from(t.text).length > 2) { continue; }
+                var prev = tokens[i - 1];
+                var next = tokens[i + 1];
+                if (prev && !prev.isWord) {
+                    prev.text += t.text;
+                    tokens.splice(i, 1);
+                    changed = true;
+                    break;
+                }
+                if (next && !next.isWord) {
+                    t.isWord = false;
+                    t.text = t.text + next.text;
+                    tokens.splice(i + 1, 1);
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        return tokens;
     }
 
     function emitThaiWord(text, isWord, out) {

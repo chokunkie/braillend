@@ -99,6 +99,12 @@ module.exports = [
     { section: 'word-space', stage: 4, needsDict: true, input: 'ผมชอบกินข้าว', spaces: 3, chartRef: 'ผม | ชอบ | กิน | ข้าว' },
     { section: 'word-space', stage: 4, needsDict: true, input: 'เขาไปโรงเรียน', spaces: 2, chartRef: 'เขา | ไป | โรงเรียน' },
 
+    // Regression guard: a proper name with no real word break must NOT get
+    // split just because short (<=2 char) dictionary words ("ติ", "พร")
+    // happen to be substrings of it. "ฐิ" never resolves, so the whole
+    // name must collapse into one unbroken token - zero space cells.
+    { section: 'word-space', stage: 4, needsDict: true, input: 'ฐิติพร', spaces: 0, chartRef: 'ฐิติพร (ชื่อเฉพาะ คำเดียว ไม่แยก)' },
+
     /* ---- pagination (แบ่งหน้า 14 เซลล์ต่อหน้า) --------------------- */
     // lowercase Latin: 1 cell/char, no number/capital signs, no dictionary
     { section: 'pagination', stage: 1, input: 'abcdefghijklmn', pages: [14] },
