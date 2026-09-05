@@ -126,6 +126,10 @@ function vibrate(pattern) {
 // far too slow to steer by. This is a parking-sensor style tone: blips get
 // faster and higher as the framing improves, and turn into a steady fast
 // double-blip when everything is locked and the shutter is about to fire.
+//
+// Currently DISABLED - the constant machine-gun blipping was too distracting.
+// Flip this to true (or wire a UI toggle) to bring it back.
+let isNavSonarEnabled = false;
 let navSonar = { ctx: null, timer: null, lastBlip: 0, progress: 0, ready: false, active: false };
 
 function ensureNavAudioCtx() {
@@ -159,6 +163,7 @@ function navBlip(frequency, durationSec, volume) {
 }
 
 function startNavSonar() {
+    if (!isNavSonarEnabled) return;
     if (navSonar.active) return;
     navSonar.active = true;
     navSonar.progress = 0;

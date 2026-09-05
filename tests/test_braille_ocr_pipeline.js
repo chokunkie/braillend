@@ -761,6 +761,11 @@ runTest('Camera guidance is temporally smoothed + debounced (anti-flicker)', () 
 
 runTest('Continuous navigation sonar + haptics + dark/glare guards (js/voice-guidance.js)', () => {
     assert(jsVoiceContent.includes('function startNavSonar') && jsVoiceContent.includes('function updateNavSonar'), 'Missing navigation sonar engine');
+    // The constant machine-gun sonar blipping is disabled for now - startNavSonar()
+    // must bail unless it's explicitly re-enabled.
+    assert(jsVoiceContent.includes('let isNavSonarEnabled = false'), 'Nav sonar must default to OFF');
+    assert(/function startNavSonar\(\)\s*\{\s*(?:\/\/[^\n]*\n\s*)*if \(!isNavSonarEnabled\) return;/.test(jsVoiceContent),
+        'startNavSonar() must bail immediately when isNavSonarEnabled is false');
     assert(jsVoiceContent.includes('function vibrate'), 'Missing vibrate() haptic helper');
     assert(jsVoiceContent.includes('แสงน้อยไป'), 'Missing too-dark Thai prompt');
     assert(jsVoiceContent.includes('แสงสะท้อน'), 'Missing glare Thai prompt');
