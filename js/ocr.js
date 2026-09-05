@@ -5,7 +5,13 @@
    returns a normalized result shape. Supports self-hosted in-browser Tesseract.js.
    ========================================================================= */
 
-const OCR_BACKEND_URL = 'http://localhost:8000/ocr';
+// Relative, not absolute: backend/main.py mounts the static frontend and
+// the /ocr route on the SAME origin (python run_server.py serves both on
+// one port), so this resolves correctly whether that origin is
+// http://localhost:8000, a tunnel URL (ngrok/Cloudflare Tunnel), or a real
+// deployed domain - no per-environment config needed. It only breaks if the
+// frontend is ever served from a DIFFERENT origin than the backend.
+const OCR_BACKEND_URL = '/ocr';
 
 /**
  * Runs OCR on an image via the backend with self-hosted in-browser Tesseract fallback.
