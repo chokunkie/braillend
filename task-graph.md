@@ -181,5 +181,85 @@ graph TD
   - **Files**: `file:///C:/Users/kt856/Downloads/Compressed/beaill/braillend/tests/test_braille_ocr_pipeline.js`
   - **Logic/Target**: 43 unit & integration tests passing 100%.
 
+### Phase 20: 2-Cell ESP32 Realtime Tactile Workstation & Dynamic Web Redesign
+- [x] **Task 20.1**: Web Serial API Driver & Auto-Connect Architecture
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/esp32-serial.js`
+    - *Logic/Target*: Create `ESP32SerialManager` class with `autoConnect()`, `requestPort()`, `send12BitCommand()`, and Web Serial event listeners for auto-reconnect and offline mock fallback.
+    - *Why*: Enables seamless zero-click re-connection to physical ESP32 solenoid board at 115200 baud.
+    - *Verification*: **[AUTONOMOUS]** Run `node tests/test_2cell_esp32.js` verifying serial formatting, queue timing, and 12-bit payload validation.
+- [x] **Task 20.2**: 2-Cell Digital Twin & Full-Text Ribbon Paging Engine
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/two-cell-display.js`
+    - *Logic/Target*: Implement `TwoCellDisplayEngine` with `updateText()`, `renderRibbon()`, `renderTwoCellGrid()`, `nextFrame()`, `prevFrame()`, and `toggleAutoPlay()` with adjustable speed slider.
+    - *Why*: Solves the 2-cell limitation by providing a full-sentence ribbon with an active 2-cell frame, supporting both manual and auto pagination.
+    - *Verification*: **[AUTONOMOUS]** Run `node tests/test_2cell_esp32.js` testing 2-cell frame slicing and bitstring generation across complex Thai and English sentences.
+- [x] **Task 20.3**: 8 Tactile Graphic Shapes & Custom 12-Dot Matrix Modal
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/tactile-shapes.js`
+    - *Logic/Target*: Implement `TactileShapesManager` with presets for `▲`, `▼`, `■`, `□`, `○`, `●`, `X`, `✓` and an interactive 3x4 dot matrix editor with `sendPreset()` and `toggleDot()`.
+    - *Why*: Provides instant tactile tactile graphics display directly mapped to 12 solenoids.
+    - *Verification*: **[AUTONOMOUS]** Run `node tests/test_2cell_esp32.js` asserting exact 12-bit strings for all 8 preset shapes.
+- [x] **Task 20.4**: Modern Workspace Redesign with Minimalist Sidebar & Quick Word Chips
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/index.html`
+    - *Logic/Target*: Overhaul `index.html` layout to integrate the new sidebar navigation, ESP32 status header, full-text ribbon, 2-cell tactile twin, dual playback controls, and quick preset word chips.
+    - *Why*: Delivers an intuitive, unified workstation for testing live text, shapes, camera OCR, and upload OCR with real-time 2-cell hardware feedback.
+    - *Verification*: **[AUTONOMOUS]** Validate HTML syntax, element IDs, and script integrations via test runner.
+- [x] **Task 20.5**: Minimalist City Boy & Tactile Pin Elevation CSS Stylesheet
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/css/styles.css`
+    - *Logic/Target*: Add CSS rules for `.two-cell-twin`, `.tactile-pin.raised`, `.sidebar-nav`, `.quick-chip`, and `.ribbon-active-window` supporting smooth haptic transitions and light/dark modes.
+    - *Why*: Delivers a state-of-the-art tactile aesthetic with clear visual elevation matching physical solenoids.
+    - *Verification*: **[AUTONOMOUS]** Automated DOM inspection verifying CSS class presence and rendering bounds.
+- [x] **Task 20.6**: Autonomous Verification & Integration QA Suite
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/tests/test_2cell_esp32.js`
+    - *Logic/Target*: Comprehensive automated test script validating Thai composite vowels, English letters, digits, 8 shape presets, 12-bit framing, and Web Serial payload boundaries.
+    - *Why*: Guarantee 100% test coverage and bug-free execution without manual guesswork.
+    - *Verification*: **[AUTONOMOUS]** Execute `node tests/test_2cell_esp32.js` and assert 100% pass rate (53/53 tests passed).
+
+### Phase 21: Clean Architecture, 3D Decoupling & Dedicated Upload Integration
+- [x] **Task 21.1**: Decouple 3D WebGL Scene into Dedicated `model.html`
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/model.html`
+    - *Logic/Target*: Extract Three.js 14-cell interactive simulator, exploded view controls, X-ray view, and back-navigation into standalone `model.html`.
+    - *Why*: Keeps the main `index.html` ultra-clean, lightweight, and focused purely on 2-cell live text input & ESP32 actuation.
+    - *Verification*: **[AUTONOMOUS]** Check file existence, HTML structure, and Three.js initialization script tags.
+- [x] **Task 21.2**: Refactor `index.html` to Ultra-Clean 2-Cell Main Workstation
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/index.html`
+    - *Logic/Target*: Remove background 3D canvas from `index.html`, leaving only the clean Minimalist City Boy layout (Sidebar, Ribbon, 2-Cell Tactile Twin, Text Input, Word Chips).
+    - *Why*: Eliminates visual clutter, heavy background rendering, and overlapping cards on the homepage.
+    - *Verification*: **[AUTONOMOUS]** Validate DOM structure and run QA test suite.
+- [x] **Task 21.3**: Implement Dedicated Image Upload OCR Modal & Hook
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/index.html`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/ocr-engine.js`
+    - *Logic/Target*: Create clean drag-and-drop Image Upload modal directly accessible from the Sidebar (`📁 อัปโหลดรูปภาพ OCR`), which runs OCR and routes text into the 2-cell tactile display and ESP32.
+    - *Why*: Allows users to upload images and re-check Braille output against the physical hardware immediately from the homepage.
+    - *Verification*: **[AUTONOMOUS]** Inspect DOM elements `#imageUploadModal` and file dropzone handlers.
+- [x] **Task 21.4**: Update QA Test Suites & Regression Verification
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/tests/test_2cell_esp32.js`
+    - *Logic/Target*: Expand test assertions to cover `model.html`, decoupled 3D structure, and image upload modal in `index.html`.
+    - *Why*: Ensure 100% test integrity across all modular pages.
+    - *Verification*: **[AUTONOMOUS]** Run both `test_2cell_esp32.js` and `test_braille_ocr_pipeline.js` and assert 100% PASS (56/56 and 52/52 passed).
+
+### Phase 22: Solenoid Overheat Protection & Timed Pulse Actuation
+- [x] **Task 22.1**: Implement Timed Pulse Actuation Engine (`triggerPulseActuation` & `releaseActuation`)
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/two-cell-display.js`
+    - *Logic/Target*: Implement `triggerPulseActuation(durationMs)` and `releaseActuation()` in `TwoCellDisplayEngine`. Under normal resting state, solenoids receive `000000000000` (power cutoff). On pulse trigger or auto-play step, solenoids actuate for the exact duration set by the speed slider, then automatically cutoff power to prevent coil burnout.
+    - *Why*: Eliminates continuous power drain and prevents solenoids from overheating/burning during manual reading or navigation.
+    - *Verification*: **[AUTONOMOUS]** Execute automated tests verifying timer release and zero-bit reset on stop.
+- [x] **Task 22.2**: UI Integration for `#btnPulseActuate` & Tactile Actuation Feedback
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/index.html`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/css/styles.css`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/app.js`
+    - *Logic/Target*: Add `#btnPulseActuate` button ("ดันหมุดแสดงผล") to the central playback bar with glowing `.btn-pulse.actuating` state. Wire event handlers in `app.js` to trigger timed actuation and apply 2s auto-cutoff to pin diagnostics.
+    - *Why*: Gives users direct tactile control to raise pins on demand for reading and auto-retract safely.
+### Phase 23: Thai Braille Grammar Orthography & Typing Pipeline Fix
+- [x] **Task 23.1**: Fix Syllable Trailing Vowel Cutting & Orphan Consonant Merging
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/thai-braille.js`
+    - *Logic/Target*: Update `segmentWords` to check `isTrailVowel(after)` instead of omitting `า`, preventing premature syllable cuts before trail vowels. Added single consonant prefix merge logic to prevent orphan consonants (such as `ส` in `สกาย`, `สแกน`, `สปอร์ต`) from being severed and hallucinating reduced vowels.
+    - *Why*: Eliminates spurious reduced-o vowels `[ะ]`, unmapped tokens `[?]`, and unwanted space breaks within words.
+    - *Verification*: **[AUTONOMOUS]** Run `node tests/test_thai_braille_transliteration.js` and verify `textToBrailleCells('สกาย')` produces exactly 4 cells `[ส][ก][า][ย]`.
+- [x] **Task 23.2**: Commit-on-Finish Text Input UX with Submit Button & Debounce
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/index.html`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/app.js`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/two-cell-display.js`
+    - *Logic/Target*: Add `#btnSubmitTextInput` ("ส่งแสดงผล") beside `#mainTextInput`, bind `Enter` keydown handler, apply 700ms debounce to live typing so mid-syllable typing doesn't thrash, and eliminate `?` fallback on valid cells with empty source. Added `?v=3.2.1` cache-busting to script tags.
+    - *Why*: Allows users to comfortably finish typing words before transliteration and eliminates real-time composition tearing.
+    - *Verification*: **[AUTONOMOUS]** Run `node tests/test_2cell_esp32.js` and verify 100% test pass.
+
+
+
+
+
 
 

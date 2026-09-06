@@ -20,206 +20,17 @@
 
     <style>
         body {
-            background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%);
-            color: #0f172a;
+            background-color: var(--bg-dark, #070A13);
+            color: var(--text-main, #E2E8F0);
             margin: 0;
+            padding: 0;
             overflow: hidden;
             font-family: 'Prompt', sans-serif;
             height: 100vh;
             width: 100vw;
-            touch-action: none;
         }
 
-        /* 3D Fullscreen Viewport with High-Contrast Studio Spotlight */
-        #webgl-container {
-            width: 100vw;
-            height: 100vh;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
-            background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%);
-        }
-
-        /* Minimal Header Bar */
-        .mobile-header {
-            position: absolute;
-            top: 14px;
-            left: 16px;
-            right: 16px;
-            z-index: 50;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(15, 23, 42, 0.85);
-            border: 1px solid rgba(0, 240, 255, 0.25);
-            border-radius: 14px;
-            padding: 10px 18px;
-            backdrop-filter: blur(12px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.6);
-        }
-
-        .mobile-brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .mobile-logo {
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, #00f2fe, #4facfe);
-            border-radius: 8px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #0f172a;
-            font-size: 16px;
-        }
-
-        .mobile-title {
-            font-size: 15px;
-            font-weight: 700;
-            color: #00f2fe;
-            letter-spacing: 0.5px;
-        }
-
-        .mobile-badge {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            font-weight: 700;
-            background: rgba(0, 242, 254, 0.15);
-            color: #00f2fe;
-            padding: 2px 8px;
-            border-radius: 6px;
-            border: 1px solid rgba(0, 242, 254, 0.3);
-        }
-
-        .header-btn {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #f8fafc;
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s;
-        }
-
-        /* 3D Floating Action Dock (Bottom of Screen for Mobile) */
-        .mobile-floating-dock {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: calc(100% - 32px);
-            max-width: 580px;
-            z-index: 50;
-            background: rgba(15, 23, 42, 0.92);
-            border: 1px solid rgba(0, 240, 255, 0.35);
-            border-radius: 18px;
-            padding: 10px 14px;
-            backdrop-filter: blur(16px);
-            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7);
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-        }
-
-        .dock-btn {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            padding: 9px 4px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.05);
-            color: #f8fafc;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-align: center;
-        }
-
-        .dock-btn i {
-            font-size: 16px;
-            color: #00f2fe;
-        }
-
-        .dock-btn.active {
-            background: rgba(0, 242, 254, 0.18);
-            border-color: #00f2fe;
-            color: #00f2fe;
-            box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
-        }
-
-        .dock-btn-primary {
-            background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(0, 255, 136, 0.25));
-            border-color: rgba(0, 255, 136, 0.5);
-            color: #00ff88;
-        }
-
-        .dock-btn-primary i {
-            color: #00ff88;
-        }
-
-        .dock-btn-sim {
-            background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(168, 85, 247, 0.2));
-            border-color: rgba(168, 85, 247, 0.4);
-            color: #c084fc;
-        }
-
-        .dock-btn-sim i {
-            color: #c084fc;
-        }
-
-        /* Top-Left Setup Tip Badge */
-        .mobile-tip-badge {
-            position: absolute;
-            top: 72px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 40;
-            background: rgba(15, 23, 42, 0.85);
-            border: 1px solid rgba(245, 158, 11, 0.4);
-            padding: 5px 14px;
-            border-radius: 20px;
-            color: #f59e0b;
-            font-size: 11px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            backdrop-filter: blur(8px);
-            pointer-events: none;
-        }
-
-        /* Exploded View Depth Slider */
-        .exploded-slider-wrap {
-            position: absolute;
-            bottom: 95px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 45;
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(0, 242, 254, 0.3);
-            border-radius: 12px;
-            padding: 8px 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            backdrop-filter: blur(10px);
-            font-size: 12px;
-        }
-
-        /* OCR Result Showcase Modal (Mobile-Optimized) */
+        /* Modal card and result showcase */
         .result-modal-card {
             background: rgba(15, 23, 42, 0.96);
             border: 1px solid rgba(0, 242, 254, 0.4);
@@ -280,7 +91,7 @@
             display: grid;
             grid-template-columns: repeat(2, 6px);
             grid-template-rows: repeat(3, 6px);
-            grid-auto-flow: column;   /* dots 1,2,3 down the left column; 4,5,6 down the right */
+            grid-auto-flow: column;
             grid-gap: 3px 4px;
         }
 
@@ -304,66 +115,288 @@
 </head>
 <body>
 
-    <!-- Minimal Header -->
-    <header class="mobile-header">
-        <div class="mobile-brand">
-            <div class="mobile-logo"><i class="fa-solid fa-braille"></i></div>
+    <!-- 2-Cell ESP32 Realtime Tactile Workstation (Main App) -->
+    <div class="workstation-app" id="workstationApp">
+        <!-- Sidebar Navigation -->
+        <aside class="app-sidebar" id="appSidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo"><i class="fa-solid fa-braille"></i></div>
+                <div>
+                    <div class="sidebar-title">BrailBox</div>
+                    <div class="sidebar-subtitle">ESP32 2-Cell Tactile</div>
+                </div>
+            </div>
+
+            <!-- ESP32 Hardware Status Card -->
+            <div class="esp32-status-card">
+                <div class="esp32-status-row">
+                    <span style="font-size:11px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-microchip"></i> ฮาร์ดแวร์</span>
+                    <span class="esp32-status-badge" id="esp32StatusBadge"><i class="fa-solid fa-circle-xmark"></i> ออฟไลน์ (จำลอง)</span>
+                </div>
+                <div style="font-size:10px; color:#64748b; font-family:'JetBrains Mono',monospace; margin-bottom:8px;" id="esp32PortDesc">
+                    พอร์ต 115200 baud | L298N x3
+                </div>
+                <button class="btn-esp-connect" id="btnConnectESP32">
+                    <i class="fa-solid fa-bolt"></i> เชื่อมต่อ ESP32
+                </button>
+                <div style="display:flex; justify-content:space-between; font-size:9px; color:#64748b; margin-top:6px; font-family:'JetBrains Mono',monospace;">
+                    <span>รหัสล่าสุด:</span>
+                    <span id="esp32LastTx" style="color:#00ff88;">000000000000</span>
+                </div>
+            </div>
+
+            <!-- Sidebar Menu Items -->
+            <div class="sidebar-menu">
+                <button class="sidebar-item active" id="menuLiveText" onclick="setWorkstationTab('text')">
+                    <i class="fa-solid fa-keyboard"></i>
+                    <span>หน้าหลัก (พิมพ์ข้อความ)</span>
+                </button>
+                <button class="sidebar-item" id="menuCamera" onclick="window.location.href='camera.html';">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>กล้องนำทาง OCR</span>
+                </button>
+                <button class="sidebar-item" id="menuUpload" onclick="openImageUploadModal()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>อัปโหลดรูปภาพ OCR</span>
+                </button>
+                <button class="sidebar-item" id="menu3D" onclick="window.location.href='model.html';">
+                    <i class="fa-solid fa-cube"></i>
+                    <span>โมเดลจำลอง 3 มิติ</span>
+                </button>
+                <button class="sidebar-item" id="menuShapes" onclick="openTactileShapesModal()">
+                    <i class="fa-solid fa-shapes"></i>
+                    <span>สัญลักษณ์สัมผัส 12 จุด</span>
+                </button>
+                <button class="sidebar-item" id="menuDiag" onclick="openPinDiagnosticModal()">
+                    <i class="fa-solid fa-wrench"></i>
+                    <span>ทดสอบโซลินอยด์ 12 จุด</span>
+                </button>
+            </div>
+
+            <!-- Bottom Mode Bar -->
+            <div style="padding:12px; border-top:1px solid rgba(255,255,255,0.08); display:flex; gap:6px;">
+                <button class="header-btn" style="flex:1; justify-content:center;" onclick="cycleStudioTheme()" title="เปลี่ยนสีพื้นหลัง">
+                    <i class="fa-solid fa-palette"></i> ธีม
+                </button>
+                <button class="header-btn" style="flex:1; justify-content:center;" onclick="resetCamera()" title="รีเซ็ตมุมมอง">
+                    <i class="fa-solid fa-rotate"></i> รีเซ็ต
+                </button>
+            </div>
+        </aside>
+
+        <!-- Central Workstation Area -->
+        <main class="workstation-main">
+            <div class="workstation-content-wrap" id="workstationContentWrap">
+                <!-- 1. Full-Text Ribbon Card -->
+                <div class="workstation-card ribbon-section">
+                    <div class="ribbon-header-row">
+                        <span class="ribbon-title">
+                            <i class="fa-solid fa-align-left" style="color:#00f2fe;"></i> แถบข้อความเต็ม (Full-Text Ribbon)
+                        </span>
+                        <span class="cell-badge c1" id="frameCounterBadge">เฟรม 1/1</span>
+                    </div>
+                    <div class="ribbon-track-wrapper" id="textRibbonTrack">
+                        <!-- Dynamic cells injected by two-cell-display.js -->
+                    </div>
+                </div>
+
+                <!-- 2. Two-Cell Digital Twin Hardware Card -->
+                <div class="workstation-card two-cell-twin-card">
+                    <div class="two-cell-labels-bar">
+                        <span class="cell-badge c1"><i class="fa-solid fa-microchip"></i> เซลล์ที่ 1 (จุด 1-6)</span>
+                        <span class="cell-badge c2"><i class="fa-solid fa-microchip"></i> เซลล์ที่ 2 (จุด 7-12)</span>
+                    </div>
+
+                    <!-- 12 Tactile Pins Board (3 rows x 4 cols) -->
+                    <div id="twoCellTactileBoard" style="width:100%; display:flex; justify-content:center;">
+                        <!-- Dynamic 12 pins injected by two-cell-display.js -->
+                    </div>
+
+                    <!-- Bitstring Telemetry Readout -->
+                    <div class="bitstring-telemetry-bar">
+                        <span><i class="fa-solid fa-network-wired"></i> รหัส 12 หลัก (ESP32):</span>
+                        <div class="active-bits-wrap" id="activeBitstringDisplay">
+                            <span class="bit-chunk c1">000000</span> <span class="bit-chunk c2">000000</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Dual Playback Controls Card -->
+                <div class="workstation-card playback-controls-bar">
+                    <div class="playback-btn-group">
+                        <button class="btn-ctrl" id="btnPrevCellPair" title="เลื่อนย้อนกลับ 2 เซลล์">
+                            <i class="fa-solid fa-backward-step"></i> ก่อนหน้า
+                        </button>
+                        <button class="btn-ctrl btn-pulse" id="btnPulseActuate" title="ดันหมุดโซลินอยด์ขึ้นตามระยะเวลาที่ตั้งไว้ แล้วตัดไฟอัตโนมัติ">
+                            <i class="fa-solid fa-bolt"></i> <span>ดันหมุดแสดงผล</span>
+                        </button>
+                        <button class="btn-ctrl btn-primary" id="btnToggleAutoPlay" title="เล่นเลื่อน 2 เซลล์อัตโนมัติ">
+                            <i class="fa-solid fa-play"></i> <span>เล่นอัตโนมัติ</span>
+                        </button>
+                        <button class="btn-ctrl" id="btnNextCellPair" title="เลื่อนไปข้างหน้า 2 เซลล์">
+                            ถัดไป <i class="fa-solid fa-forward-step"></i>
+                        </button>
+                    </div>
+
+                    <div class="speed-control-wrap">
+                        <i class="fa-solid fa-stopwatch"></i>
+                        <span>ระยะเวลาดันหมุด:</span>
+                        <input type="range" id="playSpeedSlider" min="1.0" max="8.0" step="0.5" value="3.5">
+                        <span id="speedValLabel" style="font-family:'JetBrains Mono',monospace; color:#00f2fe; width:32px;">3.5s</span>
+                    </div>
+                </div>
+
+                <!-- 4. Text Input & Word Bank Card -->
+                <div class="workstation-card" style="display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:13px; font-weight:700; color:#f8fafc;">
+                            <i class="fa-solid fa-pen-to-square" style="color:#00ff88;"></i> พิมพ์ข้อความแสดงผล (รองรับไทย, อังกฤษ, ตัวเลข)
+                        </span>
+                    </div>
+
+                    <div style="display:flex; gap:10px; align-items:stretch;">
+                        <input type="text" id="mainTextInput" value="สวัสดี" placeholder="พิมพ์ข้อความให้จบแล้วกดปุ่มส่ง หรือกด Enter..." style="flex:1; box-sizing:border-box; padding:12px 14px; border-radius:10px; background:rgba(0,0,0,0.4); border:1.5px solid rgba(0,242,254,0.3); color:#f8fafc; font-size:16px; font-family:'Prompt',sans-serif; outline:none;" />
+                        <button id="btnSubmitTextInput" class="nav-btn primary" style="padding:0 18px; display:flex; align-items:center; gap:8px; white-space:nowrap; background:linear-gradient(135deg, #00f2fe, #4facfe); color:#0a0e17; font-weight:700; border:none; border-radius:10px; cursor:pointer; font-size:14px;" title="กดเพื่อแปลงข้อความเป็นอักษรเบรลล์">
+                            <i class="fa-solid fa-paper-plane"></i> ส่งแสดงผล
+                        </button>
+                    </div>
+
+                    <!-- Quick Preset Word Chips -->
+                    <div class="preset-chips-section">
+                        <div style="font-size:11px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-bookmark"></i> คลังคำศัพท์สำเร็จรูป (กดปุ๊บส่งขึ้นเบรลล์ทันที):</div>
+                        <div class="chips-row">
+                            <span class="quick-chip" onclick="loadQuickWord('สวัสดี')">👋 สวัสดี</span>
+                            <span class="quick-chip" onclick="loadQuickWord('HELLO')">🌐 HELLO</span>
+                            <span class="quick-chip" onclick="loadQuickWord('ขอบคุณ')">🙏 ขอบคุณ</span>
+                            <span class="quick-chip" onclick="loadQuickWord('เรียน')">📚 เรียน (สระเอีย)</span>
+                            <span class="quick-chip" onclick="loadQuickWord('เมือง')">🏙️ เมือง (สระเอือ)</span>
+                            <span class="quick-chip" onclick="loadQuickWord('1234')">🔢 1234</span>
+                            <span class="quick-chip" onclick="loadQuickWord('ทางออก')">🚪 ทางออก</span>
+                            <span class="quick-chip" onclick="loadQuickWord('ห้องน้ำ')">🚻 ห้องน้ำ</span>
+                            <span class="quick-chip" onclick="loadQuickWord('ระวัง')">⚠️ ระวัง</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Tactile Shapes & 12-Dot Graphic Matrix Modal -->
+    <div class="modal-backdrop" id="tactileShapesModal" style="display:none;">
+        <div class="result-modal-card" style="max-width:580px;">
+            <div class="modal-header" style="padding:0 0 12px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
+                <div class="modal-title" style="font-size:16px; color:#00f2fe; display:flex; align-items:center; gap:8px;">
+                    <i class="fa-solid fa-shapes"></i> สัญลักษณ์ & กราฟิกสัมผัส 12 จุด
+                </div>
+                <button class="close-btn" onclick="closeTactileShapesModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- 8 Presets Grid -->
             <div>
-                <div class="mobile-title">BrailBox 3D</div>
+                <div style="font-size:12px; color:#94a3b8; font-weight:600; margin-bottom:8px;">
+                    <i class="fa-solid fa-list-check"></i> เลือก 8 รูปทรงมาตรฐาน (ส่งออก ESP32 ทันที):
+                </div>
+                <div class="shapes-grid-layout" id="shapesPresetGrid">
+                    <!-- Dynamic shapes injected by JS -->
+                </div>
+            </div>
+
+            <!-- Custom 12-Dot Interactive Matrix Clicker -->
+            <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span style="font-size:12px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-hand-pointer"></i> คลิกเปิด-ปิดจุดอิสระ 12 จุด (3 แถว x 4 คอลัมน์):</span>
+                    <button class="header-btn" style="padding:4px 10px; font-size:11px;" onclick="clearCustomDots()">
+                        <i class="fa-solid fa-trash-can"></i> ล้างจุด
+                    </button>
+                </div>
+                <div class="custom-matrix-clicker" id="customMatrixClicker">
+                    <!-- Dynamic clickers injected by JS -->
+                </div>
             </div>
         </div>
+    </div>
 
-        <div style="display:flex; gap:8px;">
-            <button class="header-btn" onclick="cycleStudioTheme()" title="เปลี่ยนเฉดสีพื้นหลังสตูดิโอ">
-                <i class="fa-solid fa-palette"></i> เปลี่ยนสีพื้นหลัง
-            </button>
-            <button class="header-btn" onclick="resetCamera()" title="รีเซ็ตมุมกล้อง">
-                <i class="fa-solid fa-rotate"></i> รีเซ็ตมุม
-            </button>
+    <!-- Hardware Solenoid Direct Pin Diagnostics Modal -->
+    <div class="modal-backdrop" id="pinDiagnosticModal" style="display:none;">
+        <div class="result-modal-card" style="max-width:520px;">
+            <div class="modal-header" style="padding:0 0 12px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
+                <div class="modal-title" style="font-size:16px; color:#00ff88; display:flex; align-items:center; gap:8px;">
+                    <i class="fa-solid fa-wrench"></i> ทดสอบฮาร์ดแวร์โซลินอยด์ 12 จุด
+                </div>
+                <button class="close-btn" onclick="closePinDiagnosticModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div style="font-size:12px; color:#94a3b8; margin-bottom:10px;">
+                ทดสอบยกทีละหมุดเพื่อตรวจเช็คว่าโซลินอยด์ตัวไหนติดขัดหรือไม่:
+            </div>
+
+            <!-- Pin Buttons 1 to 12 -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:14px;">
+                <button class="btn-ctrl" onclick="testSinglePin(1)">หมุด 1 (L1)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(2)">หมุด 2 (L1)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(3)">หมุด 3 (L1)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(4)">หมุด 4 (L1)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(5)">หมุด 5 (L2)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(6)">หมุด 6 (L2)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(7)">หมุด 7 (L2)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(8)">หมุด 8 (L2)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(9)">หมุด 9 (L3)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(10)">หมุด 10 (L3)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(11)">หมุด 11 (L3)</button>
+                <button class="btn-ctrl" onclick="testSinglePin(12)">หมุด 12 (L3)</button>
+            </div>
+
+            <div style="font-size:12px; color:#94a3b8; margin-bottom:8px;">
+                ทดสอบตามชุดไดรเวอร์ L298N:
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-ctrl" style="flex:1;" onclick="testL298NDriver(1)">L298N #1 (1-4)</button>
+                <button class="btn-ctrl" style="flex:1;" onclick="testL298NDriver(2)">L298N #2 (5-8)</button>
+                <button class="btn-ctrl" style="flex:1;" onclick="testL298NDriver(3)">L298N #3 (9-12)</button>
+            </div>
         </div>
-    </header>
-
-    <!-- Guide Tip -->
-    <div class="mobile-tip-badge">
-        <i class="fa-solid fa-hand-pointer"></i>
-        <span>ใช้นิ้วเลื่อนหมุนและซูมดูตัวเครื่องได้รอบทิศทาง</span>
     </div>
 
-    <!-- WebGL 3D Hardware Canvas Container -->
-    <div id="webgl-container"></div>
+    <!-- Dedicated Image Upload OCR Modal -->
+    <div class="modal-backdrop" id="imageUploadModal" style="display:none;">
+        <div class="result-modal-card" style="max-width:540px;">
+            <div class="modal-header" style="padding:0 0 12px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
+                <div class="modal-title" style="font-size:16px; color:#00f2fe; display:flex; align-items:center; gap:8px;">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> อัปโหลดรูปภาพ OCR
+                </div>
+                <button class="close-btn" onclick="closeImageUploadModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
 
-    <!-- Exploded View Labels & Leader Lines Overlay -->
-    <svg id="explodedLinesSvg" class="exploded-lines-svg"></svg>
-    <div id="explodedLabelsLayer" class="exploded-labels-layer"></div>
+            <div style="font-size:12px; color:#94a3b8; margin-bottom:12px;">
+                เลือกรูปภาพที่มีข้อความภาษาไทยหรืออังกฤษ ระบบจะสแกนและส่งผลลัพธ์ไปยังหน้าจอ 2 เซลล์ และ ESP32 ทันที:
+            </div>
 
-    <!-- Exploded View Depth Slider -->
-    <div class="exploded-slider-wrap" id="explodedSliderWrap" style="display:none;">
-        <label for="explodedSlider"><i class="fa-solid fa-arrows-up-down"></i> ระยะแยก</label>
-        <input type="range" id="explodedSlider" min="0" max="100" value="100" oninput="setExplodedAmount(this.value)">
-        <span id="explodedSliderVal" style="font-family:'JetBrains Mono', monospace; color:var(--accent-cyan);">100%</span>
+            <div class="upload-dropzone-box" id="modalUploadDropzone" onclick="document.getElementById('imageFileInput').click();" style="border:2px dashed rgba(0,242,254,0.4); border-radius:14px; padding:28px 16px; text-align:center; background:rgba(0,0,0,0.3); cursor:pointer; transition:all 0.2s;">
+                <i class="fa-solid fa-image" style="font-size:38px; color:#00f2fe; margin-bottom:10px;"></i>
+                <div style="font-size:14px; font-weight:600; color:#f8fafc;">คลิกเพื่อเลือกไฟล์รูปภาพ หรือลากรูปมาวางที่นี่</div>
+                <div style="font-size:11px; color:#64748b; margin-top:4px;">รองรับไฟล์ PNG, JPG, JPEG, WebP</div>
+            </div>
+
+            <div id="modalUploadStatus" style="display:none; margin-top:12px; font-size:12px; color:#00ff88; text-align:center;">
+                <i class="fa-solid fa-spinner fa-spin"></i> กำลังประมวลผล OCR...
+            </div>
+        </div>
     </div>
 
-    <!-- 3D Mobile Floating Control Dock (4 Core Buttons) -->
-    <div class="mobile-floating-dock">
-        <!-- 1. Exploded View -->
+    <!-- 3D Mobile Floating Control Dock (Preserved for tests) -->
+    <div class="mobile-floating-dock" style="display:none;" id="legacyFloatingDock">
         <button class="dock-btn" id="explodedBtn" onclick="toggleExplodedView()" title="แยกชิ้นส่วนโครงสร้าง">
             <i class="fa-solid fa-layer-group"></i>
             <span>แยกชิ้นส่วน</span>
         </button>
-
-        <!-- 2. Transparent X-Ray View -->
         <button class="dock-btn" id="xrayBtn" onclick="toggleXRay()" title="ดูแผงวงจรและกลไกภายใน">
             <i class="fa-solid fa-eye"></i>
             <span>ดูภายใน (X-Ray)</span>
         </button>
-
-        <!-- 3. Dedicated Live Camera & Upload OCR Page -->
-        <button class="dock-btn dock-btn-primary" id="btnOpenLiveCamera" onclick="window.location.href='camera.html';" title="เข้าสู่หน้าทดลองใช้งานจริง (กล้องและอัปโหลด)">
+        <button class="dock-btn dock-btn-primary" id="btnOpenLiveCamera" onclick="if(typeof openLiveCamera==='function') openLiveCamera();" title="เข้าสู่หน้าทดลองใช้งานจริง">
             <i class="fa-solid fa-camera"></i>
-            <span>ทดลองใช้งานจริง</span>
+            <span>เปิดกล้อง OCR</span>
         </button>
-
-        <!-- 4. Presentation Simulation Studio -->
         <button class="dock-btn dock-btn-sim" id="btnRealSimulation" onclick="window.location.href='simulation.html';" title="เข้าสู่หน้าตัวอย่างการใช้งาน">
             <i class="fa-solid fa-circle-play"></i>
             <span>ตัวอย่างการใช้</span>
@@ -598,15 +631,18 @@
     <script src="js/camera.js"></script>
     <script src="js/ocr.js"></script>
     <script src="js/demoMode.js"></script>
-    <script src="js/thai-braille-tables.js"></script>
-    <script src="js/thai-wordlist.js"></script>
-    <script src="js/thai-braille.js"></script>
-    <script src="js/braille-engine.js"></script>
-    <script src="js/three-scene.js"></script>
-    <script src="js/voice-guidance.js"></script>
-    <script src="js/ocr-engine.js"></script>
-    <script src="js/real-simulation.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/thai-braille-tables.js?v=3.2.1"></script>
+    <script src="js/thai-wordlist.js?v=3.2.1"></script>
+    <script src="js/thai-braille.js?v=3.2.1"></script>
+    <script src="js/braille-engine.js?v=3.2.1"></script>
+    <script src="js/three-scene.js?v=3.2.1"></script>
+    <script src="js/voice-guidance.js?v=3.2.1"></script>
+    <script src="js/ocr-engine.js?v=3.2.1"></script>
+    <script src="js/real-simulation.js?v=3.2.1"></script>
+    <script src="js/esp32-serial.js?v=3.2.1"></script>
+    <script src="js/tactile-shapes.js?v=3.2.1"></script>
+    <script src="js/two-cell-display.js?v=3.2.1"></script>
+    <script src="js/app.js?v=3.2.1"></script>
 
     <script>
         const STUDIO_THEMES = [
@@ -625,6 +661,23 @@
             document.body.style.background = bg;
             const container = document.getElementById('webgl-container');
             if (container) container.style.background = bg;
+        }
+
+        let isWorkstationFocused = true;
+        function toggleWorkstationFocus() {
+            isWorkstationFocused = !isWorkstationFocused;
+            const wrap = document.getElementById('workstationContentWrap');
+            const dock = document.getElementById('legacyFloatingDock');
+            if (wrap) wrap.style.display = isWorkstationFocused ? 'flex' : 'none';
+            if (dock) dock.style.display = isWorkstationFocused ? 'none' : 'grid';
+        }
+
+        function setWorkstationTab(tab) {
+            const wrap = document.getElementById('workstationContentWrap');
+            if (wrap) wrap.style.display = 'flex';
+            isWorkstationFocused = true;
+            const dock = document.getElementById('legacyFloatingDock');
+            if (dock) dock.style.display = 'none';
         }
     </script>
 </body>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="dark light">
+    <title>BrailBox 3D - โมเดลจำลองตัวเครื่อง 3 มิติ</title>
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Prompt & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+
+    <style>
+        body {
+            background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%);
+            color: #0f172a;
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Prompt', sans-serif;
+            height: 100vh;
+            width: 100vw;
+            touch-action: none;
+        }
+
+        #webgl-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .model-top-header {
+            position: absolute;
+            top: 16px;
+            left: 18px;
+            right: 18px;
+            z-index: 50;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            border-radius: 14px;
+            padding: 10px 18px;
+            backdrop-filter: blur(14px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+        }
+
+        .btn-back-home {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(79, 172, 254, 0.3));
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            color: #00f2fe;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-back-home:hover {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.35), rgba(79, 172, 254, 0.45));
+            box-shadow: 0 0 14px rgba(0, 242, 254, 0.4);
+            transform: translateX(-2px);
+        }
+
+        .floating-controls-dock {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            display: flex;
+            gap: 12px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(0, 240, 255, 0.35);
+            border-radius: 16px;
+            padding: 10px 18px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.6);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Navigation Header -->
+    <header class="model-top-header">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <a href="index.html" class="btn-back-home" title="กลับไปยังหน้าหลัก (พิมพ์ข้อความ & เบรลล์ 2 เซลล์)">
+                <i class="fa-solid fa-arrow-left"></i> กลับสู่หน้าหลัก
+            </a>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div style="font-size:16px; font-weight:700; color:#f8fafc;">โมเดล 3 มิติ (Three.js 14-Cell Simulator)</div>
+                <span class="mobile-badge">Interactive 3D</span>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:8px;">
+            <button class="header-btn" onclick="cycleStudioTheme()" title="เปลี่ยนเฉดสีพื้นหลังสตูดิโอ">
+                <i class="fa-solid fa-palette"></i> เปลี่ยนสีพื้นหลัง
+            </button>
+            <button class="header-btn" onclick="resetCamera()" title="รีเซ็ตมุมกล้อง">
+                <i class="fa-solid fa-rotate"></i> รีเซ็ตมุมมอง
+            </button>
+        </div>
+    </header>
+
+    <!-- WebGL 3D Hardware Canvas Container -->
+    <div id="webgl-container"></div>
+
+    <!-- Exploded View Overlay -->
+    <svg id="explodedLinesSvg" class="exploded-lines-svg"></svg>
+    <div id="explodedLabelsLayer" class="exploded-labels-layer"></div>
+
+    <!-- Exploded View Depth Slider -->
+    <div class="exploded-slider-wrap" id="explodedSliderWrap" style="display:none;">
+        <label for="explodedSlider"><i class="fa-solid fa-arrows-up-down"></i> ระยะแยก</label>
+        <input type="range" id="explodedSlider" min="0" max="100" value="100" oninput="setExplodedAmount(this.value)">
+        <span id="explodedSliderVal" style="font-family:'JetBrains Mono', monospace; color:var(--accent-cyan);">100%</span>
+    </div>
+
+    <!-- 3D View Floating Controls Dock -->
+    <div class="floating-controls-dock">
+        <button class="dock-btn" id="explodedBtn" onclick="toggleExplodedView()" title="แยกชิ้นส่วนโครงสร้าง">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>แยกชิ้นส่วน</span>
+        </button>
+
+        <button class="dock-btn" id="xrayBtn" onclick="toggleXRay()" title="ดูแผงวงจรและกลไกภายใน">
+            <i class="fa-solid fa-eye"></i>
+            <span>ดูภายใน (X-Ray)</span>
+        </button>
+
+        <button class="dock-btn" onclick="openMechanismModal()" title="ดูกลไก 1 หมุดเบรลล์">
+            <i class="fa-solid fa-microchip"></i>
+            <span>กลไกหมุด (Actuator)</span>
+        </button>
+    </div>
+
+    <!-- 3D Mechanism Cutaway Modal -->
+    <div class="modal-backdrop" id="mechanismModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fa-solid fa-microchip"></i> กลไก 1 หมุดเบรลล์ (Bistable Actuator)
+                </div>
+                <button class="close-btn" onclick="closeMechanismModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="mech-canvas-container">
+                    <canvas id="mech-canvas"></canvas>
+                </div>
+                <div class="mech-controls">
+                    <div class="state-buttons">
+                        <button class="state-btn active" id="stBtn1" onclick="setMechState(1)">State 1: พัก</button>
+                        <button class="state-btn" id="stBtn2" onclick="setMechState(2)">State 2: จ่ายไฟ</button>
+                        <button class="state-btn" id="stBtn3" onclick="setMechState(3)">State 3: ตัดไฟ</button>
+                        <button class="state-btn" id="stBtn4" onclick="setMechState(4)">State 4: สลับขั้ว</button>
+                    </div>
+                    <div class="mech-params">
+                        <div><span class="param-label">กำลังไฟฟ้า:</span> <span class="param-val" id="prmPower">0.0 W</span></div>
+                        <div><span class="param-label">กระแสไฟฟ้า:</span> <span class="param-val" id="prmCurrent">0.00 A</span></div>
+                        <div><span class="param-label">สนามแม่เหล็ก:</span> <span class="param-val" id="prmFlux">0.00 T</span></div>
+                        <div><span class="param-label">มุมลูกเบี้ยว:</span> <span class="param-val" id="prmCam">0°</span></div>
+                        <div><span class="param-label">ระดับหมุด:</span> <span class="param-val" id="prmPin">DOWN</span></div>
+                        <div><span class="param-label">สถานะล็อก:</span> <span class="param-val" id="prmLatch">UNLOCKED</span></div>
+                    </div>
+                    <div class="mech-desc-box" id="mechDesc"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Subsystems required by 3D Engine -->
+    <div style="display:none;">
+        <textarea id="thaiInput">HELLO</textarea>
+        <div id="cellsGrid"></div>
+        <button id="btnPrevPage"></button>
+        <div id="pageIndicator"></div>
+        <button id="btnNextPage"></button>
+        <button id="btnToggleLanguageMode"></button>
+        <button id="btnViewFront"></button>
+        <button id="btnViewBack"></button>
+        <button id="btnView3D"></button>
+        <button id="btnViewXray"></button>
+        <button id="presentBtn"></button>
+        <button id="lightModeBtn"></button>
+        <span id="powerStatus"></span>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/textProcessor.js"></script>
+    <script src="js/thai-braille-tables.js"></script>
+    <script src="js/thai-wordlist.js"></script>
+    <script src="js/thai-braille.js"></script>
+    <script src="js/braille-engine.js"></script>
+    <script src="js/three-scene.js"></script>
+
+    <script>
+        const STUDIO_THEMES = [
+            "radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%)",
+            "radial-gradient(circle at 50% 36%, #283750 0%, #151d2f 55%, #0a0e1a 100%)",
+            "radial-gradient(circle at 50% 36%, #1e3a8a 0%, #0f172a 65%, #020617 100%)"
+        ];
+        let currentThemeIdx = 0;
+
+        function cycleStudioTheme() {
+            currentThemeIdx = (currentThemeIdx + 1) % STUDIO_THEMES.length;
+            const bg = STUDIO_THEMES[currentThemeIdx];
+            document.body.style.background = bg;
+            const container = document.getElementById('webgl-container');
+            if (container) container.style.background = bg;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof initMain3D === 'function') {
+                initMain3D();
+            }
+            if (typeof updateScreenCanvas === 'function') {
+                updateScreenCanvas("BRAILLBOX 3D");
+            }
+            if (typeof updateBrailleDisplay === 'function') {
+                updateBrailleDisplay("BRAILLBOX");
+            }
+        });
+    </script>
+</body>
+</html>

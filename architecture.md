@@ -35,8 +35,9 @@ Version: 3.1.0 (Modular Codebase Standard)
 ## 3. Modular Directory Structure
 
 ```text
-braillend/
-├── index.html                           # Main Application Entry Point
+├── index.html                           # Main Application Entry Point (Clean 2-Cell Tactile Workstation)
+├── model.html                           # Dedicated 3D Hardware Simulation Page (Three.js 14-Cell View)
+├── camera.html                          # Dedicated Live Camera OCR & Scanner Page
 ├── BraillLens_Interactive_3D.html       # Standalone Legacy File
 ├── architecture.md                      # Architecture & Technical Specification
 ├── task-graph.md                        # Task Execution Graph & Milestones
@@ -44,8 +45,11 @@ braillend/
 ├── css/
 │   └── styles.css                       # Cyberpunk-Tactical Stylesheet (Dark & Light Mode)
 ├── js/
-│   ├── app.js                           # Entry Point & Event Dispatcher
-│   ├── braille-engine.js                # Braille Mapping, 14-Cell Chunking, & Pagination
+│   ├── app.js                           # Entry Point & Workstation Lifecycle Dispatcher
+│   ├── esp32-serial.js                  # Web Serial API Driver, Auto-Connect, 12-Bit UART
+│   ├── two-cell-display.js              # 2-Cell Digital Twin, Full-Text Ribbon Paging, Dual Navigation
+│   ├── tactile-shapes.js                # 8 Tactile Graphic Shapes & Custom 12-Dot Matrix
+│   ├── braille-engine.js                # Braille Mapping & 2-Cell Dispatch Hook
 │   ├── camera.js                        # Camera Stream Lifecycle, Viewfinder Crop, Frame Capture (client-only)
 │   ├── ocr.js                           # OCR Module - only place that calls the backend /ocr endpoint
 │   ├── textProcessor.js                 # NFC Normalization & Thai-Preserving Text Cleanup
@@ -58,7 +62,8 @@ braillend/
 │   ├── ocr_engine.py                    # EasyOCR (th+en) wrapper
 │   └── requirements.txt                 # Backend Python dependencies
 └── tests/
-    └── test_braille_ocr_pipeline.js     # Sandboxed QA Verification Suite
+    ├── test_braille_ocr_pipeline.js     # Sandboxed QA Verification Suite (Camera, OCR, 3D)
+    └── test_2cell_esp32.js              # Autonomous 2-Cell ESP32 & Web Serial QA Suite
 ```
 
 ---

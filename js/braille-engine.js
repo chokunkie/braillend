@@ -245,6 +245,17 @@ function updateBrailleDisplay(text) {
     }
 
     updatePaginationDisplay();
+
+    // Hook into 2-Cell ESP32 Tactile Workstation Engine
+    if (typeof window !== 'undefined') {
+        if (window.twoCellEngine && typeof window.twoCellEngine.setText === 'function') {
+            window.twoCellEngine.setText(text);
+        }
+        const mainInput = document.getElementById('mainTextInput');
+        if (mainInput && mainInput.value !== text) {
+            mainInput.value = text;
+        }
+    }
 }
 
 /**

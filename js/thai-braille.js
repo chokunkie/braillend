@@ -371,8 +371,7 @@
                 // remainder - that means we cut inside a syllable.
                 var after = chars[i + L];
                 if (after !== undefined) {
-                    if (isTone(after) || isAboveBelow(after) || isThanthakhat(after) ||
-                        after === 'ะ' || after === 'ำ' || after === 'ๅ') { continue; }
+                    if (isTone(after) || isAboveBelow(after) || isThanthakhat(after) || isTrailVowel(after)) { continue; }
                     // Don't cut between two consonants that form an initial
                     // cluster (เบ|รลล์ -> the บ-ร belongs together).
                     if (CLUSTERS[cand.charAt(cand.length - 1) + after]) { continue; }
@@ -388,7 +387,17 @@
             }
         }
         flush();
-        return result.length ? result : [{ text: run, isWord: false }];
+        var merged = [];
+        for (var m = 0; m < result.length; m++) {
+            var curr = result[m];
+            if (curr.text.length === 1 && isConsonant(curr.text) && !curr.isWord && m + 1 < result.length) {
+                result[m + 1].text = curr.text + result[m + 1].text;
+                result[m + 1].isWord = false;
+                continue;
+            }
+            merged.push(curr);
+        }
+        return merged.length ? merged : [{ text: run, isWord: false }];
     }
 
     function emitThaiWord(text, isWord, out) {
