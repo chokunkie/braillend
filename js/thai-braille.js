@@ -132,8 +132,9 @@
 
     /* ================================================================
        Thai run -> syllables -> braille cells (Stage 3)
-       Reorders leading vowels + tone marks into Braille (spoken) order:
-         [initial consonant(s)] [vowel unit] [final consonant(s)] [tone]
+       Keeps bare leading vowels (เ แ โ ใ ไ) before the initial consonant.
+       Multi-part vowel units are emitted after the initial consonant, while
+       final consonants and tone marks retain their Thai Braille order.
        ================================================================ */
 
     // Resolve a vowel from its written parts to braille cell groups.
@@ -313,22 +314,33 @@
     }
 
     function emitSyllable(seg, out) {
-        // 1. initial consonant(s)
-        pushEntryCells(out, T.THAI_CONSONANTS[seg.c1], seg.c1, 'consonant');
-        if (seg.c2) { pushEntryCells(out, T.THAI_CONSONANTS[seg.c2], seg.c2, 'consonant'); }
-
-        // 2. vowel unit (leading vowel is folded in here, never emitted first)
         var vgroups = resolveVowel(seg.lead, seg.above, seg.trail);
         if (!vgroups && seg.reducedO && T.THAI_COMPOUND_VOWELS['โอะ-ลดรูป']) {
             vgroups = T.THAI_COMPOUND_VOWELS['โอะ-ลดรูป'].cells;
         }
-        if (vgroups) {
-            var vsrc = (seg.lead || '') + (seg.above || '') + (seg.trail || '');
-            if (!vsrc && seg.reducedO) { vsrc = 'ะ'; } // implied โอะ - show something on the card
+
+        var vsrc = (seg.lead || '') + (seg.above || '') + (seg.trail || '');
+        if (!vsrc && seg.reducedO) { vsrc = 'ะ'; } // implied โอะ - show something on the card
+
+        function emitVowelUnit() {
+            if (!vgroups) { return; }
             for (var v = 0; v < vgroups.length; v++) {
                 out.push(cell(vgroups[v], v === 0 ? vsrc : '', 'vowel'));
             }
         }
+
+        // Bare leading vowels preserve their written Thai order in Braille.
+        // Multi-part forms such as เ◌าะ / เ◌ีย / เ◌ือ are represented by a
+        // resolved vowel unit and remain after the initial consonant(s).
+        var bareLeadingVowel = !!seg.lead && !seg.above && !seg.trail;
+        if (bareLeadingVowel) { emitVowelUnit(); }
+
+        // 1. initial consonant(s)
+        pushEntryCells(out, T.THAI_CONSONANTS[seg.c1], seg.c1, 'consonant');
+        if (seg.c2) { pushEntryCells(out, T.THAI_CONSONANTS[seg.c2], seg.c2, 'consonant'); }
+
+        // 2. non-leading or multi-part vowel unit
+        if (!bareLeadingVowel) { emitVowelUnit(); }
 
         // 2b. ไม้ไต่คู้ / นิคหิต (short-vowel & nasalisation marks) after the vowel
         var mm = seg.midMark || '';

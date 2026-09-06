@@ -74,12 +74,14 @@ module.exports = [
     { section: 'latin', stage: 1, input: 'cat', cells: [[1, 4], [1], [2, 3, 4, 5]], chartRef: 'a-z == A-Z cell' },
     { section: 'latin', stage: 1, input: 'AB', cells: [[6], [1], [6], [1, 2]], chartRef: 'เครื่องหมายตัวใหญ่' },
 
-    /* ---- reordering (สระหน้า ย้ายหลังพยัญชนะ) - engine stage 3 ------- */
-    { section: 'reorder', stage: 3, input: 'เก', cells: [[1, 2, 4, 5], [1, 2, 4]], chartRef: 'สระ เ◌ (เขียนหลัง ก)' },
-    { section: 'reorder', stage: 3, input: 'แก', cells: [[1, 2, 4, 5], [1, 2, 6]], chartRef: 'สระ แ◌' },
-    { section: 'reorder', stage: 3, input: 'โต', cells: [[1, 2, 5, 6], [2, 4]], chartRef: 'สระ โ◌' },
-    { section: 'reorder', stage: 3, input: 'ไก', cells: [[1, 2, 4, 5], [1, 5, 6]], chartRef: 'สระ ไ◌' },
-    { section: 'tone-reorder', stage: 3, input: 'เก่ง', cells: [[1, 2, 4, 5], [1, 2, 4], [1, 2, 4, 5, 6], [3, 5]], chartRef: 'เ + ก + สะกด ง + ไม้เอก (ไม้เอกท้ายสุด)' },
+    /* ---- front-vowel order (สระหน้าอยู่ก่อนพยัญชนะ) - stage 3 ------- */
+    { section: 'front-vowel-order', stage: 3, input: 'เก', cells: [[1, 2, 4], [1, 2, 4, 5]], chartRef: 'สระ เ◌ อยู่ก่อน ก' },
+    { section: 'front-vowel-order', stage: 3, input: 'แก', cells: [[1, 2, 6], [1, 2, 4, 5]], chartRef: 'สระ แ◌ อยู่ก่อน ก' },
+    { section: 'front-vowel-order', stage: 3, input: 'โต', cells: [[2, 4], [1, 2, 5, 6]], chartRef: 'สระ โ◌ อยู่ก่อน ต' },
+    { section: 'front-vowel-order', stage: 3, input: 'ใจ', cells: [[1, 5, 6], [2], [2, 4, 5]], chartRef: 'สระ ใ◌ อยู่ก่อน จ' },
+    { section: 'front-vowel-order', stage: 3, input: 'ไก', cells: [[1, 5, 6], [1, 2, 4, 5]], chartRef: 'สระ ไ◌ อยู่ก่อน ก' },
+    { section: 'tone-order', stage: 3, input: 'เก่ง', cells: [[1, 2, 4], [1, 2, 4, 5], [1, 2, 4, 5, 6], [3, 5]], chartRef: 'เ + ก + สะกด ง + ไม้เอก (ไม้เอกท้ายสุด)' },
+    { section: 'front-vowel-order', stage: 3, input: 'โชกุน', cells: [[2, 4], [3, 4, 6], [1, 2, 4, 5], [1, 4], [1, 3, 4, 5]], chartRef: 'โชกุน = โ + ช + ก + ุ + น' },
 
     /* ---- compound vowels (สระประสมหลายส่วน) - engine stage 3 -------- */
     { section: 'compound-vowel', stage: 3, input: 'เกาะ', cells: [[1, 2, 4, 5], [1, 3, 5], [1]], chartRef: 'สระ เ◌าะ' },

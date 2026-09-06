@@ -86,9 +86,9 @@ const THAI_SIMPLE_VOWELS = {
     'ุ': { cells: [[1, 4]],       chartRef: 'สระ ◌ุ' },              // ุ   // VERIFY
     'ู': { cells: [[2, 5]],       chartRef: 'สระ ◌ู' },              // ู   // VERIFY
     'ๅ': { cells: [[1, 6]],       chartRef: 'ลากข้าง ◌ๅ' },          // ๅ   // VERIFY
-    // Leading vowels as bare codepoints (used when they cannot be folded
-    // into a compound key, e.g. malformed input). Real syllables resolve
-    // through THAI_COMPOUND_VOWELS instead.
+    // Leading vowels as bare codepoints. The engine keeps a bare leading
+    // vowel before the initial consonant and also uses these mappings as a
+    // fallback for malformed input.
     'เ': { cells: [[1, 2, 4]],    chartRef: 'สระ เ◌' },              // เ
     'แ': { cells: [[1, 2, 6]],    chartRef: 'สระ แ◌' },              // แ
     'โ': { cells: [[2, 4]],       chartRef: 'สระ โ◌' },              // โ
@@ -100,7 +100,9 @@ const THAI_SIMPLE_VOWELS = {
  * Keyed by a CANONICAL form where the consonant slot is written "อ".
  * js/thai-braille.js builds this key from a parsed syllable (leading
  * vowel + above/below vowel + trailing vowel) and looks it up here.
- * These cells are emitted AFTER the initial consonant(s), BEFORE tone. */
+ * True multi-part vowel units are emitted AFTER the initial consonant(s),
+ * BEFORE tone. Canonical single-leading-vowel entries (เอ, แอ, โอ, ใอ, ไอ)
+ * keep their written position before the initial consonant. */
 const THAI_COMPOUND_VOWELS = {
     'เอะ':   { cells: [[1, 2, 4], [1]],       chartRef: 'สระ เ◌ะ' },      // VERIFY
     'เอ':    { cells: [[1, 2, 4]],            chartRef: 'สระ เ◌' },       // VERIFY
