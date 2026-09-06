@@ -15,6 +15,7 @@ width). See the module docstring in ocr_engine.py for the rationale.
 
 import sys
 
+import cv2
 import numpy as np
 
 from ocr_engine import (
@@ -22,9 +23,13 @@ from ocr_engine import (
     _MIN_WORD_CONFIDENCE, _looks_like_text, _filter_layout_noise, _letter_ratio,
     _median_glyph_height, _text_volume, _mean_conf,
     _TARGET_GLYPH_PX, _GLYPH_PX_LO, _GLYPH_PX_HI, _RETRY_TOO_BIG, _RETRY_TOO_SMALL,
+    _has_suspicious_script_mix, _has_separate_latin_token,
+    _is_plausible_thai_extension, _recover_missing_thai_marks,
+    _rescue_suspicious_thai_lines, _raw_words,
 )
 from preprocessing import (
-    resize_min_side, _is_clean_bilevel, MIN_SHORT_SIDE, MAX_LONG_SIDE,
+    resize_min_side, _is_clean_bilevel, remove_colored_spellcheck_underlines,
+    MIN_SHORT_SIDE, MAX_LONG_SIDE,
 )
 
 
@@ -280,6 +285,105 @@ check("crisp black-on-white -> clean bilevel", _is_clean_bilevel(crisp), True)
 noisy = np.random.RandomState(0).randint(60, 190, (200, 600), dtype=np.uint8)  # all mid-grey
 check("mid-grey photo -> not clean bilevel", _is_clean_bilevel(noisy), False)
 check("empty array -> not clean bilevel", _is_clean_bilevel(np.zeros((0, 0), np.uint8)), False)
+
+# ---------------------------------------------------------------------------
+# Case 13: mixed-language anomaly detection and Thai line rescue. Separate
+# Thai + English words are legitimate; a Latin island embedded inside a Thai
+# token or a repeated Latin hallucination is not. The rescue uses a padded
+# line crop and a Thai allowlist, then replaces only that suspicious line.
+# ---------------------------------------------------------------------------
+check("normal separated Thai + English is not suspicious",
+      _has_suspicious_script_mix("เรียน OpenAI 2026"), False)
+check("mixed-script product token is left alone",
+      _has_suspicious_script_mix("รุ่นiPhone"), False)
+check("Latin lookalike embedded in Thai token is suspicious",
+      _has_suspicious_script_mix("wตตา"), True)
+check("repeated Latin detector hallucination is suspicious",
+      _has_suspicious_script_mix("wnnnnnnส. e"), True)
+check("ordinary pure Thai text is not suspicious",
+      _has_suspicious_script_mix("พิตต้า"), False)
+check("standalone English word protects a genuinely mixed line",
+      _has_separate_latin_token("ชื่อ Pete"), True)
+check("embedded lookalike remains eligible for Thai rescue",
+      _has_separate_latin_token("wตตา"), False)
+
+
+class FakeThaiRescueReader:
+    def __init__(self):
+        self.allowlist_seen = False
+
+    def readtext(self, image, **kwargs):
+        self.allowlist_seen = bool(kwargs.get("allowlist"))
+        return [det("พิตต้า", 20, 25, 150, 80, 0.84)]
+
+
+fake_reader = FakeThaiRescueReader()
+bad_line = [det("wตตา", 100, 90, 250, 145, 0.95)]
+rescued_raw, rescued_count = _rescue_suspicious_thai_lines(
+    bad_line, np.full((260, 420), 255, np.uint8), fake_reader
+)
+rescued_text = assemble_text(filter_confident_words(_raw_words(rescued_raw)))
+check("suspicious mixed token is re-read as Thai", rescued_text, "พิตต้า")
+check("Thai rescue reports one replaced line", rescued_count, 1)
+check("Thai rescue passes an explicit allowlist", fake_reader.allowlist_seen, True)
+
+fake_reader_mixed = FakeThaiRescueReader()
+mixed_line = [
+    det("ชื่อ", 20, 90, 110, 145, 0.91),
+    det("Pete", 150, 90, 270, 145, 0.92),
+    det("wตตา", 310, 90, 430, 145, 0.95),
+]
+untouched_mixed, mixed_rescue_count = _rescue_suspicious_thai_lines(
+    mixed_line, np.full((260, 500), 255, np.uint8), fake_reader_mixed
+)
+check("Thai rescue never overwrites a real English word on the same line",
+      mixed_rescue_count, 0)
+check("protected mixed line remains unchanged", untouched_mixed, mixed_line)
+
+check("padded Thai reread may restore combining marks",
+      _is_plausible_thai_extension("คม", "คิม"), True)
+check("padded Thai reread may restore marks plus one spacing vowel",
+      _is_plausible_thai_extension("พตต", "พิตต้า"), True)
+check("same-length spelling rewrite is never auto-accepted",
+      _is_plausible_thai_extension("สกาย", "สบาย"), False)
+check("unrelated longer Thai guess is never auto-accepted",
+      _is_plausible_thai_extension("คม", "คอมพิวเตอร์"), False)
+check("new leading Thai glyph is never auto-accepted",
+      _is_plausible_thai_extension("พชร", "ไพัชรี"), False)
+
+
+class FakeThaiMarkReader:
+    def recognize(self, image, **kwargs):
+        x0, x1, y0, y1 = kwargs["horizontal_list"][0]
+        return [det("คิม", x0, y0, x1, y1, 0.72)]
+
+
+missing_mark = [det("คม", 100, 100, 240, 180, 0.99)]
+recovered_raw, recovered_count = _recover_missing_thai_marks(
+    missing_mark, np.full((300, 420), 255, np.uint8), FakeThaiMarkReader()
+)
+recovered_text = assemble_text(filter_confident_words(_raw_words(recovered_raw)))
+check("direct padded recognition restores omitted Thai vowel", recovered_text, "คิม")
+check("direct padded recognition reports recovered line", recovered_count, 1)
+
+# ---------------------------------------------------------------------------
+# Case 14: remove the saturated-red spell-check wave seen in the two failed
+# nickname screenshots without touching broad red document content.
+# ---------------------------------------------------------------------------
+spellcheck = np.full((180, 600, 3), 255, np.uint8)
+points = np.array([[x, 125 + (x // 6) % 2 * 3] for x in range(80, 520, 3)], np.int32)
+cv2.polylines(spellcheck, [points], False, (0, 0, 255), 3)
+cleaned_spellcheck, removed_count = remove_colored_spellcheck_underlines(spellcheck)
+check("long thin red spell-check component is detected", removed_count > 0, True)
+check("red underline pixels are inpainted",
+      int(((cleaned_spellcheck[:, :, 2] > 180) & (cleaned_spellcheck[:, :, 1] < 100)).sum()) < 20,
+      True)
+
+red_heading = np.full((180, 600, 3), 255, np.uint8)
+cv2.rectangle(red_heading, (80, 40), (520, 105), (0, 0, 255), -1)
+untouched_heading, heading_removed = remove_colored_spellcheck_underlines(red_heading)
+check("broad red content is not mistaken for an underline", heading_removed, 0)
+check("broad red content remains unchanged", np.array_equal(untouched_heading, red_heading), True)
 
 print()
 print(f"{passed} passed, {failed} failed")

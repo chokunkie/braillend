@@ -72,6 +72,54 @@ def decode_image(image_bytes: bytes) -> np.ndarray:
     return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
 
+def remove_colored_spellcheck_underlines(img: np.ndarray) -> tuple:
+    """Removes only long, thin, saturated-red underline artifacts.
+
+    Screenshot inputs sometimes contain a browser/editor spell-check wave
+    directly below an otherwise clean Thai word. Once converted to grayscale
+    that wave becomes a row of text-like strokes and can fragment EasyOCR's
+    detector. We identify the artifact while colour is still available and
+    inpaint only its red pixels. Broad red content (headings, logos, stamps)
+    is deliberately left untouched.
+
+    Returns ``(cleaned_image, removed_component_count)``.
+    """
+    if img is None or img.size == 0 or len(img.shape) != 3:
+        return img, 0
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    low_red = cv2.inRange(hsv, np.array([0, 120, 70]), np.array([12, 255, 255]))
+    high_red = cv2.inRange(hsv, np.array([168, 120, 70]), np.array([180, 255, 255]))
+    red_mask = cv2.bitwise_or(low_red, high_red)
+    linked = cv2.morphologyEx(
+        red_mask, cv2.MORPH_CLOSE, np.ones((3, 7), np.uint8), iterations=1
+    )
+
+    img_h, img_w = img.shape[:2]
+    min_width = max(28, int(img_w * 0.04))
+    max_height = max(10, int(img_h * 0.045))
+    selected = np.zeros_like(red_mask)
+    removed = 0
+
+    contours, _ = cv2.findContours(linked, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if w < min_width or h > max_height or w / max(1.0, float(h)) < 4.0:
+            continue
+        # Copy only the genuinely red pixels, not the whole bounding box, so
+        # nearby Thai lower vowels (ุ/ู) and black underlines cannot be erased.
+        roi = red_mask[y:y + h, x:x + w]
+        selected[y:y + h, x:x + w] = cv2.bitwise_or(
+            selected[y:y + h, x:x + w], roi
+        )
+        removed += 1
+
+    if not removed:
+        return img, 0
+    selected = cv2.dilate(selected, np.ones((3, 3), np.uint8), iterations=1)
+    return cv2.inpaint(img, selected, 2, cv2.INPAINT_TELEA), removed
+
+
 # --- document quad detection & perspective correction ----------------------
 #
 # The frontend guide frame is a visual aid only - it never crops to the real
@@ -250,6 +298,7 @@ def preprocess(image_bytes: bytes, document_source: str = "upload") -> tuple:
     divided by scale), else None.
     """
     img = decode_image(image_bytes)
+    img, _removed_spellcheck_lines = remove_colored_spellcheck_underlines(img)
 
     warped_preview = None
     try:

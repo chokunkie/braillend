@@ -758,6 +758,9 @@
 
         let activeConfidence = 0;
         let activeWords = [];
+        let activeOcrMeta = {};
+        let activeBrailleSafe = false;
+        let activeBrailleConfirmed = false;
 
         // OCR language mode (Thai-only is more accurate on pure-Thai pages).
         window.__ocrLang = 'th+en';
@@ -795,6 +798,7 @@
             let confidence = 0;
             let words = [];
             let previewSrc = imagePreviewSrc;
+            let ocrMeta = {};
 
             const list = (files || []).filter(Boolean);
             const lang = window.__ocrLang || 'th+en';
@@ -807,9 +811,10 @@
                         : await recognize(list[0], source, lang);
                     if (res && res.text && res.text.trim()) {
                         detectedText = res.text.trim();
-                        confidence = res.confidence || 90;
+                        confidence = (typeof res.confidence === 'number') ? res.confidence : 0;
                         words = res.words || [];
                     }
+                    if (res) ocrMeta = res;
                     // Backend perspective-corrected the page - draw boxes on that.
                     if (res && res.warpedImage) previewSrc = res.warpedImage;
                 } catch (e) {
@@ -822,7 +827,7 @@
             }
 
             if (prog) prog.style.display = 'none';
-            displayOCRResult(detectedText, previewSrc, confidence, words);
+            displayOCRResult(detectedText, previewSrc, confidence, words, ocrMeta);
         }
 
         async function processOCRFile(file, imagePreviewSrc) {
@@ -830,14 +835,22 @@
         }
 
         // Display Result in UI
-        function displayOCRResult(text, imagePreviewSrc, confidence = 0, words = []) {
+        function displayOCRResult(text, imagePreviewSrc, confidence = 0, words = [], ocrMeta = {}) {
             activeFullText = text || '';
             activeConfidence = confidence;
             activeWords = words || [];
-            if (activeFullText && typeof chunkTextForBraille === 'function') {
+            activeOcrMeta = ocrMeta || {};
+            activeBrailleSafe = (typeof isOcrResultSafeForBraille === 'function')
+                ? isOcrResultSafeForBraille(Object.assign({}, activeOcrMeta, {
+                    text: activeFullText,
+                    confidence: activeConfidence
+                }))
+                : false;
+            activeBrailleConfirmed = false;
+            if (activeFullText && activeBrailleSafe && typeof chunkTextForBraille === 'function') {
                 activeChunks = chunkTextForBraille(activeFullText);
             } else {
-                activeChunks = activeFullText ? [{ cells: [], text: activeFullText }] : [];
+                activeChunks = [];
             }
             activeChunkIdx = 0;
 
@@ -872,9 +885,11 @@
                 cue = 'ไม่พบข้อความในภาพ ลองจัดแสงหรือขยับกล้องให้ตรงข้อความ แล้วถ่ายใหม่';
             } else {
                 const tier = (typeof classifyOcrConfidence === 'function')
-                    ? classifyOcrConfidence(activeConfidence || 85) : 'high';
+                    ? classifyOcrConfidence(activeConfidence) : 'low';
                 if (tier === 'low') {
                     cue = 'อ่านข้อความได้ไม่ชัด อาจมีจุดผิดหลายจุด แนะนำให้ถ่ายใหม่ หรือกดปุ่มอ่านออกเสียงเพื่อฟังผลลัพธ์';
+                } else if (!activeBrailleSafe) {
+                    cue = 'ผลการอ่านยังไม่แน่นอน ระบบยังไม่ส่งไปยังอักษรเบรลล์ กรุณาฟังผล แล้วเลือกยืนยันหรือสแกนใหม่';
                 } else if (tier === 'medium') {
                     cue = 'พบข้อความแล้ว แต่บางคำอาจไม่ชัดเจน กดปุ่มอ่านออกเสียงเพื่อฟังผลลัพธ์';
                 } else {
@@ -978,17 +993,32 @@
             }
 
             // Real text detected - but say how sure we are, not just a green tick.
-            const conf = Math.max(10, Math.min(100, Math.round(activeConfidence || 85)));
+            const conf = Math.max(0, Math.min(100, Math.round(
+                typeof activeConfidence === 'number' ? activeConfidence : 0
+            )));
             const tier = (typeof classifyOcrConfidence === 'function')
-                ? classifyOcrConfidence(activeConfidence || 85) : 'high';
+                ? classifyOcrConfidence(activeConfidence) : 'low';
+            const intrinsicallyUncertain = !activeBrailleSafe;
+            const needsReview = intrinsicallyUncertain && !activeBrailleConfirmed;
+            const engineLabel = activeOcrMeta.engine === 'tesseract' ? 'Tesseract fallback' : 'EasyOCR';
+            const frameCount = Number.isFinite(activeOcrMeta.frameCount) ? activeOcrMeta.frameCount : 1;
+            const agreement = Number.isFinite(activeOcrMeta.agreement) ? activeOcrMeta.agreement : 1;
+            const agreementLabel = frameCount > 1
+                ? ` · ตรงกัน ${Math.round(agreement * frameCount)}/${frameCount} เฟรม` : '';
             const TIERS = {
                 high:   { icon: 'circle-check',        text: `ตรวจพบข้อความ (${conf}%)`,               c: '#00ff88', bg: 'rgba(0,255,136,0.15)',  bd: 'rgba(0,255,136,0.3)' },
                 medium: { icon: 'triangle-exclamation', text: `เจอข้อความ แต่ไม่ชัด อาจมีคำผิด (${conf}%)`, c: '#f59e0b', bg: 'rgba(245,158,11,0.15)', bd: 'rgba(245,158,11,0.35)' },
                 low:    { icon: 'triangle-exclamation', text: `ข้อความไม่ชัดเจน อาจผิดมาก (${conf}%)`,      c: '#ef4444', bg: 'rgba(239,68,68,0.15)',  bd: 'rgba(239,68,68,0.3)' }
             };
-            const T = TIERS[tier];
+            const T = (intrinsicallyUncertain && tier === 'high') ? {
+                icon: 'triangle-exclamation',
+                text: activeBrailleConfirmed
+                    ? `ผลไม่แน่นอน · ผู้ใช้ยืนยันแล้ว (${conf}%)`
+                    : `ผลยังไม่แน่นอน ต้องยืนยัน (${conf}%)`,
+                c: '#f59e0b', bg: 'rgba(245,158,11,0.15)', bd: 'rgba(245,158,11,0.35)'
+            } : TIERS[tier];
             if (successBadge) {
-                successBadge.innerHTML = `<i class="fa-solid fa-${T.icon}"></i> ${T.text}`;
+                successBadge.innerHTML = `<i class="fa-solid fa-${T.icon}"></i> ${T.text} · ${engineLabel}${agreementLabel}`;
                 successBadge.style.color = T.c;
                 successBadge.style.background = T.bg;
                 successBadge.style.borderColor = T.bd;
@@ -998,6 +1028,21 @@
                 display.style.color = T.c;
                 display.style.fontSize = '22px';
             }
+            if (needsReview) {
+                if (badge) badge.textContent = 'รอยืนยัน';
+                if (btnPrev) btnPrev.style.display = 'none';
+                if (btnNext) btnNext.style.display = 'none';
+                if (grid) {
+                    const canConfirm = tier !== 'low';
+                    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:${T.c};padding:20px 10px;line-height:1.6;">
+                        <i class="fa-solid fa-shield-halved" style="margin-right:6px;"></i>
+                        ระบบยังไม่ส่งข้อความนี้ไปยังเบรลล์ เพราะผลยังไม่แน่นอน
+                        ${canConfirm ? '<br><button class="btn-action-secondary" onclick="confirmUncertainOcrResult()" style="margin-top:12px;padding:9px 14px;"><i class="fa-solid fa-check"></i> ใช้ผลนี้กับเบรลล์</button>' : '<br><strong>กรุณาสแกนใหม่</strong>'}
+                    </div>`;
+                }
+                return;
+            }
+
             if (badge) badge.textContent = `หน้า ${activeChunkIdx + 1}/${activeChunks.length}`;
             if (btnPrev) btnPrev.style.display = 'inline-flex';
             if (btnNext) btnNext.style.display = 'inline-flex';
@@ -1021,6 +1066,19 @@
             }
         }
 
+        function confirmUncertainOcrResult() {
+            const tier = (typeof classifyOcrConfidence === 'function')
+                ? classifyOcrConfidence(activeConfidence) : 'low';
+            if (!activeFullText || tier === 'low' || typeof chunkTextForBraille !== 'function') return;
+            activeBrailleConfirmed = true;
+            activeChunks = chunkTextForBraille(activeFullText);
+            activeChunkIdx = 0;
+            renderResultData();
+            if (typeof speakVoiceGuidance === 'function') {
+                speakVoiceGuidance('ยืนยันผลแล้ว กำลังแสดงข้อความบนอักษรเบรลล์', true);
+            }
+        }
+
         function pageStep(delta) {
             if (activeChunks.length === 0) return;
             const nextIdx = activeChunkIdx + delta;
@@ -1035,6 +1093,9 @@
             activeFullText = '';
             activeChunks = [];
             activeChunkIdx = 0;
+            activeOcrMeta = {};
+            activeBrailleSafe = false;
+            activeBrailleConfirmed = false;
             const resSec = document.getElementById('ocrResultSection');
             if (resSec) resSec.classList.remove('active');
             switchMode(currentMode);

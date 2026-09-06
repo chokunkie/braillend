@@ -88,7 +88,9 @@ function renderOCRInspector(imageSource, ocrData) {
         } else {
             detailsBar.innerHTML = words.map(w => {
                 const text = (w.text || '').trim();
-                const conf = Math.round(w.confidence || overallConf);
+                const conf = Math.round(
+                    (typeof w.confidence === 'number') ? w.confidence : overallConf
+                );
                 return `<div class="inspector-word-tag"><i class="fa-solid fa-font"></i> <span>${text}</span> <span class="conf">${conf}%</span></div>`;
             }).join('');
         }
@@ -186,14 +188,10 @@ async function runOcrPipeline(imageFile, documentSource) {
         try {
             result = await recognize(imageFile, documentSource);
         } catch (apiErr) {
-            console.warn('[OCR Backend Offline / Fallback Result]:', apiErr);
+            console.warn('[OCR failed without a usable fallback]:', apiErr);
             result = {
-                text: "สวัสดีครับผมชื่อสมชาย ยินดีที่ได้รู้จักครับ",
-                confidence: 96,
-                words: [
-                    { text: "สวัสดีครับ", confidence: 98, bbox: { x0: 50, y0: 50, x1: 200, y1: 100 } },
-                    { text: "ผมชื่อสมชาย", confidence: 95, bbox: { x0: 220, y0: 50, x1: 400, y1: 100 } }
-                ]
+                text: '', confidence: 0, words: [],
+                suspicious: true, failureReason: 'ocr-error'
             };
         }
 
@@ -208,23 +206,30 @@ async function runOcrPipeline(imageFile, documentSource) {
         }
 
         if (inspectorImage && result) {
-            renderOCRInspector(inspectorImage, { words: result.words || [], confidence: result.confidence || 95 });
+            renderOCRInspector(inspectorImage, {
+                words: result.words || [],
+                confidence: (typeof result.confidence === 'number') ? result.confidence : 0
+            });
         }
 
         const tier = ocrConfidenceTier(result.confidence);
+        const safeForBraille = (typeof isOcrResultSafeForBraille === 'function')
+            ? isOcrResultSafeForBraille(Object.assign({}, result, { text: cleanedText }))
+            : false;
 
-        // Nothing readable came back, or the read is so low-confidence that
-        // showing it as a result would mislead more than help - stop here,
-        // don't actuate the Braille display on it.
-        if (!cleanedText || tier === 'low') {
-            updateOCRProgress(1.0, '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-magenta);"></i> ข้อความไม่ชัดเจน อาจอ่านผิดมาก กรุณาถ่าย/อัปโหลดใหม่ (image unclear, try again)', result.confidence);
+        // Never actuate Braille from a fallback, a suspicious cross-script
+        // token, a low/medium-confidence read, or a burst without agreement.
+        if (!cleanedText || !safeForBraille) {
+            const reason = tier === 'low' || !cleanedText
+                ? 'ข้อความไม่ชัดเจน อาจอ่านผิดมาก กรุณาถ่าย/อัปโหลดใหม่'
+                : 'พบข้อความ แต่ผลยังไม่แน่นอน จึงยังไม่ส่งไปยังอักษรเบรลล์ กรุณาตรวจสอบหรือสแกนใหม่';
+            updateOCRProgress(1.0, `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> ${reason}`, result.confidence);
             return { text: cleanedText, confidence: result.confidence, words: result.words, accepted: false, tier };
         }
 
         const previewSnippet = cleanedText.length > 22 ? cleanedText.substring(0, 22) + '...' : cleanedText;
-        // 'medium' still shows the result + Braille, but honestly labelled -
-        // a 55% read is "we saw something, half of it is probably wrong", not
-        // a green "success".
+        // The medium branch remains explicit for the UI wording, though the
+        // safety gate above prevents it from actuating Braille automatically.
         const statusHtml = tier === 'medium'
             ? `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> เจอข้อความ แต่ไม่ชัด อาจมีคำผิด: "${previewSnippet}"`
             : `<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> สแกนสำเร็จ: "${previewSnippet}"`;
@@ -234,9 +239,8 @@ async function runOcrPipeline(imageFile, documentSource) {
         return { text: cleanedText, confidence: result ? result.confidence : 95, words: result ? result.words : [], accepted: true, tier };
     } catch (err) {
         console.error('[BraillLens OCR Error]:', err);
-        const fallbackText = "สวัสดีครับผมชื่อสมชาย";
-        applyOCRResultToSystem(fallbackText, 95);
-        return { text: fallbackText, confidence: 95, words: [], accepted: true };
+        updateOCRProgress(1.0, '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-magenta);"></i> OCR ทำงานไม่สำเร็จ กรุณาลองใหม่', 0);
+        return { text: '', confidence: 0, words: [], accepted: false, tier: 'low' };
     } finally {
         isOCROngoing = false;
     }

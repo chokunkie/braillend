@@ -4,9 +4,13 @@ FastAPI service that replaces the old in-browser Tesseract.js OCR with
 EasyOCR, focused on Thai accuracy. Preprocesses images with OpenCV/Pillow
 (document-quad detection + perspective warp to deskew, resize so the short
 side is >= 1100px, CLAHE contrast, adaptive threshold when lighting is
-uneven, and source-aware denoising) before running EasyOCR. A reader is
+uneven, source-aware denoising, and saturated-red spell-check underline
+cleanup) before running EasyOCR. A reader is
 cached per language set - `th+en` (default) or `th` only, which is more
-accurate on pure-Thai pages.
+accurate on pure-Thai pages. Mixed mode also detects likely Latin-lookalike
+hallucinations inside Thai words and re-reads eligible Thai-only lines with a
+dedicated Thai reader. Lines containing real standalone English words are
+never replaced by this rescue.
 
 ## Setup
 
@@ -29,9 +33,9 @@ source venv/bin/activate
 uvicorn main:app --reload --port 8000
 ```
 
-The server listens on `http://localhost:8000`. `js/ocr.js` on the
-frontend is hardcoded to POST to `http://localhost:8000/ocr` - update
-`OCR_BACKEND_URL` there if you run the backend elsewhere.
+The server listens on `http://localhost:8000`. `js/ocr.js` posts to the
+same-origin `/ocr` route, so local, tunnel, and deployed URLs use the same
+configuration as long as FastAPI serves the frontend.
 
 ## API
 
@@ -48,6 +52,13 @@ Response:
   "words": [
     { "text": "string", "bbox": { "x0": 0, "y0": 0, "x1": 0, "y1": 0 }, "confidence": 91.2 }
   ],
+  "engine": "easyocr",
+  "langUsed": "th+en",
+  "rescuedLines": 0,
+  "recoveredLines": 0,
+  "suspicious": false,
+  "warnings": [],
+  "failureReason": null,
   "warped": true,
   "warpedImage": "data:image/jpeg;base64,..."
 }

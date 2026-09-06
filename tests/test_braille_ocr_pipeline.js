@@ -526,15 +526,18 @@ runTest('Backend Preprocessing Pipeline (Bounded Resize, Clean-Bilevel Gate, Ada
 runTest('EasyOCR Engine Configuration (Thai + English, Glyph-Size Retry, Thai-Tuned Detector, Per-Word Boxes)', () => {
     assert(backendOcrEngineContent.includes('"th"') && backendOcrEngineContent.includes('"en"'), "EasyOCR must still support the th+en language set");
     assert(backendOcrEngineContent.includes('_LANG_SETS') && backendOcrEngineContent.includes('def get_reader'), 'Missing per-language reader cache (th vs th+en) for Thai-only accuracy mode');
-    assert(backendOcrEngineContent.includes('decoder="beamsearch"'), 'Missing decoder=\"beamsearch\" fallback for accuracy');
-    assert(backendOcrEngineContent.includes('paragraph=False'), 'Missing paragraph=False for per-word bounding boxes');
+    assert(backendOcrEngineContent.includes('decoder="beamsearch"') || backendOcrEngineContent.includes('"decoder": "beamsearch"'),
+        'Missing decoder="beamsearch" for accuracy');
+    assert(backendOcrEngineContent.includes('paragraph=False') || backendOcrEngineContent.includes('"paragraph": False'),
+        'Missing paragraph=False for per-word bounding boxes');
     assert(backendOcrEngineContent.includes('_bbox_to_rect'), 'Missing conversion of EasyOCR polygon bbox to axis-aligned rect');
     // Thai-tuned detector knobs: keep faint diacritic strokes / merge stacked
     // vowels, but text_threshold stays only mildly lowered (a hard drop makes
     // faint background noise read 'confidently' too).
-    assert(/y_ths=1\.\d/.test(backendOcrEngineContent) && backendOcrEngineContent.includes('add_margin='),
+    assert((/y_ths=1\.\d/.test(backendOcrEngineContent) || backendOcrEngineContent.includes('"y_ths": 1.5')) &&
+        (backendOcrEngineContent.includes('add_margin=') || backendOcrEngineContent.includes('"add_margin": 0.1')),
         'Missing raised y_ths / add_margin so above-below vowels stay attached');
-    assert(backendOcrEngineContent.includes('text_threshold=0.6'),
+    assert(backendOcrEngineContent.includes('text_threshold=0.6') || backendOcrEngineContent.includes('"text_threshold": 0.6'),
         'text_threshold should be mildly lowered (0.6), not hard-dropped');
     // Glyph-size retry: read, measure text height, re-read at the sweet spot,
     // keep the re-read only if it held onto text + confidence.
@@ -952,6 +955,57 @@ runTest('js/ocr.js pickBestBurstResult() - burst picker weighs completeness, not
 
     assert.strictEqual(ctx.pickBestBurstResult([]), null, 'no frames -> null');
     assert.strictEqual(ctx.pickBestBurstResult([{ text: '   ', confidence: 9 }]), null, 'blank frames -> null');
+});
+
+runTest('Mixed OCR safety: Thai rescue signals, burst consensus, and Braille gate', () => {
+    const ctx = vm.createContext({});
+    vm.runInContext(jsOcrModuleContent, ctx);
+
+    // Legitimate mixed-language text is preserved. Only a script switch
+    // inside a Thai-looking token / repeated Latin hallucination is flagged.
+    assert.strictEqual(ctx.detectSuspiciousOcrText('เรียน OpenAI 2026', 'th+en'), false,
+        'separate Thai + English words must remain valid mixed text');
+    assert.strictEqual(ctx.detectSuspiciousOcrText('รุ่นiPhone', 'th+en'), false,
+        'a substantial mixed-script product token must not be auto-rewritten');
+    assert.strictEqual(ctx.detectSuspiciousOcrText('wตตา', 'th+en'), true,
+        'Latin lookalike embedded in a Thai token must be suspicious');
+    assert.strictEqual(ctx.detectSuspiciousOcrText('wnnnnnnส. e', 'th+en'), true,
+        'repeated Latin detector noise must be suspicious');
+    assert.strictEqual(ctx.detectSuspiciousOcrText('OpenAI', 'th'), true,
+        'Thai-only mode must reject Latin output from a fallback/model mismatch');
+
+    // Two matching reads beat one confidently-wrong frame.
+    const voted = ctx.pickBestBurstResult([
+        { text: 'พิตต้า', confidence: 82, words: [], engine: 'easyocr', langUsed: 'th+en' },
+        { text: 'พิตต้า', confidence: 78, words: [], engine: 'easyocr', langUsed: 'th+en' },
+        { text: 'wตตา', confidence: 95, words: [], engine: 'easyocr', langUsed: 'th+en' },
+    ]);
+    assert.strictEqual(voted.text, 'พิตต้า', '2/3 frame consensus must beat a 95%-confident wrong read');
+    assert.strictEqual(Math.round(voted.agreement * 3), 2, 'consensus metadata must report 2/3 agreement');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille(voted), true, 'clean 2/3 EasyOCR consensus may actuate Braille');
+
+    const disputed = ctx.pickBestBurstResult([
+        { text: 'สกาย', confidence: 80, words: [], engine: 'easyocr', langUsed: 'th+en' },
+        { text: 'สาย', confidence: 85, words: [], engine: 'easyocr', langUsed: 'th+en' },
+        { text: 'wnnnnnnส. e', confidence: 91, words: [], engine: 'easyocr', langUsed: 'th+en' },
+    ]);
+    assert.strictEqual(disputed.suspicious, true, 'three disagreeing frames must be marked suspicious');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille(disputed), false, 'disputed burst must not actuate Braille');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille({
+        text: 'พิตต้า', confidence: 99, fallback: true, suspicious: false, frameCount: 1, agreement: 1
+    }), false, 'fallback output always requires confirmation');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille({
+        text: 'พิตต้า', confidence: 99, fallback: false, suspicious: false,
+        rescuedLines: 1, frameCount: 1, agreement: 1
+    }), false, 'a rescued line proves the first pass was unstable and must require confirmation');
+
+    assert(jsOcrModuleContent.includes('empty successful EasyOCR read returns above'),
+        'an empty successful backend read must return without silently falling through to Tesseract');
+    const cameraHtmlContent = fs.readFileSync(path.join(projectRoot, 'camera.html'), 'utf-8');
+    assert(cameraHtmlContent.includes('function confirmUncertainOcrResult'),
+        'camera result screen needs an explicit confirmation path for uncertain text');
+    assert(cameraHtmlContent.includes('activeBrailleSafe'),
+        'camera must gate Braille generation on composite OCR safety');
 });
 
 runTest('Guidance toggle states persist to localStorage (js/voice-guidance.js)', () => {

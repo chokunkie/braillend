@@ -21,6 +21,8 @@ _readers: Dict[str, "easyocr.Reader"] = {}
 _LANG_SETS = {
     "th": ["th"],
     "tha": ["th"],
+    "en": ["en"],
+    "eng": ["en"],
     "th+en": ["th", "en"],
     "tha+eng": ["th", "en"],
 }
@@ -163,7 +165,7 @@ _RESIZE_MAX = 2.8
 _EFF_SCALE_FLOOR = 0.35
 
 
-def _readtext(reader: "easyocr.Reader", image):
+def _readtext(reader: "easyocr.Reader", image, allowlist: str = None):
     """One detection+recognition pass with Thai-tuned detector knobs: a
     slightly lower text_threshold so faint diacritic strokes stay in their
     box, a higher y_ths so an above/below vowel merges into its line instead
@@ -171,13 +173,25 @@ def _readtext(reader: "easyocr.Reader", image):
     top. text_threshold isn't dropped hard - that also makes faint background
     noise read 'confidently'."""
     try:
+        kwargs = {
+            "decoder": "beamsearch",
+            "paragraph": False,
+            "text_threshold": 0.6,
+            "y_ths": 1.5,
+            "x_ths": 1.0,
+            "add_margin": 0.1,
+        }
+        if allowlist:
+            kwargs["allowlist"] = allowlist
         return reader.readtext(
-            image, paragraph=False,
-            text_threshold=0.6,
-            y_ths=1.5, x_ths=1.0, add_margin=0.1,
+            image,
+            **kwargs,
         )
     except Exception:
-        return reader.readtext(image, decoder="beamsearch", paragraph=False)
+        kwargs = {"decoder": "beamsearch", "paragraph": False}
+        if allowlist:
+            kwargs["allowlist"] = allowlist
+        return reader.readtext(image, **kwargs)
 
 
 def _median_glyph_height(raw_results) -> float:
@@ -208,11 +222,305 @@ def _confident_volume(raw_results) -> int:
               if str(t).strip() and float(c) >= floor)
 
 
+# A mixed Thai/English page must keep legitimate runs such as
+# "เรียน OpenAI 2026". What is suspicious is a script switch *inside one
+# whitespace-delimited token* ("wตตา") or a long repeated Latin run of the
+# kind produced when Thai strokes fragment ("wnnnnnnส.e"). These are the two
+# real failures this rescue targets; ordinary Thai and English words on the
+# same line are deliberately left alone.
+_THAI_CHAR_RE = re.compile(r"[ก-๏]")
+_LATIN_CHAR_RE = re.compile(r"[A-Za-z]")
+_REPEATED_LATIN_RE = re.compile(r"([A-Za-z])\1{3,}", re.IGNORECASE)
+_THAI_LETTER_MARK_RE = re.compile(r"[\u0E01-\u0E3A\u0E40-\u0E4E]")
+_THAI_COMBINING_RE = re.compile(r"[ัิีึืฺุู็่้๊๋์ํ๎]")
+_THAI_ALLOWLIST = "".join(chr(c) for c in range(0x0E01, 0x0E5C)) + "0123456789 .,!?%()-/"
+
+
+def _has_suspicious_script_mix(text: str) -> bool:
+    """True for likely Thai-as-Latin hallucinations, not normal mixed text."""
+    if not text:
+        return False
+    if _REPEATED_LATIN_RE.search(text):
+        return True
+
+    for token in re.findall(r"\S+", text):
+        thai_count = len(_THAI_CHAR_RE.findall(token))
+        latin_count = len(_LATIN_CHAR_RE.findall(token))
+        if thai_count and latin_count:
+            # A small Latin island surrounded by Thai is the common ก/n,
+            # พ/w confusion. A genuine product/name such as "รุ่นiPhone"
+            # has a substantial Latin run and is not rewritten automatically.
+            if thai_count >= 2 and latin_count <= 3:
+                return True
+            latin = "".join(_LATIN_CHAR_RE.findall(token)).lower()
+            if len(latin) >= 4 and len(set(latin)) <= 3:
+                return True
+    return False
+
+
+def _has_separate_latin_token(text: str) -> bool:
+    """True when a line contains an actual standalone English token.
+
+    A Thai-only rescue is allowed for an embedded lookalike such as ``wตตา``
+    but must never replace a whole genuinely mixed line such as
+    ``ชื่อ Pete`` and thereby erase its English content.
+    """
+    return any(
+        _LATIN_CHAR_RE.search(token) and not _THAI_CHAR_RE.search(token)
+        for token in re.findall(r"\S+", text or "")
+    )
+
+
+def _raw_words(raw_results) -> List[Dict[str, Any]]:
+    """EasyOCR tuples -> temporary word dictionaries in OCR-image space."""
+    words = []
+    for idx, (points, text, confidence) in enumerate(raw_results):
+        text = str(text).strip()
+        if not text:
+            continue
+        xs = [float(p[0]) for p in points]
+        ys = [float(p[1]) for p in points]
+        words.append({
+            "text": text,
+            "bbox": {"x0": min(xs), "y0": min(ys), "x1": max(xs), "y1": max(ys)},
+            "confidence": float(confidence) * 100.0,
+            "_raw_index": idx,
+        })
+    return words
+
+
+def _offset_raw_results(raw_results, dx: float, dy: float):
+    adjusted = []
+    for points, text, confidence in raw_results:
+        shifted = [[float(p[0]) + dx, float(p[1]) + dy] for p in points]
+        adjusted.append((shifted, text, confidence))
+    return adjusted
+
+
+def _is_plausible_thai_extension(original: str, candidate: str) -> bool:
+    """Whether a padded reread plausibly recovered omitted Thai glyphs.
+
+    EasyOCR sometimes boxes only the baseline consonants, excluding stacked
+    vowels/tone marks (and occasionally the final spacing vowel). We accept
+    only a *longer* Thai candidate whose consonant skeleton preserves the
+    original in order, adds at most one non-combining Thai character, and
+    adds no more than three Thai code points overall. This intentionally
+    cannot rewrite a same-length spelling guess.
+    """
+    original_chars = "".join(_THAI_LETTER_MARK_RE.findall(original or ""))
+    candidate_chars = "".join(_THAI_LETTER_MARK_RE.findall(candidate or ""))
+    if not original_chars or len(candidate_chars) <= len(original_chars):
+        return False
+    if len(candidate_chars) - len(original_chars) > 3:
+        return False
+
+    original_base = _THAI_COMBINING_RE.sub("", original_chars)
+    candidate_base = _THAI_COMBINING_RE.sub("", candidate_chars)
+    base_delta = len(candidate_base) - len(original_base)
+    if not original_base or base_delta < 0 or base_delta > 1:
+        return False
+    if base_delta == 0:
+        return candidate_base == original_base
+    # The one permitted spacing character must extend the detected word at
+    # its right edge (e.g. a missed final า). Never accept a new leading or
+    # internal base glyph: that produced false rewrites such as พชร -> ไพัชรี
+    # in a real regression fixture.
+    return candidate_base.startswith(original_base)
+
+
+def _recover_missing_thai_marks(raw_results, image, reader=None):
+    """Reread Thai-only lines with a padded direct recognition box.
+
+    Unlike ``readtext()``, ``Reader.recognize()`` uses the supplied rectangle
+    directly. Extending that rectangle one line-height upward keeps detached
+    สระ/วรรณยุกต์ inside the recognizer even when the detector omitted them.
+    Accepted candidates are deliberately narrow (see the helper above) and
+    are surfaced as rescued metadata so the frontend still asks the user to
+    confirm before sending them to Braille.
+    """
+    words = _raw_words(raw_results)
+    if not words:
+        return raw_results, 0
+    try:
+        lines = _group_into_lines(words)
+        img_h, img_w = image.shape[:2]
+    except Exception:
+        return raw_results, 0
+
+    thai_reader = reader or get_reader("th")
+    drop_indices = set()
+    replacements = []
+    recovered_lines = 0
+
+    for line in lines:
+        line_text = _join_line(line)
+        if not _THAI_CHAR_RE.search(line_text) or _LATIN_CHAR_RE.search(line_text):
+            continue
+
+        x0 = min(w["bbox"]["x0"] for w in line)
+        y0 = min(w["bbox"]["y0"] for w in line)
+        x1 = max(w["bbox"]["x1"] for w in line)
+        y1 = max(w["bbox"]["y1"] for w in line)
+        line_w = max(1.0, x1 - x0)
+        line_h = max(1.0, y1 - y0)
+        side_pad = max(12.0, min(line_w * 0.30, line_h * 0.75))
+        box = [
+            max(0, int(x0 - side_pad)),
+            min(img_w, int(x1 + side_pad)),
+            max(0, int(y0 - line_h)),
+            min(img_h, int(y1 + line_h * 0.30)),
+        ]
+        if box[1] - box[0] < 20 or box[3] - box[2] < 20:
+            continue
+
+        try:
+            candidate_raw = thai_reader.recognize(
+                image,
+                horizontal_list=[box],
+                free_list=[],
+                decoder="beamsearch",
+                allowlist=_THAI_ALLOWLIST,
+                detail=1,
+            )
+        except Exception:
+            continue
+
+        candidate_words = filter_confident_words(_raw_words(candidate_raw))
+        candidate_text = assemble_text(candidate_words)
+        if (_LATIN_CHAR_RE.search(candidate_text)
+                or _mean_conf(candidate_raw) < 0.45
+                or not _is_plausible_thai_extension(line_text, candidate_text)):
+            continue
+
+        drop_indices.update(w["_raw_index"] for w in line)
+        replacements.extend(candidate_raw)
+        recovered_lines += 1
+
+    if not recovered_lines:
+        return raw_results, 0
+    kept = [r for idx, r in enumerate(raw_results) if idx not in drop_indices]
+    return kept + replacements, recovered_lines
+
+
+def _rescue_suspicious_thai_lines(raw_results, image, reader=None):
+    """Re-read only suspicious mixed-script lines with a Thai allowlist.
+
+    The crop is padded heavily above the detected boxes so detached Thai
+    vowels/tone marks remain available. A rescue is accepted only when it
+    removes the script anomaly, keeps a reasonable amount of content, and
+    has usable confidence. Legitimate separated Thai + English words never
+    enter this path.
+    """
+    words = _raw_words(raw_results)
+    if not words:
+        return raw_results, 0
+
+    try:
+        lines = _group_into_lines(words)
+        img_h, img_w = image.shape[:2]
+    except Exception:
+        return raw_results, 0
+
+    suspicious_lines = [line for line in lines if _has_suspicious_script_mix(_join_line(line))]
+    if not suspicious_lines:
+        return raw_results, 0
+
+    # A dedicated Thai reader is materially more accurate than applying a
+    # Thai allowlist to the mixed reader. Run it once on the same full image
+    # first: retaining page context proved more accurate on real name images
+    # than immediately cutting a tight crop. The crop remains a fallback when
+    # no corresponding Thai line can be aligned.
+    thai_reader = reader or get_reader("th")
+    try:
+        thai_full_raw = _readtext(thai_reader, image, allowlist=_THAI_ALLOWLIST)
+        thai_full_lines = _group_into_lines(_raw_words(thai_full_raw))
+    except Exception:
+        thai_full_raw = []
+        thai_full_lines = []
+
+    def line_rect(line):
+        return {
+            "x0": min(w["bbox"]["x0"] for w in line),
+            "y0": min(w["bbox"]["y0"] for w in line),
+            "x1": max(w["bbox"]["x1"] for w in line),
+            "y1": max(w["bbox"]["y1"] for w in line),
+        }
+
+    def match_score(a, b):
+        inter_x = max(0.0, min(a["x1"], b["x1"]) - max(a["x0"], b["x0"]))
+        inter_y = max(0.0, min(a["y1"], b["y1"]) - max(a["y0"], b["y0"]))
+        min_w = max(1.0, min(a["x1"] - a["x0"], b["x1"] - b["x0"]))
+        min_h = max(1.0, min(a["y1"] - a["y0"], b["y1"] - b["y0"]))
+        return (inter_y / min_h) * 2.0 + (inter_x / min_w)
+
+    drop_indices = set()
+    replacements = []
+    rescued_lines = 0
+
+    for line in suspicious_lines:
+        line_text = _join_line(line)
+        # The rescue replaces the complete detected line. Keep genuinely
+        # mixed lines untouched and merely flag them for user confirmation;
+        # otherwise a Thai pass could silently delete a real English word.
+        if _has_separate_latin_token(line_text):
+            continue
+
+        x0 = min(w["bbox"]["x0"] for w in line)
+        y0 = min(w["bbox"]["y0"] for w in line)
+        x1 = max(w["bbox"]["x1"] for w in line)
+        y1 = max(w["bbox"]["y1"] for w in line)
+        line_w = max(1.0, x1 - x0)
+        line_h = max(1.0, y1 - y0)
+        cx0 = max(0, int(x0 - max(12.0, line_w * 0.10)))
+        cx1 = min(img_w, int(x1 + max(12.0, line_w * 0.10)))
+        cy0 = max(0, int(y0 - max(18.0, line_h * 0.70)))
+        cy1 = min(img_h, int(y1 + max(12.0, line_h * 0.35)))
+        rescue = []
+        if thai_full_lines:
+            original_rect = line_rect(line)
+            matched_line = max(thai_full_lines, key=lambda candidate: match_score(original_rect, line_rect(candidate)))
+            if match_score(original_rect, line_rect(matched_line)) >= 0.50:
+                rescue = [thai_full_raw[w["_raw_index"]] for w in matched_line]
+
+        if not rescue:
+            if cx1 - cx0 < 20 or cy1 - cy0 < 20:
+                continue
+            try:
+                rescue = _readtext(
+                    thai_reader, image[cy0:cy1, cx0:cx1], allowlist=_THAI_ALLOWLIST
+                )
+            except Exception:
+                continue
+            rescue = _offset_raw_results(rescue, cx0, cy0)
+        rescue_words = filter_confident_words(_raw_words(rescue))
+        rescue_text = assemble_text(rescue_words)
+        rescue_thai = len(_THAI_CHAR_RE.findall(rescue_text))
+        rescue_latin = len(_LATIN_CHAR_RE.findall(rescue_text))
+        original_content = max(1, len(_THAI_CHAR_RE.findall(line_text)) + len(_LATIN_CHAR_RE.findall(line_text)))
+        rescue_content = rescue_thai + rescue_latin
+        rescue_mean_conf = _mean_conf(rescue)
+
+        if (rescue_thai >= 2
+                and rescue_latin == 0
+                and not _has_suspicious_script_mix(rescue_text)
+                and rescue_content >= 0.35 * original_content
+                and rescue_mean_conf >= 0.30):
+            drop_indices.update(w["_raw_index"] for w in line)
+            replacements.extend(rescue)
+            rescued_lines += 1
+
+    if not rescued_lines:
+        return raw_results, 0
+    kept = [r for idx, r in enumerate(raw_results) if idx not in drop_indices]
+    return kept + replacements, rescued_lines
+
+
 def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
     reader = get_reader(lang)
     raw_results = _readtext(reader, image)
 
     factor = 1.0
+    ocr_image = image
     med_h = _median_glyph_height(raw_results)
     if med_h > 0.0 and (med_h < _RETRY_TOO_SMALL or med_h > _RETRY_TOO_BIG):
         f = max(_RESIZE_MIN, min(_RESIZE_MAX, _TARGET_GLYPH_PX / med_h))
@@ -237,9 +545,23 @@ def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
                 if (_median_glyph_height(retry) > 0.0
                         and _confident_volume(retry) >= 0.7 * _confident_volume(raw_results)
                         and _mean_conf(retry) >= _mean_conf(raw_results) - 0.35):
-                    raw_results, factor = retry, f
+                    raw_results, factor, ocr_image = retry, f, resized
             except Exception:
                 pass
+
+    normalized_lang = lang if lang in _LANG_SETS else "th+en"
+    script_rescued_lines = 0
+    if normalized_lang in ("th+en", "tha+eng"):
+        raw_results, script_rescued_lines = _rescue_suspicious_thai_lines(
+            raw_results, ocr_image
+        )
+        raw_results, recovered_lines = _recover_missing_thai_marks(
+            raw_results, ocr_image
+        )
+    else:
+        recovered_lines = 0
+
+    rescued_lines = script_rescued_lines + recovered_lines
 
     eff_scale = scale * factor
 
@@ -270,10 +592,26 @@ def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
     if not _looks_like_text(text, overall_confidence):
         text = ""
 
+    suspicious = _has_suspicious_script_mix(text)
+    warnings = []
+    if suspicious:
+        warnings.append("suspicious-script-mix")
+    if script_rescued_lines:
+        warnings.append("thai-line-rescued")
+    if recovered_lines:
+        warnings.append("thai-marks-recovered")
+
     return {
         "text": text,
         "confidence": overall_confidence,
         "words": words,
+        "engine": "easyocr",
+        "langUsed": normalized_lang,
+        "rescuedLines": rescued_lines,
+        "recoveredLines": recovered_lines,
+        "suspicious": suspicious,
+        "warnings": warnings,
+        "failureReason": None if text else "no-text",
     }
 
 
