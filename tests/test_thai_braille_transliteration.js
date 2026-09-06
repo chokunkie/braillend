@@ -78,6 +78,7 @@ console.log('\n--- SUITE B: totality (never throw, always an array) ---');
                 assert(typeof c.source === 'string');
                 assert.deepStrictEqual(c.activeDots, c.dots, 'activeDots must alias dots');
                 assert.strictEqual(c.char, c.source, 'char must alias source');
+                assert(typeof c.label === 'string', 'cell must carry a display label');
             });
         });
     });
@@ -136,6 +137,49 @@ test('empty input -> exactly one empty page', () => {
     assert.strictEqual(pages.length, 1);
     assert.strictEqual(pages[0].cells.length, 0);
 });
+
+/* ------------------------------------------------------------------ */
+console.log('\n--- SUITE F: cell display label (bare combining marks) ---');
+
+test('a bare above/below vowel or tone cell is labelled with a dotted circle', () => {
+    const marks = textToBrailleCells('พิตต้า');
+    const vowel = marks.find(c => c.source === 'ิ');
+    const tone = marks.find(c => c.source === '้');
+    assert(vowel && vowel.label === '◌ิ', `sara i cell label should be ◌ิ, got ${vowel && vowel.label}`);
+    assert(tone && tone.label === '◌้', `mai tho cell label should be ◌้, got ${tone && tone.label}`);
+    // source stays the raw grapheme (used for OLED text + speech)
+    assert.strictEqual(vowel.source, 'ิ');
+    assert.strictEqual(tone.source, '้');
+});
+
+test('a spacing letter/vowel keeps its plain label', () => {
+    const cells = textToBrailleCells('กา');
+    assert.strictEqual(cells[0].label, 'ก');
+    assert.strictEqual(cells.find(c => c.source === 'า').label, 'า');
+});
+
+test('page .text is built from source, never the dotted-circle label', () => {
+    const pages = paginateBrailleCells(textToBrailleCells('ก่อน'), 14);
+    assert(!pages[0].text.includes('◌'), 'OLED/speech text must not contain the display dotted circle');
+});
+
+/* ------------------------------------------------------------------ */
+console.log('\n--- SUITE G: name segmentation (a spaceless OCR run is not over-split) ---');
+
+if (!HAS_DICT) {
+    pend('name segmentation [needs wordlist]');
+} else {
+    [
+        ['พิตต้า', 0], ['ฐิติพร', 0], ['สกาย', 0], ['โชกุน', 0], ['สมชาย', 0], ['คิม', 0],
+        // real phrases still get their word breaks
+        ['ผมชอบกินข้าว', 3], ['สวัสดีครับ', 1], ['ยินดีต้อนรับ', 1], ['เขาไปโรงเรียน', 2],
+    ].forEach(([input, want]) => {
+        test(`segment ${JSON.stringify(input)} -> ${want} space cell(s)`, () => {
+            const n = textToBrailleCells(input).filter(c => c.kind === 'space').length;
+            assert.strictEqual(n, want, `expected ${want} spaces, got ${n}`);
+        });
+    });
+}
 
 /* ------------------------------------------------------------------ */
 console.log(`\n=== Thai Braille suite: ${passed}/${total} passed, ${failed} failed, ${pending} pending ===\n`);

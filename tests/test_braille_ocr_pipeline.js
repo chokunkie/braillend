@@ -104,21 +104,19 @@ runTest('External CDN Dependencies in index.html', () => {
 
 runTest('Modular Stylesheet & Script Tags in index.html (including OCR module split)', () => {
     assert(indexContent.includes('<link rel="stylesheet" href="css/styles.css">'), 'Missing css/styles.css link tag');
-    assert(indexContent.includes('<script src="js/textProcessor.js"></script>'), 'Missing js/textProcessor.js script tag');
-    assert(indexContent.includes('<script src="js/camera.js"></script>'), 'Missing js/camera.js script tag');
-    assert(indexContent.includes('<script src="js/ocr.js"></script>'), 'Missing js/ocr.js script tag');
-    assert(indexContent.includes('<script src="js/demoMode.js"></script>'), 'Missing js/demoMode.js script tag');
-    assert(indexContent.includes('<script src="js/thai-braille-tables.js"></script>'), 'Missing js/thai-braille-tables.js script tag');
-    assert(indexContent.includes('<script src="js/thai-wordlist.js"></script>'), 'Missing js/thai-wordlist.js script tag');
-    assert(indexContent.includes('<script src="js/thai-braille.js"></script>'), 'Missing js/thai-braille.js script tag');
+    // Script src may carry a ?v= cache-buster query string.
+    const hasScript = name => new RegExp(
+        '<script src="' + name.replace(/[.]/g, '\\$&') + '(\\?[^"]*)?"></script>'
+    ).test(indexContent);
+    [
+        'js/textProcessor.js', 'js/camera.js', 'js/ocr.js', 'js/demoMode.js',
+        'js/thai-braille-tables.js', 'js/thai-wordlist.js', 'js/thai-braille.js',
+        'js/braille-engine.js', 'js/three-scene.js', 'js/voice-guidance.js',
+        'js/ocr-engine.js', 'js/app.js',
+    ].forEach(name => assert(hasScript(name), `Missing ${name} script tag`));
     assert(indexContent.indexOf('js/thai-braille-tables.js') < indexContent.indexOf('js/thai-braille.js'), 'thai-braille-tables.js must load before thai-braille.js');
     assert(indexContent.indexOf('js/thai-wordlist.js') < indexContent.indexOf('js/thai-braille.js'), 'thai-wordlist.js must load before thai-braille.js');
     assert(indexContent.indexOf('js/thai-braille.js') < indexContent.indexOf('js/braille-engine.js'), 'thai-braille.js must load before braille-engine.js');
-    assert(indexContent.includes('<script src="js/braille-engine.js"></script>'), 'Missing js/braille-engine.js script tag');
-    assert(indexContent.includes('<script src="js/three-scene.js"></script>'), 'Missing js/three-scene.js script tag');
-    assert(indexContent.includes('<script src="js/voice-guidance.js"></script>'), 'Missing js/voice-guidance.js script tag');
-    assert(indexContent.includes('<script src="js/ocr-engine.js"></script>'), 'Missing js/ocr-engine.js script tag');
-    assert(indexContent.includes('<script src="js/app.js"></script>'), 'Missing js/app.js script tag');
 });
 
 // -------------------------------------------------------------
@@ -354,6 +352,68 @@ runTest('Compile js/textProcessor.js with Node vm.Script (Thai-aware NFC normali
     assert(jsTextProcessorContent.includes('function normalizeOcrText'), 'Missing normalizeOcrText');
     assert(jsTextProcessorContent.includes("normalize('NFC')"), 'Missing Unicode NFC normalization');
     assert(!/toUpperCase/.test(jsTextProcessorContent), 'textProcessor.js must not force uppercase - Thai has no case');
+    assert(jsTextProcessorContent.includes('function classifyOcrConfidence'), 'Missing classifyOcrConfidence bucket helper');
+    assert(jsTextProcessorContent.includes('function repairThaiToneMarks'), 'Missing repairThaiToneMarks() Thai tone-mark repair pass');
+});
+
+runTest('js/textProcessor.js classifyOcrConfidence() - three honest confidence buckets, not binary', () => {
+    const ctx = vm.createContext({});
+    vm.runInContext(jsTextProcessorContent, ctx);
+
+    assert.strictEqual(ctx.classifyOcrConfidence(95), 'high', '95% -> high');
+    assert.strictEqual(ctx.classifyOcrConfidence(72), 'high', 'exactly 72 -> high (>=)');
+    assert.strictEqual(ctx.classifyOcrConfidence(60), 'medium', '60% -> medium (saw text, half is probably wrong)');
+    assert.strictEqual(ctx.classifyOcrConfidence(45), 'medium', 'exactly 45 -> medium (>=)');
+    assert.strictEqual(ctx.classifyOcrConfidence(30), 'low', '30% -> low');
+    assert.strictEqual(ctx.classifyOcrConfidence(0), 'low', '0% -> low');
+    // Garbage in never throws - defaults to the most cautious bucket.
+    assert.strictEqual(ctx.classifyOcrConfidence(undefined), 'low', 'undefined -> low');
+    assert.strictEqual(ctx.classifyOcrConfidence(NaN), 'low', 'NaN -> low');
+    assert.strictEqual(ctx.classifyOcrConfidence('nonsense'), 'low', 'non-number -> low');
+});
+
+runTest('js/textProcessor.js repairThaiToneMarks() - restores unambiguous dropped tone marks, never corrupts real words', () => {
+    const wl = require(path.join(projectRoot, 'js', 'thai-wordlist.js'));
+    const ctx = vm.createContext({ THAI_WORDLIST: wl, console });
+    vm.runInContext(jsTextProcessorContent, ctx);
+    const R = ctx.repairThaiToneMarks;
+
+    // Dropped tone mark, exactly one dictionary reading -> restored.
+    assert.strictEqual(R('ให'), 'ให้', 'ให -> ให้ (dropped mai tho)');
+    assert.strictEqual(R('แลว'), 'แล้ว', 'แลว -> แล้ว');
+    // The mark belongs after the above-vowel, not the consonant.
+    assert.strictEqual(R('ขึน'), 'ขึ้น', 'ขึน -> ขึ้น (mark sits after ึ)');
+
+    // Correctly-read words are NEVER touched - idempotent over the whole list.
+    let altered = 0;
+    for (const w of wl.set) { if (R(w) !== w) { altered++; if (altered <= 3) console.log('   altered:', w, '->', R(w)); } }
+    assert.strictEqual(altered, 0, 'no dictionary word may be rewritten by the repair pass');
+
+    // "ขาว" (white) is a real word; even though "ข้าว" (rice) is one tone
+    // edit away, an in-dictionary token is left alone.
+    assert.strictEqual(R('ขาว'), 'ขาว', 'a valid word one edit from another valid word is left as-is');
+
+    // Ambiguous / unknown -> unchanged (never a wrong guess).
+    assert.strictEqual(R('พด'), 'พด', 'พด has no unambiguous tone-only repair -> unchanged');
+    assert.strictEqual(R('ผมชอบกินขาว'), 'ผมชอบกินขาว', 'long glued token (>6 chars) is not touched');
+
+    // Multi-token strings are repaired per whitespace token, spacing preserved.
+    assert.strictEqual(R('แลว ผม ให คุณ'), 'แล้ว ผม ให้ คุณ', 'per-token repair, whitespace kept');
+
+    // Non-Thai and mixed tokens pass straight through.
+    assert.strictEqual(R('HELLO ครบ'), 'HELLO ครบ', 'latin token untouched; ครบ has no unambiguous repair');
+    assert.strictEqual(R('abc123'), 'abc123');
+
+    // Runtime kill-switch.
+    ctx.ENABLE_THAI_OCR_REPAIR = false;
+    assert.strictEqual(R('ให'), 'ให', 'globalThis.ENABLE_THAI_OCR_REPAIR = false disables the pass');
+    ctx.ENABLE_THAI_OCR_REPAIR = true;
+
+    // Degrades to a no-op with no wordlist loaded.
+    const bare = vm.createContext({ console });
+    vm.runInContext(jsTextProcessorContent, bare);
+    assert.strictEqual(bare.repairThaiToneMarks('ให'), 'ให', 'no wordlist -> no-op');
+    assert.strictEqual(bare.normalizeOcrText('  Hello   สวัสดี  '), 'Hello สวัสดี', 'normalizeOcrText still works without wordlist');
 });
 
 runTest('Compile js/demoMode.js with Node vm.Script (isolated from real OCR)', () => {
@@ -427,7 +487,7 @@ runTest('Laplacian Variance Focus Detection 3x3 Kernel Math & Thresholds', () =>
 runTest('Focus Voice Guidance Prompts & Focus Gating Protection', () => {
     assert(jsVoiceContent.includes('ภาพยังเบลออยู่ ถือกล้องนิ่งๆ อีกนิดนะครับ'), 'Missing blurry voice prompt');
     assert(jsVoiceContent.includes('ตัวอักษรชัดเจนแล้ว ถือค้างไว้นะครับ...'), 'Missing sharp voice prompt');
-    assert(jsVoiceContent.includes('focusScore >= FOCUS_SHARP_THRESHOLD'), 'Auto-Capture must gate shutter trigger on focusScore >= FOCUS_SHARP_THRESHOLD (160)');
+    assert(/m\.focus >= FOCUS_SHARP_THRESHOLD\b/.test(jsVoiceContent), 'Auto-Capture must gate the shutter trigger on the (smoothed) focus score >= FOCUS_SHARP_THRESHOLD (160)');
 });
 
 runTest('Real-time Focus Status HUD Format & Score Display', () => {
@@ -443,9 +503,17 @@ runTest('Viewfinder Crop Coordinate Calculation & 85% Fallback in js/camera.js',
     assert(jsCameraContent.includes('drawImage(video, sx, sy, sw, sh'), 'Missing precise source crop drawImage coordinates');
 });
 
-runTest('Backend Preprocessing Pipeline (Resize, CLAHE, Adaptive Threshold, Source-Aware Denoise)', () => {
-    assert(backendPreprocessingContent.includes('MIN_SHORT_SIDE = 1100'), 'Missing 1100px minimum short-side resize target (raised from 640 for Thai x-height)');
+runTest('Backend Preprocessing Pipeline (Bounded Resize, Clean-Bilevel Gate, Adaptive Threshold, Source-Aware Denoise)', () => {
+    // Resize is now coarse bounds only - run_ocr() does the OCR-optimal
+    // sizing. The old fixed 1100px upscaled clean single-word uploads
+    // (~90px glyphs -> ~180px) into EasyOCR's fragmentation zone.
+    assert(/MIN_SHORT_SIDE = [1-9]\d{2}\b/.test(backendPreprocessingContent) && parseInt(backendPreprocessingContent.match(/MIN_SHORT_SIDE = (\d+)/)[1], 10) < 1100,
+        'MIN_SHORT_SIDE must be a modest detection floor, well below the old fixed 1100 upscale');
+    assert(backendPreprocessingContent.includes('MAX_LONG_SIDE') && backendPreprocessingContent.includes('MAX_UPSCALE'),
+        'resize must clamp into coarse bounds and cap how far it upscales (up-then-down round trip smears thin strokes)');
     assert(backendPreprocessingContent.includes('createCLAHE'), 'Missing CLAHE contrast enhancement');
+    assert(backendPreprocessingContent.includes('_is_clean_bilevel'),
+        'Missing the crisp-black-on-white gate that skips CLAHE / threshold (they only erode thin Thai diacritic strokes)');
     assert(backendPreprocessingContent.includes('adaptiveThreshold'), 'Missing adaptive threshold for uneven lighting');
     assert(backendPreprocessingContent.includes('_is_lighting_uneven'), 'Missing lighting-unevenness heuristic gating the adaptive threshold');
     assert(backendPreprocessingContent.includes('fastNlMeansDenoising'), 'Missing denoise step');
@@ -453,12 +521,50 @@ runTest('Backend Preprocessing Pipeline (Resize, CLAHE, Adaptive Threshold, Sour
     assert(backendPreprocessingContent.includes('detect_document_quad') && backendPreprocessingContent.includes('warpPerspective'), 'Missing document quad detection + perspective (deskew) warp');
 });
 
-runTest('EasyOCR Engine Configuration (Thai + English, Beamsearch, Per-Word Boxes)', () => {
+runTest('EasyOCR Engine Configuration (Thai + English, Glyph-Size Retry, Thai-Tuned Detector, Per-Word Boxes)', () => {
     assert(backendOcrEngineContent.includes('"th"') && backendOcrEngineContent.includes('"en"'), "EasyOCR must still support the th+en language set");
     assert(backendOcrEngineContent.includes('_LANG_SETS') && backendOcrEngineContent.includes('def get_reader'), 'Missing per-language reader cache (th vs th+en) for Thai-only accuracy mode');
-    assert(backendOcrEngineContent.includes('decoder="beamsearch"'), 'Missing decoder=\"beamsearch\" for accuracy');
-    assert(backendOcrEngineContent.includes('paragraph=False'), 'Missing paragraph=False for per-word bounding boxes');
+    assert(backendOcrEngineContent.includes('decoder="beamsearch"') || backendOcrEngineContent.includes('"decoder": "beamsearch"'),
+        'Missing decoder="beamsearch" for accuracy');
+    assert(backendOcrEngineContent.includes('paragraph=False') || backendOcrEngineContent.includes('"paragraph": False'),
+        'Missing paragraph=False for per-word bounding boxes');
     assert(backendOcrEngineContent.includes('_bbox_to_rect'), 'Missing conversion of EasyOCR polygon bbox to axis-aligned rect');
+    // Thai-tuned detector knobs: keep faint diacritic strokes / merge stacked
+    // vowels, but text_threshold stays only mildly lowered (a hard drop makes
+    // faint background noise read 'confidently' too).
+    assert((/y_ths=1\.\d/.test(backendOcrEngineContent) || backendOcrEngineContent.includes('"y_ths": 1.5')) &&
+        (backendOcrEngineContent.includes('add_margin=') || backendOcrEngineContent.includes('"add_margin": 0.1')),
+        'Missing raised y_ths / add_margin so above-below vowels stay attached');
+    assert(backendOcrEngineContent.includes('text_threshold=0.6') || backendOcrEngineContent.includes('"text_threshold": 0.6'),
+        'text_threshold should be mildly lowered (0.6), not hard-dropped');
+    // Glyph-size retry: read, measure text height, re-read at the sweet spot,
+    // keep the re-read only if it held onto text + confidence.
+    assert(backendOcrEngineContent.includes('def _median_glyph_height') && backendOcrEngineContent.includes('_TARGET_GLYPH_PX'),
+        'Missing the measure-and-resize retry that keeps glyphs near EasyOCR\'s ~46px sweet spot');
+    assert(backendOcrEngineContent.includes('def _confident_volume') && /_confident_volume\(retry\)\s*>=/.test(backendOcrEngineContent),
+        'Retry must be rejected when the text that survives filtering shrinks (multi-line regression guard)');
+    assert(backendOcrEngineContent.includes('eff_scale = scale * factor'),
+        'bbox coords must fold in the retry resize factor, not just the preprocess scale');
+});
+
+runTest('Backend OCR noise rejection (digit/symbol hallucination + layout logo strips)', () => {
+    // Regression guards for the real test-photo failures:
+    //  - "AIS" wooden letters on a wood-grain table came back as "1 , 111
+    //    โ ) 1" at 54% - mostly digits/punctuation, mediocre confidence.
+    //  - A "MAMO" headline came back with the sponsor-logo strip glued on
+    //    ("mamo als academy ni okmd").
+    // See backend/test_ocr_text_assembly.py Cases 9 & 10 for the behavioural
+    // tests; this just pins that the guards are still wired into run_ocr().
+    assert(backendOcrEngineContent.includes('def _looks_like_text'),
+        'Missing _looks_like_text() digit/symbol-soup rejection');
+    assert(backendOcrEngineContent.includes('def _letter_ratio'),
+        'Missing _letter_ratio() helper');
+    assert(backendOcrEngineContent.includes('def _filter_layout_noise'),
+        'Missing _filter_layout_noise() logo/fine-print stripper');
+    assert(/_filter_layout_noise\(\s*filter_confident_words\(/.test(backendOcrEngineContent),
+        'run_ocr must chain filter_confident_words -> _filter_layout_noise before assembly');
+    assert(/if not _looks_like_text\(/.test(backendOcrEngineContent),
+        'run_ocr must blank the text when _looks_like_text() rejects it');
 });
 
 runTest('FastAPI /ocr Endpoint Contract', () => {
@@ -477,8 +583,15 @@ runTest('Single Unified OCR Call Path (Upload & Camera share runOcrPipeline; doc
     assert(/runOcrPipeline\(\s*file\s*,\s*['"]camera['"]\s*\)/.test(jsOcrContent), 'Camera flow must call runOcrPipeline(file, \'camera\')');
     assert(jsOcrContent.includes('await recognize(imageFile, documentSource)'), 'runOcrPipeline must delegate the actual OCR call to js/ocr.js\'s recognize()');
     assert(jsOcrContent.includes('normalizeOcrText(result.text)'), 'runOcrPipeline must normalize OCR text via js/textProcessor.js');
-    assert(jsOcrContent.includes('OCR_LOW_CONFIDENCE_THRESHOLD'), 'Missing low-confidence gate constant');
-    assert(jsOcrContent.includes('result.confidence < OCR_LOW_CONFIDENCE_THRESHOLD'), 'Missing low-confidence gate blocking Braille actuation on unclear images');
+    // The low-confidence gate that blocks Braille actuation on unclear reads
+    // now routes through the shared three-bucket classifier instead of a
+    // local numeric cutoff, so camera.html and this modal agree.
+    assert(jsOcrContent.includes('ocrConfidenceTier') || jsOcrContent.includes('classifyOcrConfidence'),
+        'Missing shared confidence-tier classification');
+    assert(/tier === 'low'/.test(jsOcrContent),
+        'Missing low-tier gate blocking Braille actuation on unclear images');
+    assert(/tier === 'medium'/.test(jsOcrContent),
+        "Missing medium tier - a borderline read must show the result but labelled 'อาจมีคำผิด', not a green success");
 });
 
 runTest('Visual OCR Bounding Box Inspector Canvas Rendering & Glowing Bounding Boxes', () => {
@@ -510,7 +623,7 @@ runTest('4-Corner Target Locked Bracket Density Scanning & HUD Synchronization',
     assert(jsVoiceContent.includes('zoneBL'), 'Missing zoneBL corner target boundary definition');
     assert(jsVoiceContent.includes('zoneBR'), 'Missing zoneBR corner target boundary definition');
     assert(jsVoiceContent.includes('densityTL = countTL / Math.max(1, pixelsTL)'), 'Missing densityTL calculation');
-    assert(jsVoiceContent.includes('updateCornerTargetHUD(lockedTL, lockedTR, lockedBL, lockedBR)'), 'Missing updateCornerTargetHUD invocation');
+    assert(/updateCornerTargetHUD\(lockedTL, lockedTR, lockedBL, lockedBR\b/.test(jsVoiceContent), 'Missing updateCornerTargetHUD invocation');
 });
 
 runTest('Real-Time 4-Corner Target Alignment Percentage Math & 100% Lock Banner', () => {
@@ -601,6 +714,52 @@ runTest('Auto-Capture defaults to OFF (manual shutter is the default)', () => {
     assert(jsVoiceContent.includes('กดปุ่มถ่ายภาพได้เลยครับ'), 'Missing manual-shutter-ready voice prompt');
 });
 
+runTest('Stop-reading button next to every read-aloud button (long OCR text must be interruptible)', () => {
+    const cameraHtmlContent = fs.readFileSync(path.join(projectRoot, 'camera.html'), 'utf-8');
+
+    // camera.html: speakResult() + its own stop button/function.
+    assert(cameraHtmlContent.includes('onclick="stopSpeakingResult()"'), 'camera.html missing stop-reading button');
+    assert(cameraHtmlContent.includes('function stopSpeakingResult()') &&
+        cameraHtmlContent.includes('window.speechSynthesis.cancel()'),
+        'camera.html missing stopSpeakingResult() calling speechSynthesis.cancel()');
+
+    // index.html + js/ocr-engine.js: speakResultText() result modal.
+    assert(indexContent.includes('onclick="stopSpeakingResult()"'), 'index.html missing stop-reading button');
+    assert(jsOcrContent.includes('function stopSpeakingResult()') &&
+        jsOcrContent.includes('window.speechSynthesis.cancel()'),
+        'js/ocr-engine.js missing stopSpeakingResult() calling speechSynthesis.cancel()');
+});
+
+runTest('OCR result confidence is a 3-tier signal (high / medium / low), not a binary green tick', () => {
+    const cameraHtmlContent = fs.readFileSync(path.join(projectRoot, 'camera.html'), 'utf-8');
+
+    // camera.html result screen: the success badge + detected-text colour
+    // must be driven by classifyOcrConfidence, with an explicit "อาจมีคำผิด"
+    // wording for the medium bucket. Regression guard for the screenshot
+    // where a 54% read of wood-grain noise showed a confident green
+    // "ตรวจพบข้อความ".
+    assert(cameraHtmlContent.includes('classifyOcrConfidence'),
+        'camera.html renderResultData must classify OCR confidence into tiers');
+    assert(cameraHtmlContent.includes('อาจมีคำผิด'),
+        'camera.html must warn "อาจมีคำผิด" on a medium-confidence read instead of a plain success badge');
+
+    // ...and a blind user, who can't see that badge, must hear the same
+    // caveat spoken once when the result lands (not a full read-aloud - that
+    // stays on the manual button).
+    assert(cameraHtmlContent.includes('function speakOcrResultCue'),
+        'camera.html must speak a confidence cue after the OCR result lands');
+    assert(/speakOcrResultCue\(\)/.test(cameraHtmlContent),
+        'speakOcrResultCue() must actually be called from displayOCRResult');
+
+    // js/ocr-engine.js result modal: same tiering, plus a visible badge.
+    assert(jsOcrContent.includes('ocrConfidenceTier') || jsOcrContent.includes('classifyOcrConfidence'),
+        'js/ocr-engine.js must classify OCR confidence into tiers');
+    assert(jsOcrContent.includes('resConfidenceBadge'),
+        'js/ocr-engine.js renderResultScreenData must populate the result-modal confidence badge');
+    assert(indexContent.includes('id="resConfidenceBadge"'),
+        'index.html result modal must have a confidence badge element');
+});
+
 runTest('speechSynthesis unlock on first user gesture (beeps-but-no-voice regression guard)', () => {
     // Regression guard for a real report: the camera+guidance loop starts on
     // DOMContentLoaded (no click involved) and re-fires every 300ms from a
@@ -675,7 +834,12 @@ runTest('3D Hardware Interactive Tactical Buttons (Prev, Next, Mode) & Raycaster
 
 runTest('Text-presence gate rejects non-text scenes & keeps text (js/voice-guidance.js)', () => {
     assert(jsVoiceContent.includes('function detectTextLikeStructure'), 'Missing detectTextLikeStructure()');
-    assert(jsVoiceContent.includes('if (!textStruct.isText)'), 'analyzeLiveCameraFrame must bail out (no auto-capture) when the frame is not text-like');
+    assert(jsVoiceContent.includes('textStruct.rows') && jsVoiceContent.includes('textStruct.components'),
+        'analyzeLiveCameraFrame must feed detectTextLikeStructure output into its text-confidence gate');
+    assert(jsVoiceContent.includes("textConfidence === 'no'"),
+        'analyzeLiveCameraFrame must bail out (no auto-capture) when text confidence is "no"');
+    assert(jsVoiceContent.includes("textConfidence !== 'confident'") && jsVoiceContent.includes("textConfidence = 'confident'"),
+        'analyzeLiveCameraFrame must treat "confident" text specially (person guard) - 3-level confidence, not a boolean');
     assert(jsVoiceContent.includes('ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษนะครับ'), 'Missing distinct no-text Thai prompt');
     assert(jsVoiceContent.includes('กล้องเจอคน'), 'Missing "camera sees a person" Thai prompt');
     assert(jsVoiceContent.includes('computeSkinRatio'), 'Missing skin-tone ratio helper for person detection');
@@ -702,8 +866,49 @@ runTest('Text-presence gate rejects non-text scenes & keeps text (js/voice-guida
     assert.strictEqual(ctx.detectTextLikeStructure(blob, w, h).isText, false, 'One large blob (a face/object) must not read as text');
 });
 
+runTest('Camera guidance is temporally smoothed + debounced (anti-flicker)', () => {
+    assert(jsVoiceContent.includes('function smoothFrameMetrics') && jsVoiceContent.includes('function ema'),
+        'Missing EMA metric smoothing');
+    assert(jsVoiceContent.includes('function commitGuidance'),
+        'Missing commitGuidance() state-commit debounce');
+    assert(jsVoiceContent.includes('hasDocumentSticky'),
+        'Missing hysteresis latch for document presence');
+    assert(jsVoiceContent.includes('DOC_STROKES_ENTER') && jsVoiceContent.includes('DOC_STROKES_EXIT'),
+        'Document detection must have separate enter/exit thresholds (hysteresis)');
+    assert(jsVoiceContent.includes('resetGuidanceSmoothing()') &&
+        (jsVoiceContent.match(/resetGuidanceSmoothing\(\)/g) || []).length >= 3,
+        'resetGuidanceSmoothing() must be defined and called on both start and stop of the guidance loop');
+
+    // Exercise the pure logic (EMA + the commit-debounce state machine). The
+    // module's own updateVoiceStatusHUD/speakVoiceGuidance no-op without a DOM,
+    // which is fine here - we're asserting the returned commit decision.
+    const ctx = vm.createContext({
+        Math, Uint8Array, Int32Array, Date, setInterval: () => 0, clearInterval: () => {}, console
+    });
+    vm.runInContext(jsVoiceContent + '\nvar __api = { ema, commitGuidance, resetGuidanceSmoothing };', ctx);
+    const { ema, commitGuidance, resetGuidanceSmoothing } = ctx.__api;
+
+    // EMA: first sample passes through, later samples are pulled toward it.
+    assert.strictEqual(ema(null, 10), 10, 'first EMA sample must pass through');
+    const mixed = ema(10, 20);
+    assert(mixed > 10 && mixed < 20, 'EMA must blend previous and current');
+
+    // commitGuidance: a state must repeat before it commits; changing state resets the count.
+    resetGuidanceSmoothing();
+    assert.strictEqual(commitGuidance('a', 'msg-a'), false, 'first tick of a state must NOT commit');
+    assert.strictEqual(commitGuidance('a', 'msg-a'), true, 'second consecutive tick commits');
+    assert.strictEqual(commitGuidance('a', 'msg-a'), true, 'staying in the same state stays committed');
+    assert.strictEqual(commitGuidance('b', 'msg-b'), false, 'switching state resets the debounce');
+    assert.strictEqual(commitGuidance('c', 'msg-c', null, null, true), true, 'force=true bypasses the debounce');
+});
+
 runTest('Continuous navigation sonar + haptics + dark/glare guards (js/voice-guidance.js)', () => {
     assert(jsVoiceContent.includes('function startNavSonar') && jsVoiceContent.includes('function updateNavSonar'), 'Missing navigation sonar engine');
+    // The constant machine-gun sonar blipping is disabled for now - startNavSonar()
+    // must bail unless it's explicitly re-enabled.
+    assert(jsVoiceContent.includes('let isNavSonarEnabled = false'), 'Nav sonar must default to OFF');
+    assert(/function startNavSonar\(\)\s*\{\s*(?:\/\/[^\n]*\n\s*)*if \(!isNavSonarEnabled\) return;/.test(jsVoiceContent),
+        'startNavSonar() must bail immediately when isNavSonarEnabled is false');
     assert(jsVoiceContent.includes('function vibrate'), 'Missing vibrate() haptic helper');
     assert(jsVoiceContent.includes('แสงน้อยไป'), 'Missing too-dark Thai prompt');
     assert(jsVoiceContent.includes('แสงสะท้อน'), 'Missing glare Thai prompt');
@@ -712,6 +917,109 @@ runTest('Continuous navigation sonar + haptics + dark/glare guards (js/voice-gui
     assert(jsCameraContent.includes('function setTorch') && jsCameraContent.includes('function captureBurstFrames'), 'js/camera.js missing torch + burst-capture helpers');
     assert(jsOcrModuleContent.includes('async function recognizeBest'), 'js/ocr.js missing recognizeBest() burst picker');
     assert(jsOcrModuleContent.includes("formData.append('lang'"), 'recognize() must pass the OCR language set to the backend');
+});
+
+runTest('js/ocr.js pickBestBurstResult() - burst picker weighs completeness, not just confidence', () => {
+    const ctx = vm.createContext({});
+    vm.runInContext(jsOcrModuleContent, ctx);
+
+    // The core case: a slightly-lower-confidence frame that captured the
+    // trailing word must beat the crisp-but-truncated frame.
+    const chosen = ctx.pickBestBurstResult([
+        { text: 'HACKATHON', confidence: 95, words: [] },
+        { text: 'HACKATHON 2026', confidence: 88, words: [] },
+        { text: 'HACK', confidence: 70, words: [] },
+    ]);
+    assert.strictEqual(chosen.text, 'HACKATHON 2026', 'must prefer the more complete read within the confidence band');
+
+    // A wordier frame that reads MUCH lower is out of the band -> the crisp
+    // frame still wins (a garbled frame reads low and is wordy with junk).
+    const chosen2 = ctx.pickBestBurstResult([
+        { text: 'ภารกิจ', confidence: 90, words: [] },
+        { text: 'ภารกิจ คิด เผื่อ ขับ เคลื่อน โ ) นาคต', confidence: 55, words: [] },
+    ]);
+    assert.strictEqual(chosen2.text, 'ภารกิจ', 'a far-lower-confidence frame must not win on wordiness alone');
+
+    // Equal content -> higher confidence breaks the tie.
+    const chosen3 = ctx.pickBestBurstResult([
+        { text: 'สวัสดี', confidence: 80, words: [] },
+        { text: 'สวัสดี', confidence: 92, words: [] },
+    ]);
+    assert.strictEqual(chosen3.confidence, 92, 'equal content falls back to confidence');
+
+    // Punctuation/space noise doesn't inflate the content score.
+    assert.strictEqual(ctx.burstContentScore({ text: 'A B C' }), 3, 'spaces are not content');
+    assert.strictEqual(ctx.burstContentScore({ text: ') ) 1 1 (' }), 2, 'only the two digits count');
+
+    assert.strictEqual(ctx.pickBestBurstResult([]), null, 'no frames -> null');
+    assert.strictEqual(ctx.pickBestBurstResult([{ text: '   ', confidence: 9 }]), null, 'blank frames -> null');
+});
+
+runTest('Mixed OCR safety: Thai rescue signals, burst consensus, and Braille gate', () => {
+    const ctx = vm.createContext({});
+    vm.runInContext(jsOcrModuleContent, ctx);
+
+    // Legitimate mixed-language text is preserved. Only a script switch
+    // inside a Thai-looking token / repeated Latin hallucination is flagged.
+    assert.strictEqual(ctx.detectSuspiciousOcrText('เรียน OpenAI 2026', 'th+en'), false,
+        'separate Thai + English words must remain valid mixed text');
+    assert.strictEqual(ctx.detectSuspiciousOcrText('รุ่นiPhone', 'th+en'), false,
+        'a substantial mixed-script product token must not be auto-rewritten');
+    assert.strictEqual(ctx.detectSuspiciousOcrText('wตตา', 'th+en'), true,
+        'Latin lookalike embedded in a Thai token must be suspicious');
+    assert.strictEqual(ctx.detectSuspiciousOcrText('wnnnnnnส. e', 'th+en'), true,
+        'repeated Latin detector noise must be suspicious');
+    assert.strictEqual(ctx.detectSuspiciousOcrText('OpenAI', 'th'), true,
+        'Thai-only mode must reject Latin output from a fallback/model mismatch');
+
+    // Two matching reads beat one confidently-wrong frame.
+    const voted = ctx.pickBestBurstResult([
+        { text: 'พิตต้า', confidence: 82, words: [], engine: 'easyocr', langUsed: 'th+en' },
+        { text: 'พิตต้า', confidence: 78, words: [], engine: 'easyocr', langUsed: 'th+en' },
+        { text: 'wตตา', confidence: 95, words: [], engine: 'easyocr', langUsed: 'th+en' },
+    ]);
+    assert.strictEqual(voted.text, 'พิตต้า', '2/3 frame consensus must beat a 95%-confident wrong read');
+    assert.strictEqual(Math.round(voted.agreement * 3), 2, 'consensus metadata must report 2/3 agreement');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille(voted), true, 'clean 2/3 EasyOCR consensus may actuate Braille');
+
+    const disputed = ctx.pickBestBurstResult([
+        { text: 'สกาย', confidence: 80, words: [], engine: 'easyocr', langUsed: 'th+en' },
+        { text: 'สาย', confidence: 85, words: [], engine: 'easyocr', langUsed: 'th+en' },
+        { text: 'wnnnnnnส. e', confidence: 91, words: [], engine: 'easyocr', langUsed: 'th+en' },
+    ]);
+    assert.strictEqual(disputed.suspicious, true, 'three disagreeing frames must be marked suspicious');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille(disputed), false, 'disputed burst must not actuate Braille');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille({
+        text: 'พิตต้า', confidence: 99, fallback: true, suspicious: false, frameCount: 1, agreement: 1
+    }), false, 'fallback output always requires confirmation');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille({
+        text: 'พิตต้า', confidence: 99, fallback: false, suspicious: false,
+        rescuedLines: 1, frameCount: 1, agreement: 1
+    }), false, 'a rescued line proves the first pass was unstable and must require confirmation');
+
+    // A plain medium-confidence read is NOT gated behind a confirm button -
+    // it renders Braille with the visible amber "อาจมีคำผิด" caveat. The
+    // target user is blind and can't verify a plausible-but-wrong word by
+    // looking, so a confirm step there is friction without safety. Only
+    // STRUCTURALLY unreliable output (above) needs confirmation.
+    assert.strictEqual(ctx.isOcrResultSafeForBraille({
+        text: 'สกาย', confidence: 58, fallback: false, suspicious: false,
+        rescuedLines: 0, frameCount: 1, agreement: 1
+    }), true, 'a clean medium-confidence read renders Braille (amber-flagged, not gated)');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille({
+        text: 'สกาย', confidence: 30, fallback: false, suspicious: false,
+        rescuedLines: 0, frameCount: 1, agreement: 1
+    }), false, 'a low-confidence read (< OCR_BRAILLE_MIN_CONFIDENCE) still stays out of Braille');
+    assert(jsOcrModuleContent.includes('OCR_BRAILLE_MIN_CONFIDENCE'),
+        'the Braille confidence floor should be a named constant aligned with classifyOcrConfidence');
+
+    assert(jsOcrModuleContent.includes('empty successful EasyOCR read returns above'),
+        'an empty successful backend read must return without silently falling through to Tesseract');
+    const cameraHtmlContent = fs.readFileSync(path.join(projectRoot, 'camera.html'), 'utf-8');
+    assert(cameraHtmlContent.includes('function confirmUncertainOcrResult'),
+        'camera result screen needs an explicit confirmation path for uncertain text');
+    assert(cameraHtmlContent.includes('activeBrailleSafe'),
+        'camera must gate Braille generation on composite OCR safety');
 });
 
 runTest('Guidance toggle states persist to localStorage (js/voice-guidance.js)', () => {

@@ -2179,7 +2179,7 @@
                 const src = produced[c];
                 const activeDots = src ? (src.dots || []) : [];
                 cells.push({
-                    char: src ? (src.source || ' ') : ' ',
+                    char: src ? ((src.label !== undefined ? src.label : src.source) || ' ') : ' ',
                     activeDots: activeDots,
                     dotsBool: [1, 2, 3, 4, 5, 6].map(dot => activeDots.includes(dot))
                 });

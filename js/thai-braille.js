@@ -66,9 +66,27 @@
     })();
 
     /* ----- helpers ------------------------------------------------------- */
+
+    // A lone Thai above/below vowel or tone mark (ั ิ ี ึ ื ฺ ุ ู ็ ่ ้ ๊ ๋ ์ ํ ๎)
+    // has no base consonant to attach to, so a renderer that just drops it
+    // into a <span> shows nothing (or a stray floating glyph). Prefix a
+    // dotted circle - the same notation the reference chart uses ("สระ ◌ิ") -
+    // so the cell label reads as an actual character. `source` stays the raw
+    // grapheme (used for the OLED text line and speech); `label` is display-only.
+    var RE_BARE_COMBINING_MARK = /^[ัิ-ฺ็-๎]$/;
+    function displayLabel(source) {
+        return (typeof source === 'string' && RE_BARE_COMBINING_MARK.test(source))
+            ? '◌' + source
+            : source;
+    }
+
     function cell(dots, source, kind) {
         var d = (dots || []).slice().sort(function (a, b) { return a - b; });
-        return { dots: d, source: source, kind: kind, char: source, activeDots: d };
+        return {
+            dots: d, source: source, kind: kind,
+            char: source, activeDots: d,
+            label: displayLabel(source)
+        };
     }
 
     // Expand a table entry ({cells:[[..],[..]]}) into Cell objects.
@@ -132,8 +150,9 @@
 
     /* ================================================================
        Thai run -> syllables -> braille cells (Stage 3)
-       Reorders leading vowels + tone marks into Braille (spoken) order:
-         [initial consonant(s)] [vowel unit] [final consonant(s)] [tone]
+       Keeps bare leading vowels (เ แ โ ใ ไ) before the initial consonant.
+       Multi-part vowel units are emitted after the initial consonant, while
+       final consonants and tone marks retain their Thai Braille order.
        ================================================================ */
 
     // Resolve a vowel from its written parts to braille cell groups.
@@ -313,22 +332,33 @@
     }
 
     function emitSyllable(seg, out) {
-        // 1. initial consonant(s)
-        pushEntryCells(out, T.THAI_CONSONANTS[seg.c1], seg.c1, 'consonant');
-        if (seg.c2) { pushEntryCells(out, T.THAI_CONSONANTS[seg.c2], seg.c2, 'consonant'); }
-
-        // 2. vowel unit (leading vowel is folded in here, never emitted first)
         var vgroups = resolveVowel(seg.lead, seg.above, seg.trail);
         if (!vgroups && seg.reducedO && T.THAI_COMPOUND_VOWELS['โอะ-ลดรูป']) {
             vgroups = T.THAI_COMPOUND_VOWELS['โอะ-ลดรูป'].cells;
         }
-        if (vgroups) {
-            var vsrc = (seg.lead || '') + (seg.above || '') + (seg.trail || '');
-            if (!vsrc && seg.reducedO) { vsrc = 'ะ'; } // implied โอะ - show something on the card
+
+        var vsrc = (seg.lead || '') + (seg.above || '') + (seg.trail || '');
+        if (!vsrc && seg.reducedO) { vsrc = 'ะ'; } // implied โอะ - show something on the card
+
+        function emitVowelUnit() {
+            if (!vgroups) { return; }
             for (var v = 0; v < vgroups.length; v++) {
                 out.push(cell(vgroups[v], v === 0 ? vsrc : '', 'vowel'));
             }
         }
+
+        // Bare leading vowels preserve their written Thai order in Braille.
+        // Multi-part forms such as เ◌าะ / เ◌ีย / เ◌ือ are represented by a
+        // resolved vowel unit and remain after the initial consonant(s).
+        var bareLeadingVowel = !!seg.lead && !seg.above && !seg.trail;
+        if (bareLeadingVowel) { emitVowelUnit(); }
+
+        // 1. initial consonant(s)
+        pushEntryCells(out, T.THAI_CONSONANTS[seg.c1], seg.c1, 'consonant');
+        if (seg.c2) { pushEntryCells(out, T.THAI_CONSONANTS[seg.c2], seg.c2, 'consonant'); }
+
+        // 2. non-leading or multi-part vowel unit
+        if (!bareLeadingVowel) { emitVowelUnit(); }
 
         // 2b. ไม้ไต่คู้ / นิคหิต (short-vowel & nasalisation marks) after the vowel
         var mm = seg.midMark || '';
@@ -387,17 +417,77 @@
             }
         }
         flush();
+
+        // A lone leading consonant that never resolved (e.g. "ฐ" before
+        // "ิติพร") belongs to the word that follows it, not on its own.
         var merged = [];
         for (var m = 0; m < result.length; m++) {
             var curr = result[m];
-            if (curr.text.length === 1 && isConsonant(curr.text) && !curr.isWord && m + 1 < result.length) {
+            if (Array.from(curr.text).length === 1 && isConsonant(curr.text) &&
+                !curr.isWord && m + 1 < result.length) {
                 result[m + 1].text = curr.text + result[m + 1].text;
                 result[m + 1].isWord = false;
                 continue;
             }
             merged.push(curr);
         }
-        return merged.length ? merged : [{ text: run, isWord: false }];
+
+        var tokens = collapseAmbiguousShortMatches(merged.length ? merged : [{ text: run, isWord: false }]);
+        return finalizeSegmentation(tokens, run);
+    }
+
+    // OCR delivers a whole line as one spaceless Thai run. Splitting that run
+    // into "words" is only safe when it clearly decomposes into a PHRASE:
+    // every piece is a real dictionary word AND at least one is substantial
+    // (>= 4 characters). A run with any unresolved fragment, or made only of
+    // 2-3 char dictionary substrings, is kept as a single unit - it is far
+    // more likely one word or a name (พิตต้า -> "พิต"+"ต้า", ฐิติพร, สมชาย)
+    // than a genuine multi-word phrase, and a space invented mid-name is a
+    // hard error for a Braille reader (a blank cell means "next word").
+    function finalizeSegmentation(tokens, run) {
+        if (tokens.length <= 1) { return tokens; }
+        var allWords = tokens.every(function (t) { return t.isWord; });
+        var hasSubstantial = tokens.some(function (t) {
+            return Array.from(t.text).length >= 4;
+        });
+        if (allWords && hasSubstantial) { return tokens; }
+        return [{ text: run, isWord: false }];
+    }
+
+    // A short (<=2 char) dictionary match sitting directly next to text the
+    // dictionary couldn't resolve at all is more likely a coincidental
+    // substring of one unknown word/name (ฐิติพร -> "ติ" and "พร" both
+    // happen to be real words on their own) than a genuine word starting or
+    // ending right there. Merge it into the adjacent unmatched fragment
+    // instead of treating it as its own word - under-segmenting (no space)
+    // is the safer failure mode for Braille output than inventing a space
+    // in the middle of a name. Repeats until stable, since a merge can
+    // create a new fragment-adjacency on the other side.
+    function collapseAmbiguousShortMatches(tokens) {
+        var changed = true;
+        while (changed) {
+            changed = false;
+            for (var i = 0; i < tokens.length; i++) {
+                var t = tokens[i];
+                if (!t.isWord || Array.from(t.text).length > 2) { continue; }
+                var prev = tokens[i - 1];
+                var next = tokens[i + 1];
+                if (prev && !prev.isWord) {
+                    prev.text += t.text;
+                    tokens.splice(i, 1);
+                    changed = true;
+                    break;
+                }
+                if (next && !next.isWord) {
+                    t.isWord = false;
+                    t.text = t.text + next.text;
+                    tokens.splice(i + 1, 1);
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        return tokens;
     }
 
     function emitThaiWord(text, isWord, out) {

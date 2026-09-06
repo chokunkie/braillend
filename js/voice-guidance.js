@@ -43,10 +43,35 @@ const DARK_LUMA_THRESHOLD = 48;           // mean luma below this = too dark
 const GLARE_FRACTION_THRESHOLD = 0.16;    // blown-out pixel fraction above this = glare
 const LENS_COVERED_CONTRAST = 12;         // contrast range below this + few strokes = covered
 const SKIN_RATIO_THRESHOLD = 0.35;        // skin-tone pixel fraction above this = a person
+const SKIN_RATIO_PERSON_HARD = 0.5;       // ...this much skin = a person no matter the blob structure
 const AUTO_TORCH_DARK_MS = 1500;          // stay dark this long before auto-enabling torch
+
+// --- Temporal smoothing & state-machine stability -------------------------
+// Every metric used to be read raw from ONE 300ms frame and compared to a
+// hard threshold, so anything sitting near a boundary flip-flopped every
+// tick as camera noise / autofocus breathing / hand shake nudged it across.
+// Smooth each metric (EMA) and require a guidance state to persist a couple
+// of ticks before it is spoken, so the feedback stops jittering.
+const METRIC_SMOOTHING = 0.4;             // weight of the newest frame (lower = smoother, laggier)
+const STATE_COMMIT_TICKS = 2;             // a spoken guidance state must hold this many ticks first
+const STABILITY_GRACE_TICKS = 2;          // brief bad frames don't instantly wipe the auto-capture countdown
+
+// "Is this a document / text?" - hysteresis (enter high, drop low) plus a
+// borderline band that still lets the user proceed but says it isn't sure.
+const DOC_STROKES_ENTER = 55;             // confident "document present"
+const DOC_STROKES_EXIT = 28;             // ...stays present until it falls below this
+const DOC_STROKES_MAYBE = 30;             // borderline: proceed, but warn it's unsure
+const DOC_CONTRAST_ENTER = 22;
+const DOC_CONTRAST_MAYBE = 15;
+const TEXT_ROWS_CONFIDENT = 3;            // >= this many blob rows = confident it's real text
 
 let noTextSince = null;
 let darkSince = null;
+let smoothedMetrics = null;               // EMA of the noisy per-frame metrics
+let hasDocumentSticky = false;            // hysteresis latch for "document present"
+let guidanceCandidateKey = '';            // guidance state proposed on the current run of ticks
+let guidanceCandidateTicks = 0;           // ...how many consecutive ticks it has been proposed
+let imperfectTicks = 0;                   // consecutive ticks the "ready to capture" state was NOT perfect
 const GUIDANCE_PREFS_KEY = 'brailbox.guidancePrefs';
 
 // --- speechSynthesis "unlock" ------------------------------------------
@@ -101,6 +126,10 @@ function vibrate(pattern) {
 // far too slow to steer by. This is a parking-sensor style tone: blips get
 // faster and higher as the framing improves, and turn into a steady fast
 // double-blip when everything is locked and the shutter is about to fire.
+//
+// Currently DISABLED - the constant machine-gun blipping was too distracting.
+// Flip this to true (or wire a UI toggle) to bring it back.
+let isNavSonarEnabled = false;
 let navSonar = { ctx: null, timer: null, lastBlip: 0, progress: 0, ready: false, active: false };
 
 function ensureNavAudioCtx() {
@@ -134,6 +163,7 @@ function navBlip(frequency, durationSec, volume) {
 }
 
 function startNavSonar() {
+    if (!isNavSonarEnabled) return;
     if (navSonar.active) return;
     navSonar.active = true;
     navSonar.progress = 0;
@@ -655,6 +685,61 @@ function isCaptureArmed() {
     return !guidanceStartTime || (Date.now() - guidanceStartTime) >= CAPTURE_ARM_DELAY_MS;
 }
 
+// Exponential moving average - first sample passes through untouched.
+function ema(prev, cur) {
+    return (prev == null || !isFinite(prev)) ? cur : (prev * (1 - METRIC_SMOOTHING) + cur * METRIC_SMOOTHING);
+}
+
+// Feeds every noisy per-frame metric through an EMA so downstream threshold
+// checks stop flipping on single-frame noise. Returns the smoothed set.
+function smoothFrameMetrics(raw) {
+    const s = smoothedMetrics || {};
+    for (const k in raw) {
+        s[k] = ema(s[k], raw[k]);
+    }
+    smoothedMetrics = s;
+    return s;
+}
+
+// Gate for the spoken guidance / status HUD: a given guidance state has to
+// be proposed for STATE_COMMIT_TICKS consecutive ticks before it actually
+// speaks, so rapid A<->B flip-flopping never reaches the user. Time-critical
+// states (pre-capture warning, the hold-still countdown) pass force=true and
+// skip the gate. Returns true once the state is committed.
+function commitGuidance(key, speakText, hudText, hudLevel, force) {
+    if (key === guidanceCandidateKey) {
+        guidanceCandidateTicks++;
+    } else {
+        guidanceCandidateKey = key;
+        guidanceCandidateTicks = 1;
+    }
+    if (!force && guidanceCandidateTicks < STATE_COMMIT_TICKS) {
+        return false;
+    }
+    if (hudText) updateVoiceStatusHUD(hudText, hudLevel || null);
+    if (speakText) speakVoiceGuidance(speakText, force === 'speak');
+    return true;
+}
+
+function resetGuidanceSmoothing() {
+    smoothedMetrics = null;
+    hasDocumentSticky = false;
+    guidanceCandidateKey = '';
+    guidanceCandidateTicks = 0;
+    imperfectTicks = 0;
+}
+
+// A single sub-ideal frame mid-countdown (a blink of blur, one corner
+// dipping) shouldn't restart the auto-capture hold. Tolerate up to
+// STABILITY_GRACE_TICKS of them before actually cancelling the countdown.
+function graceResetStability() {
+    if (stabilityStartTime && ++imperfectTicks < STABILITY_GRACE_TICKS) {
+        return; // keep the countdown running for now
+    }
+    stabilityStartTime = null;
+    hasSpokenPreCaptureWarning = false;
+}
+
 function analyzeLiveCameraFrame() {
     const video = document.getElementById('cameraVideo');
     if (!video || video.readyState < 2 || video.paused || video.ended) {
@@ -684,9 +769,9 @@ function analyzeLiveCameraFrame() {
         const data = imgData.data;
         const totalPixels = sampleW * sampleH;
 
-        // Calculate Real-Time Laplacian Focus Score & Update HUD
+        // Calculate Real-Time Laplacian Focus Score (HUD is updated later with
+        // the smoothed value, so it doesn't jump around as autofocus breathes).
         const focusScore = calculateLaplacianFocusScore(imgData);
-        updateFocusHUD(focusScore);
 
         // Grayscale conversion & Frame Difference (Camera Stability Analysis)
         let totalDiff = 0;
@@ -766,141 +851,185 @@ function analyzeLiveCameraFrame() {
         const densityBL = countBL / Math.max(1, pixelsBL);
         const densityBR = countBR / Math.max(1, pixelsBR);
 
-        const hasDocument = (totalStrokes >= MIN_TOTAL_STROKES) && (contrastRange >= 18);
+        // --- Smooth every noisy per-frame metric before ANY threshold check.
+        const m = smoothFrameMetrics({
+            contrast: contrastRange,
+            strokes: totalStrokes,
+            meanLuma: meanLuma,
+            overexposed: overexposedFrac,
+            motion: avgMotionDiff,
+            focus: focusScore,
+            skin: skinRatio,
+            textRows: textStruct.rows,
+            textComps: textStruct.components,
+            dTL: densityTL, dTR: densityTR, dBL: densityBL, dBR: densityBR
+        });
+        updateFocusHUD(m.focus);
 
-        // --- Accessibility guards: call out the specific problem, and never
-        //     let auto-capture fire on a scene that isn't actually text. ---
+        // --- "Document present?" - hysteresis latch (enter high, drop low) ---
+        if (!hasDocumentSticky && m.strokes >= DOC_STROKES_ENTER && m.contrast >= DOC_CONTRAST_ENTER) {
+            hasDocumentSticky = true;
+        } else if (hasDocumentSticky && (m.strokes < DOC_STROKES_EXIT || m.contrast < LENS_COVERED_CONTRAST)) {
+            hasDocumentSticky = false;
+        }
+        const docBorderline = !hasDocumentSticky &&
+            m.strokes >= DOC_STROKES_MAYBE && m.contrast >= DOC_CONTRAST_MAYBE;
+        const hasDocument = hasDocumentSticky || docBorderline;
+
+        // --- "Is it text?" - three levels: confident / maybe / no ---------
+        let textConfidence;
+        if (m.textRows >= TEXT_ROWS_CONFIDENT) {
+            textConfidence = 'confident';
+        } else if (m.textRows >= TEXT_MIN_ROWS ||
+                   (m.textRows >= 1 && m.textComps >= TEXT_MIN_COMPONENTS)) {
+            textConfidence = 'maybe';
+        } else {
+            textConfidence = 'no';
+        }
+        // Borderline document OR only-maybe text -> still proceed, but say so.
+        const lowConfidence = (textConfidence === 'maybe') || docBorderline;
+
+        // --- Accessibility guards (smoothed values + debounced messages) ---
 
         // 1. Something is covering the lens (near-uniform, few edges).
-        if (contrastRange < LENS_COVERED_CONTRAST && totalStrokes < 10) {
+        if (m.contrast < LENS_COVERED_CONTRAST && m.strokes < 10) {
             updateCornerTargetHUD(false, false, false, false);
             updateFocusHUD(0);
             stabilityStartTime = null;
             hasSpokenPreCaptureWarning = false;
             updateNavSonar(0);
-            vibrate(60);
-            speakVoiceGuidance('มีอะไรบังกล้องอยู่ ขยับกล้องออกหน่อยนะครับ');
-            updateVoiceStatusHUD('มีอะไรบังกล้องอยู่ ขยับกล้องออกหน่อย', 'alert');
+            if (commitGuidance('lens-covered', 'มีอะไรบังกล้องอยู่ ขยับกล้องออกหน่อยนะครับ',
+                'มีอะไรบังกล้องอยู่ ขยับกล้องออกหน่อย', 'alert')) {
+                vibrate(60);
+            }
             return;
         }
 
         // 2. Too dark to read (torch auto-enabled above if the device has one).
-        if (meanLuma < DARK_LUMA_THRESHOLD) {
+        if (m.meanLuma < DARK_LUMA_THRESHOLD) {
             updateCornerTargetHUD(false, false, false, false);
             updateFocusHUD(0);
             stabilityStartTime = null;
             hasSpokenPreCaptureWarning = false;
             updateNavSonar(0);
-            speakVoiceGuidance('แสงน้อยไป ลองเปิดไฟหรือหาที่ที่สว่างกว่านี้นะครับ');
-            updateVoiceStatusHUD('💡 แสงน้อยไป ลองเปิดไฟหรือหาที่สว่างกว่านี้', 'alert');
+            commitGuidance('dark', 'แสงน้อยไป ลองเปิดไฟหรือหาที่ที่สว่างกว่านี้นะครับ',
+                '💡 แสงน้อยไป ลองเปิดไฟหรือหาที่สว่างกว่านี้', 'alert');
             return;
         }
 
         // 3. Glare / reflection washing out the page.
-        if (overexposedFrac > GLARE_FRACTION_THRESHOLD) {
+        if (m.overexposed > GLARE_FRACTION_THRESHOLD) {
             updateCornerTargetHUD(false, false, false, false);
             stabilityStartTime = null;
             hasSpokenPreCaptureWarning = false;
             updateNavSonar(0);
-            speakVoiceGuidance('มีแสงสะท้อนบนหน้ากระดาษ เอียงหนังสือหนีแสงหน่อยนะครับ');
-            updateVoiceStatusHUD('✨ มีแสงสะท้อน เอียงหนังสือหนีแสงหน่อย', 'warning');
+            commitGuidance('glare', 'มีแสงสะท้อนบนหน้ากระดาษ เอียงหนังสือหนีแสงหน่อยนะครับ',
+                '✨ มีแสงสะท้อน เอียงหนังสือหนีแสงหน่อย', 'warning');
             return;
         }
 
-        // 4. It's a person, not a document.
-        if (skinRatio > SKIN_RATIO_THRESHOLD && !textStruct.isText) {
+        // 4. It's a person, not a document. Hard call at very high skin ratio;
+        //    otherwise only when we're also NOT confident it's text.
+        if (m.skin > SKIN_RATIO_PERSON_HARD ||
+            (m.skin > SKIN_RATIO_THRESHOLD && textConfidence !== 'confident')) {
             updateCornerTargetHUD(false, false, false, false);
             updateFocusHUD(0);
             stabilityStartTime = null;
             hasSpokenPreCaptureWarning = false;
             updateNavSonar(0);
-            speakVoiceGuidance('กล้องเจอคน ยังไม่เจอเอกสาร ลองเล็งกล้องไปที่หนังสือนะครับ');
-            updateVoiceStatusHUD('🧑 กล้องเจอคน ไม่ใช่เอกสาร', 'alert');
+            commitGuidance('person', 'กล้องเจอคน ยังไม่เจอเอกสาร ลองเล็งกล้องไปที่หนังสือนะครับ',
+                '🧑 กล้องเจอคน ไม่ใช่เอกสาร', 'alert');
             return;
         }
 
-        // 5. Edges/contrast present but no text-like row structure -> not text.
-        if (!textStruct.isText) {
+        // 5. No text-like structure at all -> block.
+        if (textConfidence === 'no') {
             updateCornerTargetHUD(false, false, false, false);
             updateFocusHUD(0);
             stabilityStartTime = null;
             hasSpokenPreCaptureWarning = false;
             updateNavSonar(0);
             if (!noTextSince) noTextSince = Date.now();
-            if (Date.now() - noTextSince >= NO_TEXT_ANNOUNCE_MS) {
-                speakVoiceGuidance('ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษนะครับ');
-            }
-            updateVoiceStatusHUD('🔎 ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษ', 'warning');
+            const speak = (Date.now() - noTextSince >= NO_TEXT_ANNOUNCE_MS)
+                ? 'ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษนะครับ' : null;
+            commitGuidance('no-text', speak,
+                '🔎 ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษ', 'warning');
             return;
         }
         noTextSince = null;
 
+        // 6. Not enough document signal even at the borderline bar -> block.
         if (!hasDocument) {
             updateCornerTargetHUD(false, false, false, false);
             updateFocusHUD(0);
             stabilityStartTime = null;
-            speakVoiceGuidance('ยังไม่พบเอกสาร กรุณาส่องกล้องไปที่หนังสือ');
-            updateVoiceStatusHUD('ยังไม่พบเอกสาร กรุณาส่องกล้องไปที่หนังสือ', 'alert');
+            commitGuidance('no-doc', 'ยังไม่พบเอกสาร กรุณาส่องกล้องไปที่หนังสือ',
+                'ยังไม่พบเอกสาร กรุณาส่องกล้องไปที่หนังสือ', 'alert');
             return;
         }
 
-        // Evaluate 4-Corner Target Locks
-        const lockedTL = densityTL >= CORNER_STROKE_THRESHOLD;
-        const lockedTR = densityTR >= CORNER_STROKE_THRESHOLD;
-        const lockedBL = densityBL >= CORNER_STROKE_THRESHOLD;
-        const lockedBR = densityBR >= CORNER_STROKE_THRESHOLD;
+        // Evaluate 4-Corner Target Locks (on the SMOOTHED corner densities)
+        const lockedTL = m.dTL >= CORNER_STROKE_THRESHOLD;
+        const lockedTR = m.dTR >= CORNER_STROKE_THRESHOLD;
+        const lockedBL = m.dBL >= CORNER_STROKE_THRESHOLD;
+        const lockedBR = m.dBR >= CORNER_STROKE_THRESHOLD;
 
         // Immediate Visual Feedback on Viewfinder Brackets
-        updateCornerTargetHUD(lockedTL, lockedTR, lockedBL, lockedBR);
+        updateCornerTargetHUD(lockedTL, lockedTR, lockedBL, lockedBR, hasDocument);
 
         // Continuous navigation tone: blip rate/pitch track how many corners
         // are in, so the user can steer without waiting for a spoken sentence.
         const lockedCount = (lockedTL ? 1 : 0) + (lockedTR ? 1 : 0) + (lockedBL ? 1 : 0) + (lockedBR ? 1 : 0);
 
-        const isCameraStable = (avgMotionDiff < MOTION_DIFF_THRESHOLD);
-        const isFocusSharp = (focusScore >= FOCUS_SHARP_THRESHOLD);
-        const isFocusBlurry = (focusScore < FOCUS_BLURRY_THRESHOLD);
+        const isCameraStable = (m.motion < MOTION_DIFF_THRESHOLD);
+        const isFocusSharp = (m.focus >= FOCUS_SHARP_THRESHOLD);
+        const isFocusBlurry = (m.focus < FOCUS_BLURRY_THRESHOLD);
 
         if (lockedTL && lockedTR && lockedBL && lockedBR) {
             // Framing done - sonar now tracks focus (0..1 up to the sharp threshold).
-            const focusProgress = Math.max(0, Math.min(1, focusScore / FOCUS_SHARP_THRESHOLD));
+            const focusProgress = Math.max(0, Math.min(1, m.focus / FOCUS_SHARP_THRESHOLD));
             updateNavSonar(0.75 + focusProgress * 0.25, isCameraStable && isFocusSharp);
             // All 4 Corners Locked! Check Focus Gating
             if (isFocusBlurry) {
                 // Focus Gating: Image is blurry (Score < 80) -> Prompt user to hold steady
-                stabilityStartTime = null;
-                hasSpokenPreCaptureWarning = false;
-                speakVoiceGuidance('ภาพยังเบลออยู่ ถือกล้องนิ่งๆ อีกนิดนะครับ');
-                updateVoiceStatusHUD('📷 ภาพยังเบลออยู่ ถือกล้องนิ่งๆ อีกนิดนะครับ...', 'warning');
+                graceResetStability();
+                commitGuidance('blurry', 'ภาพยังเบลออยู่ ถือกล้องนิ่งๆ อีกนิดนะครับ',
+                    '📷 ภาพยังเบลออยู่ ถือกล้องนิ่งๆ อีกนิดนะครับ...', 'warning');
             } else if (!isFocusSharp) {
                 // Score 80..159 (Adjusting focus)
-                stabilityStartTime = null;
-                hasSpokenPreCaptureWarning = false;
-                updateVoiceStatusHUD(`🔍 กำลังปรับความคมชัด (Score ${Math.round(focusScore)}/160)...`, 'warning');
+                graceResetStability();
+                commitGuidance('adjusting', null,
+                    `🔍 กำลังปรับความคมชัด (Score ${Math.round(m.focus)}/160)...`, 'warning');
             } else if (isCameraStable && isFocusSharp && !isAutoCaptureEnabled) {
                 // Manual-shutter mode (the default): framing/focus/stability
-                // are all good, but nothing should self-trigger - tell the
-                // user to press the shutter themselves instead of running
-                // the auto-capture countdown language, which would promise a
-                // photo that never gets taken.
+                // are all good - tell the user to press the shutter. If we're
+                // not sure the frame actually has text, say so first.
                 stabilityStartTime = null;
                 hasSpokenPreCaptureWarning = false;
-                speakVoiceGuidance('ตัวอักษรชัดเจนแล้ว กดปุ่มถ่ายภาพได้เลยครับ');
-                updateVoiceStatusHUD('🎯 ตัวอักษรชัดเจนแล้ว กดปุ่มถ่ายภาพได้เลยครับ', 'success');
+                if (lowConfidence) {
+                    commitGuidance('manual-lowconf',
+                        'เจอกรอบแล้ว แต่ไม่แน่ใจว่ามีข้อความ ลองเล็งให้ชัดขึ้น แล้วกดปุ่มถ่ายได้ครับ',
+                        '⚠️ ไม่แน่ใจว่ามีข้อความ ลองเล็งให้ชัดขึ้น แล้วกดถ่ายได้', 'warning');
+                } else {
+                    commitGuidance('manual-ready', 'ตัวอักษรชัดเจนแล้ว กดปุ่มถ่ายภาพได้เลยครับ',
+                        '🎯 ตัวอักษรชัดเจนแล้ว กดปุ่มถ่ายภาพได้เลยครับ', 'success');
+                }
             } else if (isCameraStable && isFocusSharp && !isCaptureArmed()) {
                 // Everything else checks out, but we're still inside the
                 // post-open warm-up window - never let the shutter fire this
                 // fast, even if the frame happened to look perfect on tick 1.
                 stabilityStartTime = null;
                 hasSpokenPreCaptureWarning = false;
-                updateVoiceStatusHUD('🎯 เจอกรอบแล้ว กำลังเตรียมกล้อง รอสักครู่...', 'success');
+                commitGuidance('warmup', null,
+                    '🎯 เจอกรอบแล้ว กำลังเตรียมกล้อง รอสักครู่...', 'success');
             } else if (isCameraStable && isFocusSharp) {
                 // Focus Gating PASSED (Score >= 160) + 4-Corners Locked + Camera Stable!
+                imperfectTicks = 0;
                 if (!stabilityStartTime) {
                     stabilityStartTime = Date.now();
                     hasSpokenPreCaptureWarning = false;
-                    speakVoiceGuidance('ตัวอักษรชัดเจนแล้ว ถือค้างไว้นะครับ...');
-                    updateVoiceStatusHUD('🎯 ตัวอักษรชัดเจนแล้ว ถือค้างไว้นะครับ...', 'success');
+                    commitGuidance('hold', 'ตัวอักษรชัดเจนแล้ว ถือค้างไว้นะครับ...',
+                        '🎯 ตัวอักษรชัดเจนแล้ว ถือค้างไว้นะครับ...', 'success', true);
                 } else {
                     const elapsed = Date.now() - stabilityStartTime;
                     const remaining = Math.max(0, ((STABILITY_REQUIRED_MS - elapsed) / 1000).toFixed(1));
@@ -914,8 +1043,8 @@ function analyzeLiveCameraFrame() {
                         updateVoiceStatusHUD(`🎯 เข้ามุมและชัดแล้ว ถือค้างอีก ${remaining}s...`, 'success');
                     }
 
-                    // Focus Gating Protection: Shutter fires ONLY when focusScore >= 160 (SHARP 100%)
-                    if (elapsed >= STABILITY_REQUIRED_MS && isAutoCaptureEnabled && !isAutoCapturing && focusScore >= FOCUS_SHARP_THRESHOLD) {
+                    // Focus Gating Protection: Shutter fires ONLY when focus >= 160 (SHARP 100%)
+                    if (elapsed >= STABILITY_REQUIRED_MS && isAutoCaptureEnabled && !isAutoCapturing && m.focus >= FOCUS_SHARP_THRESHOLD) {
                         isAutoCapturing = true;
                         stabilityStartTime = null;
 
@@ -948,44 +1077,43 @@ function analyzeLiveCameraFrame() {
                     }
                 }
             } else {
-                stabilityStartTime = null;
-                hasSpokenPreCaptureWarning = false;
-                updateVoiceStatusHUD('เข้ามุมและชัดแล้ว แต่ภาพขยับ ถือกล้องให้นิ่ง...', 'warning');
+                graceResetStability();
+                commitGuidance('moved', 'เข้ามุมและชัดแล้ว แต่ภาพขยับ ถือกล้องให้นิ่งนะครับ',
+                    'เข้ามุมและชัดแล้ว แต่ภาพขยับ ถือกล้องให้นิ่ง...', 'warning');
             }
         } else {
             // One or more corners are out of target bracket
-            stabilityStartTime = null;
-            hasSpokenPreCaptureWarning = false;
+            graceResetStability();
             updateNavSonar(lockedCount / 4);
             vibrate(35);
 
             if (!lockedTL && !lockedTR && !lockedBL && !lockedBR) {
-                speakVoiceGuidance('ยังไม่เข้ามุม กรุณาขยับหนังสือให้ตรงกรอบ 4 มุม');
-                updateVoiceStatusHUD('ยังไม่เข้ามุม เล็งหนังสือให้ตรงกรอบ 4 มุม', 'warning');
+                commitGuidance('dir-none', 'ยังไม่เข้ามุม กรุณาขยับหนังสือให้ตรงกรอบ 4 มุม',
+                    'ยังไม่เข้ามุม เล็งหนังสือให้ตรงกรอบ 4 มุม', 'warning');
             } else if (!lockedTL && !lockedTR) {
-                speakVoiceGuidance('มุมด้านบนหลุดกรอบ ให้เลื่อนกล้องขึ้นบน');
-                updateVoiceStatusHUD('มุมด้านบนหลุดกรอบ ▲ เลื่อนกล้องขึ้นบน', 'warning');
+                commitGuidance('dir-up', 'มุมด้านบนหลุดกรอบ ให้เลื่อนกล้องขึ้นบน',
+                    'มุมด้านบนหลุดกรอบ ▲ เลื่อนกล้องขึ้นบน', 'warning');
             } else if (!lockedBL && !lockedBR) {
-                speakVoiceGuidance('มุมด้านล่างหลุดกรอบ ให้เลื่อนกล้องลงล่าง');
-                updateVoiceStatusHUD('มุมด้านล่างหลุดกรอบ ▼ เลื่อนกล้องลงล่าง', 'warning');
+                commitGuidance('dir-down', 'มุมด้านล่างหลุดกรอบ ให้เลื่อนกล้องลงล่าง',
+                    'มุมด้านล่างหลุดกรอบ ▼ เลื่อนกล้องลงล่าง', 'warning');
             } else if (!lockedTL && !lockedBL) {
-                speakVoiceGuidance('มุมด้านซ้ายหลุดกรอบ ให้ขยับกล้องไปทางซ้าย');
-                updateVoiceStatusHUD('มุมด้านซ้ายหลุดกรอบ ◄ ขยับกล้องไปทางซ้าย', 'warning');
+                commitGuidance('dir-left', 'มุมด้านซ้ายหลุดกรอบ ให้ขยับกล้องไปทางซ้าย',
+                    'มุมด้านซ้ายหลุดกรอบ ◄ ขยับกล้องไปทางซ้าย', 'warning');
             } else if (!lockedTR && !lockedBR) {
-                speakVoiceGuidance('มุมด้านขวาหลุดกรอบ ให้ขยับกล้องไปทางขวา');
-                updateVoiceStatusHUD('มุมด้านขวาหลุดกรอบ ► ขยับกล้องไปทางขวา', 'warning');
+                commitGuidance('dir-right', 'มุมด้านขวาหลุดกรอบ ให้ขยับกล้องไปทางขวา',
+                    'มุมด้านขวาหลุดกรอบ ► ขยับกล้องไปทางขวา', 'warning');
             } else if (!lockedTL) {
-                speakVoiceGuidance('มุมบนซ้ายหลุดกรอบ');
-                updateVoiceStatusHUD('มุมบนซ้ายหลุดกรอบ ↖', 'warning');
+                commitGuidance('dir-tl', 'มุมบนซ้ายหลุดกรอบ เลื่อนกล้องขึ้นและไปทางซ้าย',
+                    'มุมบนซ้ายหลุดกรอบ ↖ ขึ้น + ซ้าย', 'warning');
             } else if (!lockedTR) {
-                speakVoiceGuidance('มุมบนขวาหลุดกรอบ');
-                updateVoiceStatusHUD('มุมบนขวาหลุดกรอบ ↗', 'warning');
+                commitGuidance('dir-tr', 'มุมบนขวาหลุดกรอบ เลื่อนกล้องขึ้นและไปทางขวา',
+                    'มุมบนขวาหลุดกรอบ ↗ ขึ้น + ขวา', 'warning');
             } else if (!lockedBL) {
-                speakVoiceGuidance('มุมล่างซ้ายหลุดกรอบ');
-                updateVoiceStatusHUD('มุมล่างซ้ายหลุดกรอบ ↙', 'warning');
+                commitGuidance('dir-bl', 'มุมล่างซ้ายหลุดกรอบ เลื่อนกล้องลงและไปทางซ้าย',
+                    'มุมล่างซ้ายหลุดกรอบ ↙ ลง + ซ้าย', 'warning');
             } else if (!lockedBR) {
-                speakVoiceGuidance('มุมล่างขวาหลุดกรอบ');
-                updateVoiceStatusHUD('มุมล่างขวาหลุดกรอบ ↘', 'warning');
+                commitGuidance('dir-br', 'มุมล่างขวาหลุดกรอบ เลื่อนกล้องลงและไปทางขวา',
+                    'มุมล่างขวาหลุดกรอบ ↘ ลง + ขวา', 'warning');
             }
         }
     } catch (err) {
@@ -1009,6 +1137,7 @@ function startLiveVoiceGuidance() {
     noTextSince = null;
     darkSince = null;
     guidanceStartTime = Date.now();
+    resetGuidanceSmoothing();
     updateCornerTargetHUD(false, false, false, false);
     updateFocusHUD(0);
     startNavSonar();
@@ -1035,6 +1164,7 @@ function stopLiveVoiceGuidance() {
     noTextSince = null;
     darkSince = null;
     guidanceStartTime = null;
+    resetGuidanceSmoothing();
     stopNavSonar();
     if (typeof setTorch === 'function') setTorch(false);
     updateCornerTargetHUD(false, false, false, false);

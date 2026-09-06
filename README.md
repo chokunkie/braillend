@@ -25,12 +25,16 @@
 | **🔊 Continuous Navigation Sonar + Haptics** | เสียงปี๊บต่อเนื่องสไตล์เซ็นเซอร์ถอยรถ (`startNavSonar`) — จังหวะถี่ขึ้น/เสียงสูงขึ้นเมื่อเข้ากรอบมากขึ้น และกลายเป็นปี๊บคู่ถี่ ๆ เมื่อล็อกครบพร้อมลั่นชัตเตอร์ เร็วกว่ารอฟังประโยคเต็ม พร้อมสั่นเครื่อง (`navigator.vibrate`) กำกับทุกคำสั่งทิศทาง |
 | **🧠 Text-Presence Gate (ไม่ใช่แค่ขอบเยอะ)** | `detectTextLikeStructure()` ยืนยันว่าในเฟรมเป็น "ข้อความจริง" (blob ขนาดตัวอักษรจำนวนมากเรียงเป็นแถว ≥ 2 บรรทัด) — ปฏิเสธหน้าคน/สิ่งของ/ลายมั่ว และ **ห้าม auto-capture ลั่น** ถ้ายังไม่เจอข้อความ พร้อมเสียงแยกชัด *"ยังไม่เจอข้อความ ลองเล็งกล้องไปที่หนังสือหรือกระดาษ"* / *"กล้องเจอคน ไม่ใช่เอกสาร"* |
 | **💡 Scene Guards: มืด / แสงสะท้อน / มีอะไรบัง + Auto-Torch** | ตรวจความสว่างเฉลี่ย, สัดส่วนพิกเซลโอเวอร์, และเลนส์ถูกบัง แล้วบอกปัญหาตรง ๆ เป็นภาษาไทย พร้อมเปิดไฟฉายกล้องอัตโนมัติ (`setTorch`) เมื่อแสงน้อยเกินไป (เฉพาะเครื่องที่รองรับ) |
-| **📸 Burst Capture → เลือกเฟรมคมสุด** | ตอนลั่นชัตเตอร์เก็บ 3 เฟรมห่างกันไม่กี่ ms (`captureBurstFrames`) แล้ว `recognizeBest()` เลือกผลลัพธ์ที่ confidence สูงสุด — มือสั่นได้บ้างก็ยังได้เฟรมที่ชัด |
-| **🌐 OCR Language Mode (ไทยล้วน / ไทย+อังกฤษ)** | ปุ่มสลับบนหัวกล้อง ส่งชุดภาษาไป EasyOCR — โหมด **ไทยล้วน** ตัดชุดอักขระอังกฤษออก ลดการสับสน (ก/n, ล/a) แม่นขึ้นบนหน้าไทยล้วน จำค่าไว้ผ่าน `localStorage` |
+| **📸 Burst Capture + Consensus** | ตอนลั่นชัตเตอร์เก็บ 3 เฟรม (`captureBurstFrames`) แล้ว `recognizeBest()` / `pickBestBurstResult()` ให้ผลที่ตรงกันอย่างน้อย **2/3 เฟรมชนะก่อน confidence**; ถ้าทั้งสามอ่านไม่ตรงกัน ระบบยังแสดงผลที่ดีที่สุดได้แต่ติดธงให้ตรวจสอบและไม่ส่งเข้าเบรลล์อัตโนมัติ |
+| **🚦 OCR Safety Gate ก่อนส่งเข้าเบรลล์** | `classifyOcrConfidence()` แบ่งเป็น **สูง ≥ 72% / กลาง 45–72% / ต่ำ < 45%** และ `isOcrResultSafeForBraille()` ตรวจเพิ่มทั้ง burst consensus, script ที่ผิดปกติ, Thai rescue และ fallback engine — ผลที่ยังไม่แน่นอนจะแสดง/อ่านออกเสียงได้ แต่ต้องกด **"ใช้ผลนี้กับเบรลล์"** เอง; ระดับต่ำให้สแกนใหม่ |
+| **🧹 กรองขยะ OCR (พื้นผิวลายไม้ / แถบโลโก้)** | Backend ปฏิเสธผลที่เป็นตัวเลข/สัญลักษณ์ล้วนแบบมั่ว ๆ ที่ confidence ไม่สูงพอ (`_looks_like_text` — เช่นภาพลายไม้อ่านได้ `"1 , 111 โ ) 1"` ที่ 54%) และตัดกล่องเล็ก ๆ / แถบโลโก้ผู้สนับสนุนท้ายป้าย (`_filter_layout_noise` — ไม่ให้ `"MAMO"` กลายเป็น `"mamo als academy ni okmd"`) |
+| **✍️ ซ่อมวรรณยุกต์ไทยที่ OCR ตกหล่น** | `repairThaiToneMarks()` เทียบคำที่ OCR อ่านมากับพจนานุกรม 7,000 คำ — ถ้าคำนั้นไม่ใช่คำจริง แต่เติม/สลับ/ลบ **วรรณยุกต์ตัวเดียว** (่ ้ ๊ ๋) แล้วได้คำจริง **เพียงคำเดียว** จึงแก้ให้ (เช่น `"แลว" → "แล้ว"`, `"ขึน" → "ขึ้น"`); กำกวมเมื่อไหร่ปล่อยตามที่ OCR อ่าน ปิดได้ด้วย `globalThis.ENABLE_THAI_OCR_REPAIR = false` |
+| **🌐 OCR Language Mode (ไทยล้วน / ไทย+อังกฤษ)** | ปุ่มสลับบนหัวกล้องส่งชุดภาษาไป EasyOCR — `ไทย+อังกฤษ` เป็นค่าหลักสำหรับเอกสารสองภาษา; ถ้าพบ Latin แทรกผิดปกติในคำไทย ระบบจะลองอ่านเฉพาะบรรทัดนั้นซ้ำด้วยโมเดลไทย โดยไม่แตะบรรทัดที่มีคำอังกฤษจริง ส่วนโหมด `ไทยล้วน` ยังใช้ได้กับหน้าที่ไม่มีอังกฤษและจำค่าผ่าน `localStorage` |
+| **🧽 Spell-check Underline Cleanup** | ก่อน OCR จะตรวจและ inpaint เฉพาะเส้นหยักสีแดงที่ยาว/บางแบบขีดคำผิด โดยไม่ลบตัวอักษรหรือพื้นที่สีแดงขนาดใหญ่ เพื่อลดปัญหาเส้นใต้ทำให้ detector แยกคำไทยผิด |
 | **📸 1.0s Rapid Auto-Capture Shutter** | เมื่อมุมทั้ง 4 เข้าสู่กรอบเป้าหมายครบถ้วนและภาพนิ่งต่อเนื่อง 1.0 วินาที ระบบจะส่งเสียง *"เข้ามุมทั้ง 4 เรียบร้อยแล้ว ถือค้างไว้นะครับ..."* พร้อมสัญญาณปี๊บและสั่งลั่นชัตเตอร์ถ่ายภาพอัตโนมัติ |
 | **🔍 Visual OCR Bounding Box Inspector** | แสดงภาพสแกนจริงบน Canvas พร้อมวาดกรอบเรืองแสงนีออน (Glowing Neon Bounding Boxes) ล้อมรอบคำทุกคำที่สแกนได้ (`result.data.words`) และพ่นป้ายข้อความกำกับบนกรอบ พร้อมปุ่มกดดูย้อนหลังได้อย่างชัดเจน |
 | **🎯 Viewfinder Crop Engine** | อัลกอริทึมตัดพิกเซลภาพเฉพาะบริเวณภายในกรอบเล็ง `.viewfinder-box` เท่านั้น ตัดขอบและพื้นหลังที่รบกวนทิ้ง 100% ทำให้ OCR แม่นยำสูงสุด |
-| **⚡ Thai-Focused EasyOCR Backend** | ส่งภาพ (จากอัปโหลดหรือกล้อง) ไปยัง Backend (FastAPI + EasyOCR `['th','en']`, `decoder='beamsearch'`) ที่ทำ Document Quad Detection + Perspective Warp (ดัดภาพเอียงให้ตรง), Resize (short side ≥ 1100px), CLAHE Contrast Enhancement, Adaptive Threshold (เมื่อแสงไม่สม่ำเสมอ), และ Denoise (ปรับความแรงตามแหล่งภาพ อัปโหลด vs กล้อง) ก่อนถอดข้อความ — เมื่อดัดภาพสำเร็จจะส่งภาพหน้าเอกสารที่ดัดแล้ว (`warpedImage`) กลับไปให้ frontend วาดกรอบคำ |
+| **⚡ Thai-Focused EasyOCR Backend** | ส่งภาพไป Backend (FastAPI + EasyOCR `['th','en']`, `decoder='beamsearch'`) ที่ทำ Spell-check Cleanup, Document Warp, Resize, CLAHE/Adaptive Threshold แบบมีเงื่อนไข และ Denoise ก่อนถอดข้อความ พร้อมส่ง metadata (`engine`, `langUsed`, `rescuedLines`, `suspicious`, `warnings`) ให้ frontend ตัดสินความปลอดภัยได้ |
 | **📑 14-Cell Tactical Pagination** | ระบบหั่นแบ่งข้อความยาวเป็นชุดละ 14 ตัวอักษร (`PAGE X/Y [start-end]`) รองรับการเปลี่ยนหน้าด้วยปุ่ม PREV / NEXT และคีย์ลัดคีย์บอร์ด `ArrowLeft` / `ArrowRight` |
 | **🌐 Single-Language Mode Switcher** | ปุ่มสลับโหมดภาษา ENG / THAI ได้ในคลิกเดียว อัปเดตทั้งพจนานุกรมเบรลล์, ตัวเลือกภาษา OCR, และข้อความตัวอย่าง Preset ทันที |
 | **⚙️ Bistable Electro-Cam Actuator Modal** | โมดูล 3D ผ่าดูการทำงานระดับกลไก 1 หมุดเบรลล์ แสดงการทำงาน 4 สถานะ (สภาวะพัก 0W, พัลส์ดันหมุด 2.4W, ตัดไฟล็อกตำแหน่ง 0W Bistable Latch, และสลับขั้วรีเซ็ต) |
@@ -89,9 +93,12 @@ graph TD
     CornerLock -- "เข้ามุมทั้ง 4 ครบ & ภาพนิ่ง 1.0s" --> AutoShutter["📸 Auto-Capture Shutter\n+ 🔔 Web Audio Beep"]
     AutoShutter --> Crop["js/camera.js: captureFrameToFile()\n(Crop to Viewfinder, JPEG q=0.92)"]
     Crop --> OcrModule["js/ocr.js: recognize()\nfetch POST /ocr (multipart)"]
-    OcrModule --> Backend["FastAPI Backend\nResize + CLAHE + Adaptive Threshold + Denoise\n-> EasyOCR ['th','en'] (beamsearch)"]
-    Backend --> TextProc["js/textProcessor.js\nNFC Normalize + Thai-Preserving Cleanup"]
-    TextProc --> Braille["Braille Engine & 3D Tactile Matrix\n(14 Cells / 84 Actuator Pins)"]
+    OcrModule --> Backend["FastAPI Backend\nSpell-check cleanup + Resize/Deskew\n-> EasyOCR ['th','en'] (beamsearch)\n-> Thai-only rescue เมื่อ script ผิดปกติ"]
+    Backend --> Burst["js/ocr.js: pickBestBurstResult()\n2/3 consensus ก่อน confidence"]
+    Burst --> TextProc["js/textProcessor.js\nNFC Normalize + Thai-Preserving Cleanup\n+ repairThaiToneMarks() ซ่อมวรรณยุกต์ที่ตกหล่น"]
+    TextProc --> Conf["classifyOcrConfidence() + Safety Gate\nconfidence / consensus / rescue / fallback"]
+    Conf -- "ปลอดภัย หรือผู้ใช้ยืนยัน" --> Braille["Braille Engine & 3D Tactile Matrix\n(14 Cells / 84 Actuator Pins)"]
+    Conf -- "ยังไม่แน่นอน" --> Review["แสดงผล + อ่านออกเสียง\nรอยืนยันหรือสแกนใหม่"]
 ```
 
 ### 4.2 การถอดอักษรเบรลล์ไทย (Thai Braille Transliteration)
@@ -111,7 +118,7 @@ graph LR
 
 | หลักการ | การจัดการ |
 |---|---|
-| **สระหน้า** (เ แ โ ใ ไ) | ย้ายไปเขียนหลังพยัญชนะต้น: `เก่ง` → ก·เ·ง·่ |
+| **สระหน้า** (เ แ โ ใ ไ) | คงไว้หน้าพยัญชนะต้น: `เก่ง` → เ·ก·ง·่, `โชกุน` → โ·ช·ก·ุ·น |
 | **สระประสม** (เ–าะ, เ–ีย, เ–ือ, –ัว, เ–อ ฯลฯ) | รวมเป็นเซลล์เฉพาะ วางหลังพยัญชนะต้น |
 | **วรรณยุกต์** | ย้ายไปท้ายพยางค์เสมอ |
 | **สระโอะลดรูป** | เขียนเต็มในเบรลล์: `คน` → ค·โอะ·น (เฉพาะคำที่รู้จัก/อยู่ในคลังคำ) |
@@ -162,12 +169,20 @@ graph LR
 node ./tests/test_braille_ocr_pipeline.js
 ```
 
+รวมถึงชุดทดสอบเอนจินถอดอักษรเบรลล์ไทย และชุดทดสอบการประกอบข้อความฝั่ง Backend:
+
+```bash
+node ./tests/test_thai_braille_transliteration.js
+python3 ./backend/test_ocr_text_assembly.py
+```
+
 ### เกณฑ์การตรวจสอบของชุดทดสอบ (Test Coverage):
 1. **HTML5 Document & Assets Integrity**: ตรวจสอบ DOCTYPE, แท็กโครงสร้าง, และลิงก์ CDN ภายนอกครบถ้วน
 2. **CSS3 Stylesheet & Theme Consistency**: ตรวจสอบการปิดบล็อก Braces, CSS Variables ทั้งโหมด Dark และ Light, คลาส OCR, Voice HUD, และปุ่ม Toggle ทั้งหมด
 3. **DOM Structure & Elements ID**: ตรวจสอบ ID สำคัญครบทุกจุด (Dropzone, Camera, Viewfinder, Voice Guidance, Auto-Capture, Pagination, Language Toggle)
 4. **JavaScript VM Syntax & Sandboxing**: คอมไพล์ไฟล์ JS ทั้งหมดผ่าน Node `vm.Script` รับประกันว่าปราศจาก Syntax Error 100%
 5. **Logic & Algorithms QA**: ทดสอบ Viewfinder Crop, OCR Module Separation (`js/ocr.js` / `js/camera.js` / `js/textProcessor.js` / `js/demoMode.js`), Backend Preprocessing Pipeline (`backend/preprocessing.py`), Voice Guidance Phrases, Auto-Capture Timer Math, 14-Cell Chunking, และพจนานุกรมเบรลล์
+6. **OCR Quality Safeguards**: `classifyOcrConfidence()` 3 ระดับ, `pickBestBurstResult()` เลือกเฟรมตามความครบของข้อความ, `repairThaiToneMarks()` ซ่อมวรรณยุกต์ (กวาดทั้งพจนานุกรม 7,000 คำ — ต้องไม่แก้คำที่ถูกอยู่แล้ว), และการกรองขยะ OCR ฝั่ง Backend (`_looks_like_text`, `_filter_layout_noise`)
 
 ---
 

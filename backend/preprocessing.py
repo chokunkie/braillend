@@ -2,10 +2,13 @@
 Image preprocessing pipeline for Thai-focused EasyOCR accuracy.
 
 Order: decode -> detect document quad & perspective-warp (deskew) -> resize
-(shorter side >= 1100px) -> grayscale -> CLAHE contrast enhancement ->
-adaptive threshold (only if lighting looks uneven AND the raw image doesn't
-already look sharp/high-contrast) -> denoise (intensity tuned by
-documentSource, since camera captures are noisier than clean uploads).
+into coarse bounds (short side >= 640 with a gentle upscale cap, long side
+<= 2800; run_ocr does the precise OCR-optimal sizing later) -> grayscale ->
+CLAHE contrast enhancement
+(skipped entirely on a crisp black-on-white image) -> adaptive threshold
+(only on a non-clean image whose lighting looks uneven AND that isn't
+already sharp/high-contrast) -> denoise (intensity tuned by documentSource,
+since camera captures are noisier than clean uploads).
 
 preprocess() returns (processed_img, scale, warped_preview_data_url). The
 third value is a JPEG data URL of the perspective-corrected colour image
@@ -21,12 +24,21 @@ import cv2
 import numpy as np
 from PIL import Image
 
-# Was 640. Thai OCR needs a tall enough x-height for the stacked tone
-# marks / vowels (่ ้ ๊ ๋ ั ิ ) to survive; 640 on a tightly cropped phone
-# capture pushed glyphs down to ~12-18px and the detector merged or dropped
-# the diacritics. 1100 keeps upscaling of small crops without downscaling
-# real phone captures (which are already well above this on the short side).
-MIN_SHORT_SIDE = 1100
+# Coarse bounds only. This step no longer tries to hit an OCR-optimal glyph
+# size - run_ocr() does that precisely by measuring the detected text height
+# and re-running at ~46px/glyph (EasyOCR's sweet spot). It only has to make
+# sure the first detection pass has enough pixels to find the text (a low
+# floor) without a huge image making that pass slow (a ceiling), and it must
+# UPSCALE GENTLY: if this step doubles a small image and run_ocr then has to
+# halve it again, that up-then-down round trip smears the thin Thai strokes.
+#
+# History: was 1100, chosen to upscale tightly-cropped phone captures whose
+# glyphs fell to ~12-18px. But 1100 *upscales a clean single-word upload*
+# (~90px glyphs -> ~180px) straight into EasyOCR's fragmentation zone
+# (>~70px/glyph), which is where "โชกุน -> เชกน", "พิตต้า -> พตตา" came from.
+MIN_SHORT_SIDE = 640
+MAX_LONG_SIDE = 2800
+MAX_UPSCALE = 1.8
 
 # Tile is treated as blank/background rather than real content if its own
 # internal std falls below this. Calibrated against rendered Thai text:
@@ -44,11 +56,68 @@ _BLANK_TILE_STD = 15.0
 _HIGH_QUALITY_STD = 40.0
 _HIGH_QUALITY_LAPLACIAN_VAR = 15.0
 
+# A crisp black-on-white scan/screenshot/render has a strongly bimodal
+# histogram - almost every pixel is near-white paper or near-black ink, very
+# few mid-greys. On an image like that both CLAHE and adaptive-threshold do
+# nothing useful and actively eat the hairline strokes of Thai vowels / tone
+# marks (ิ ี ึ ื ่ ้). This catches those even when they carry a big white
+# margin that drags global std below _HIGH_QUALITY_STD (a single word on a
+# page), which the std/Laplacian gate alone misses.
+_BILEVEL_MIDTONE_MAX_FRAC = 0.06  # fraction of pixels allowed in the [64,192] mid-band
+
 
 def decode_image(image_bytes: bytes) -> np.ndarray:
     pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     rgb = np.array(pil_img)
     return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
+
+def remove_colored_spellcheck_underlines(img: np.ndarray) -> tuple:
+    """Removes only long, thin, saturated-red underline artifacts.
+
+    Screenshot inputs sometimes contain a browser/editor spell-check wave
+    directly below an otherwise clean Thai word. Once converted to grayscale
+    that wave becomes a row of text-like strokes and can fragment EasyOCR's
+    detector. We identify the artifact while colour is still available and
+    inpaint only its red pixels. Broad red content (headings, logos, stamps)
+    is deliberately left untouched.
+
+    Returns ``(cleaned_image, removed_component_count)``.
+    """
+    if img is None or img.size == 0 or len(img.shape) != 3:
+        return img, 0
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    low_red = cv2.inRange(hsv, np.array([0, 120, 70]), np.array([12, 255, 255]))
+    high_red = cv2.inRange(hsv, np.array([168, 120, 70]), np.array([180, 255, 255]))
+    red_mask = cv2.bitwise_or(low_red, high_red)
+    linked = cv2.morphologyEx(
+        red_mask, cv2.MORPH_CLOSE, np.ones((3, 7), np.uint8), iterations=1
+    )
+
+    img_h, img_w = img.shape[:2]
+    min_width = max(28, int(img_w * 0.04))
+    max_height = max(10, int(img_h * 0.045))
+    selected = np.zeros_like(red_mask)
+    removed = 0
+
+    contours, _ = cv2.findContours(linked, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if w < min_width or h > max_height or w / max(1.0, float(h)) < 4.0:
+            continue
+        # Copy only the genuinely red pixels, not the whole bounding box, so
+        # nearby Thai lower vowels (ุ/ู) and black underlines cannot be erased.
+        roi = red_mask[y:y + h, x:x + w]
+        selected[y:y + h, x:x + w] = cv2.bitwise_or(
+            selected[y:y + h, x:x + w], roi
+        )
+        removed += 1
+
+    if not removed:
+        return img, 0
+    selected = cv2.dilate(selected, np.ones((3, 3), np.uint8), iterations=1)
+    return cv2.inpaint(img, selected, 2, cv2.INPAINT_TELEA), removed
 
 
 # --- document quad detection & perspective correction ----------------------
@@ -130,19 +199,33 @@ def _to_jpeg_data_url(bgr_img: np.ndarray) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode("ascii")
 
 
-def resize_min_side(img: np.ndarray, min_side: int = MIN_SHORT_SIDE) -> tuple:
-    """Returns (resized_img, scale). scale is 1.0 when no resize was needed -
-    callers must divide bbox coordinates by scale to map back to the original
-    (pre-resize) image the frontend inspector actually displays."""
+def resize_min_side(img: np.ndarray, min_side: int = MIN_SHORT_SIDE,
+                    max_side: int = MAX_LONG_SIDE) -> tuple:
+    """Clamps the image into [min_side (short), max_side (long)] and returns
+    (resized_img, scale). scale is 1.0 when no resize was needed - callers
+    must divide bbox coordinates by scale to map back to the original
+    (pre-resize) image the frontend inspector actually displays.
+
+    Upscales a too-small image so the detection pass has pixels to work with;
+    downscales a huge one for speed. It does NOT chase an OCR-optimal glyph
+    size - run_ocr() does that afterwards from the measured text height."""
     h, w = img.shape[:2]
     short_side = min(h, w)
-    if short_side >= min_side or short_side == 0:
+    long_side = max(h, w)
+    if short_side == 0:
         return img, 1.0
-    scale = min_side / short_side
-    if scale > 2.2:
-        scale = 2.0
-    new_w, new_h = round(w * scale), round(h * scale)
-    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR), scale
+
+    scale = 1.0
+    if short_side < min_side:
+        scale = min(min_side / short_side, MAX_UPSCALE)
+    elif long_side > max_side:
+        scale = max_side / long_side
+
+    if abs(scale - 1.0) < 0.02:
+        return img, 1.0
+    new_w, new_h = max(1, round(w * scale)), max(1, round(h * scale))
+    interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
+    return cv2.resize(img, (new_w, new_h), interpolation=interp), scale
 
 
 def _is_lighting_uneven(gray: np.ndarray) -> bool:
@@ -181,6 +264,18 @@ def _is_lighting_uneven(gray: np.ndarray) -> bool:
     return (max(means) - min(means)) > 55.0
 
 
+def _is_clean_bilevel(gray: np.ndarray) -> bool:
+    """True for a crisp black-on-white image (scan / screenshot / render):
+    histogram strongly bimodal, so contrast/threshold enhancement can only
+    hurt the thin Thai diacritic strokes."""
+    total = gray.size
+    if total == 0:
+        return False
+    hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).ravel()
+    midtone_frac = float(hist[64:192].sum()) / float(total)
+    return midtone_frac < _BILEVEL_MIDTONE_MAX_FRAC
+
+
 def _is_already_high_quality(gray: np.ndarray) -> bool:
     """Second, independent safety net: even if _is_lighting_uneven() says
     uneven, skip adaptive-threshold when the raw image is already sharp and
@@ -203,6 +298,7 @@ def preprocess(image_bytes: bytes, document_source: str = "upload") -> tuple:
     divided by scale), else None.
     """
     img = decode_image(image_bytes)
+    img, _removed_spellcheck_lines = remove_colored_spellcheck_underlines(img)
 
     warped_preview = None
     try:
@@ -221,10 +317,18 @@ def preprocess(image_bytes: bytes, document_source: str = "upload") -> tuple:
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
+    # A crisp black-on-white image is left untouched - CLAHE and adaptive
+    # threshold only erode the hairline Thai diacritic strokes on an image
+    # that has nothing to fix. Contrast/threshold work stays for real
+    # photographs (uneven light, low contrast, glare).
+    clean = _is_clean_bilevel(gray)
+    if clean:
+        enhanced = gray
+    else:
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
 
-    if _is_lighting_uneven(enhanced) and not _is_already_high_quality(gray):
+    if not clean and _is_lighting_uneven(enhanced) and not _is_already_high_quality(gray):
         enhanced = cv2.adaptiveThreshold(
             enhanced,
             255,

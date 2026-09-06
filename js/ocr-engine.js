@@ -14,7 +14,19 @@
 
 let isOCROngoing = false;
 let lastOcrInspectorData = null;
+// Kept for backwards-compat with older references; the accept / warn / reject
+// decision now goes through classifyOcrConfidence() (js/textProcessor.js) so
+// the three flows (camera.html, this modal, the progress HUD) agree on what
+// "high / medium / low" means instead of each hard-coding its own cutoff.
 const OCR_LOW_CONFIDENCE_THRESHOLD = 50;
+
+// Local fallback so this file still classifies sensibly if textProcessor.js
+// somehow didn't load. Mirrors OCR_CONF_HIGH / OCR_CONF_MEDIUM there.
+function ocrConfidenceTier(confidence) {
+    if (typeof classifyOcrConfidence === 'function') return classifyOcrConfidence(confidence);
+    const c = (typeof confidence === 'number' && isFinite(confidence)) ? confidence : 0;
+    return c >= 72 ? 'high' : c >= 45 ? 'medium' : 'low';
+}
 
 /**
  * Updates OCR Progress HUD and Confidence Indicator
@@ -31,19 +43,14 @@ function updateOCRProgress(progress01, statusHtml, confidence = null) {
 
     if (confBadge && confidence !== null && confidence !== undefined) {
         confBadge.innerText = `CONF: ${Math.round(confidence)}%`;
-        if (confidence >= 80) {
-            confBadge.style.background = 'rgba(0, 255, 136, 0.15)';
-            confBadge.style.color = 'var(--accent-emerald)';
-            confBadge.style.borderColor = 'rgba(0, 255, 136, 0.4)';
-        } else if (confidence >= OCR_LOW_CONFIDENCE_THRESHOLD) {
-            confBadge.style.background = 'rgba(245, 158, 11, 0.15)';
-            confBadge.style.color = 'var(--accent-amber)';
-            confBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
-        } else {
-            confBadge.style.background = 'rgba(255, 0, 85, 0.15)';
-            confBadge.style.color = 'var(--accent-magenta)';
-            confBadge.style.borderColor = 'rgba(255, 0, 85, 0.4)';
-        }
+        const palette = {
+            high:   ['rgba(0, 255, 136, 0.15)', 'var(--accent-emerald)', 'rgba(0, 255, 136, 0.4)'],
+            medium: ['rgba(245, 158, 11, 0.15)', 'var(--accent-amber)',   'rgba(245, 158, 11, 0.4)'],
+            low:    ['rgba(255, 0, 85, 0.15)',  'var(--accent-magenta)',  'rgba(255, 0, 85, 0.4)'],
+        }[ocrConfidenceTier(confidence)];
+        confBadge.style.background = palette[0];
+        confBadge.style.color = palette[1];
+        confBadge.style.borderColor = palette[2];
     }
 }
 
@@ -81,7 +88,9 @@ function renderOCRInspector(imageSource, ocrData) {
         } else {
             detailsBar.innerHTML = words.map(w => {
                 const text = (w.text || '').trim();
-                const conf = Math.round(w.confidence || overallConf);
+                const conf = Math.round(
+                    (typeof w.confidence === 'number') ? w.confidence : overallConf
+                );
                 return `<div class="inspector-word-tag"><i class="fa-solid fa-font"></i> <span>${text}</span> <span class="conf">${conf}%</span></div>`;
             }).join('');
         }
@@ -179,14 +188,10 @@ async function runOcrPipeline(imageFile, documentSource) {
         try {
             result = await recognize(imageFile, documentSource);
         } catch (apiErr) {
-            console.warn('[OCR Backend Offline / Fallback Result]:', apiErr);
+            console.warn('[OCR failed without a usable fallback]:', apiErr);
             result = {
-                text: "สวัสดีครับผมชื่อสมชาย ยินดีที่ได้รู้จักครับ",
-                confidence: 96,
-                words: [
-                    { text: "สวัสดีครับ", confidence: 98, bbox: { x0: 50, y0: 50, x1: 200, y1: 100 } },
-                    { text: "ผมชื่อสมชาย", confidence: 95, bbox: { x0: 220, y0: 50, x1: 400, y1: 100 } }
-                ]
+                text: '', confidence: 0, words: [],
+                suspicious: true, failureReason: 'ocr-error'
             };
         }
 
@@ -201,24 +206,41 @@ async function runOcrPipeline(imageFile, documentSource) {
         }
 
         if (inspectorImage && result) {
-            renderOCRInspector(inspectorImage, { words: result.words || [], confidence: result.confidence || 95 });
+            renderOCRInspector(inspectorImage, {
+                words: result.words || [],
+                confidence: (typeof result.confidence === 'number') ? result.confidence : 0
+            });
         }
 
-        if (!cleanedText || result.confidence < OCR_LOW_CONFIDENCE_THRESHOLD) {
-            updateOCRProgress(1.0, '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> ภาพไม่ชัดเจน กรุณาลองใหม่ (image unclear, try again)', result.confidence);
-            return { text: cleanedText, confidence: result.confidence, words: result.words, accepted: false };
+        const tier = ocrConfidenceTier(result.confidence);
+        const safeForBraille = (typeof isOcrResultSafeForBraille === 'function')
+            ? isOcrResultSafeForBraille(Object.assign({}, result, { text: cleanedText }))
+            : false;
+
+        // Never actuate Braille from a fallback, a suspicious cross-script
+        // token, a low/medium-confidence read, or a burst without agreement.
+        if (!cleanedText || !safeForBraille) {
+            const reason = tier === 'low' || !cleanedText
+                ? 'ข้อความไม่ชัดเจน อาจอ่านผิดมาก กรุณาถ่าย/อัปโหลดใหม่'
+                : 'พบข้อความ แต่ผลยังไม่แน่นอน จึงยังไม่ส่งไปยังอักษรเบรลล์ กรุณาตรวจสอบหรือสแกนใหม่';
+            updateOCRProgress(1.0, `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> ${reason}`, result.confidence);
+            return { text: cleanedText, confidence: result.confidence, words: result.words, accepted: false, tier };
         }
 
         const previewSnippet = cleanedText.length > 22 ? cleanedText.substring(0, 22) + '...' : cleanedText;
-        updateOCRProgress(1.0, `<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> สแกนสำเร็จ: "${previewSnippet}"`, result ? result.confidence : 95);
+        // The medium branch remains explicit for the UI wording, though the
+        // safety gate above prevents it from actuating Braille automatically.
+        const statusHtml = tier === 'medium'
+            ? `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> เจอข้อความ แต่ไม่ชัด อาจมีคำผิด: "${previewSnippet}"`
+            : `<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> สแกนสำเร็จ: "${previewSnippet}"`;
+        updateOCRProgress(1.0, statusHtml, result ? result.confidence : 95);
         applyOCRResultToSystem(cleanedText, result ? result.confidence : 95);
 
-        return { text: cleanedText, confidence: result ? result.confidence : 95, words: result ? result.words : [], accepted: true };
+        return { text: cleanedText, confidence: result ? result.confidence : 95, words: result ? result.words : [], accepted: true, tier };
     } catch (err) {
         console.error('[BraillLens OCR Error]:', err);
-        const fallbackText = "สวัสดีครับผมชื่อสมชาย";
-        applyOCRResultToSystem(fallbackText, 95);
-        return { text: fallbackText, confidence: 95, words: [], accepted: true };
+        updateOCRProgress(1.0, '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-magenta);"></i> OCR ทำงานไม่สำเร็จ กรุณาลองใหม่', 0);
+        return { text: '', confidence: 0, words: [], accepted: false, tier: 'low' };
     } finally {
         isOCROngoing = false;
     }
@@ -230,6 +252,7 @@ async function runOcrPipeline(imageFile, documentSource) {
 let currentResultText = '';
 let currentResultChunkIndex = 0;
 let currentResultChunks = [];
+let currentResultConfidence = 95;
 
 function applyOCRResultToSystem(extractedText, confidence = 95) {
     if (!extractedText) return;
@@ -245,6 +268,7 @@ function applyOCRResultToSystem(extractedText, confidence = 95) {
 
 function showOcrResultScreen(extractedText, confidence = 95) {
     currentResultText = extractedText || 'สวัสดีครับผมชื่อสมชาย';
+    currentResultConfidence = (typeof confidence === 'number' && isFinite(confidence)) ? confidence : 95;
     if (typeof chunkTextForBraille === 'function') {
         currentResultChunks = chunkTextForBraille(currentResultText);
     } else {
@@ -268,15 +292,30 @@ function renderResultScreenData() {
     const headline = document.getElementById('resThaiHeadline');
     const badge = document.getElementById('resPageBadge');
     const grid = document.getElementById('resBrailleGrid');
+    const confBadge = document.getElementById('resConfidenceBadge');
 
     if (headline) headline.textContent = `"${currentResultText}"`;
     if (badge) badge.textContent = `หน้า ${currentResultChunkIndex + 1}/${currentResultChunks.length}`;
+
+    if (confBadge) {
+        const conf = Math.max(10, Math.min(100, Math.round(currentResultConfidence)));
+        const spec = {
+            high:   ['ชัดเจน',            '#00ff88', 'rgba(0,255,136,0.15)',  'rgba(0,255,136,0.35)'],
+            medium: ['อาจมีคำผิด',        '#f59e0b', 'rgba(245,158,11,0.15)', 'rgba(245,158,11,0.4)'],
+            low:    ['ไม่ชัด อาจผิดมาก',  '#ef4444', 'rgba(239,68,68,0.15)',  'rgba(239,68,68,0.4)'],
+        }[ocrConfidenceTier(currentResultConfidence)];
+        confBadge.textContent = `${spec[0]} · ${conf}%`;
+        confBadge.style.color = spec[1];
+        confBadge.style.background = spec[2];
+        confBadge.style.borderColor = spec[3];
+    }
 
     const page = currentResultChunks[currentResultChunkIndex] || { cells: [], text: '' };
     const pageCells = page.cells || [];
     if (grid) {
         grid.innerHTML = pageCells.map(cell => {
-            const char = (cell.source !== undefined ? cell.source : cell.char) || ' ';
+            const char = (cell.label !== undefined ? cell.label
+                : (cell.source !== undefined ? cell.source : cell.char)) || ' ';
             const activeList = cell.dots || cell.activeDots || [];
             const dots = [1, 2, 3, 4, 5, 6].map(d => {
                 const isActive = Array.isArray(activeList) && activeList.includes(d);
@@ -322,6 +361,14 @@ function speakResultText() {
         utter.lang = 'th-TH';
         utter.rate = 0.95;
         window.speechSynthesis.speak(utter);
+    }
+}
+
+// Stops read-aloud playback immediately (long detected text could
+// otherwise keep reading for a while with no way to cut it short).
+function stopSpeakingResult() {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
     }
 }
 

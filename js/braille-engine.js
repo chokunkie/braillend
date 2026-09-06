@@ -43,6 +43,7 @@ function convertThaiToBraille(text) {
         cells.push({
             char: src ? src.source : ' ',
             source: src ? src.source : ' ',
+            label: src ? (src.label !== undefined ? src.label : src.source) : ' ',
             activeDots: activeDots,
             dots: activeDots,
             dotsBool: [1, 2, 3, 4, 5, 6].map(dot => activeDots.includes(dot))
@@ -158,7 +159,8 @@ function updatePaginationDisplay() {
         for (let c = 0; c < 14; c++) {
             const cell = cellsData[c] || { dots: [], source: '' };
             const dots = cell.dots || cell.activeDots || [];
-            const src = (cell.source !== undefined ? cell.source : cell.char) || '';
+            const src = (cell.label !== undefined ? cell.label
+                : (cell.source !== undefined ? cell.source : cell.char)) || '';
             const card = document.createElement('div');
             card.className = 'cell-card';
             card.id = `cell-card-${c}`;

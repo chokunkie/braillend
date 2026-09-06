@@ -74,12 +74,14 @@ module.exports = [
     { section: 'latin', stage: 1, input: 'cat', cells: [[1, 4], [1], [2, 3, 4, 5]], chartRef: 'a-z == A-Z cell' },
     { section: 'latin', stage: 1, input: 'AB', cells: [[6], [1], [6], [1, 2]], chartRef: 'เครื่องหมายตัวใหญ่' },
 
-    /* ---- reordering (สระหน้า ย้ายหลังพยัญชนะ) - engine stage 3 ------- */
-    { section: 'reorder', stage: 3, input: 'เก', cells: [[1, 2, 4, 5], [1, 2, 4]], chartRef: 'สระ เ◌ (เขียนหลัง ก)' },
-    { section: 'reorder', stage: 3, input: 'แก', cells: [[1, 2, 4, 5], [1, 2, 6]], chartRef: 'สระ แ◌' },
-    { section: 'reorder', stage: 3, input: 'โต', cells: [[1, 2, 5, 6], [2, 4]], chartRef: 'สระ โ◌' },
-    { section: 'reorder', stage: 3, input: 'ไก', cells: [[1, 2, 4, 5], [1, 5, 6]], chartRef: 'สระ ไ◌' },
-    { section: 'tone-reorder', stage: 3, input: 'เก่ง', cells: [[1, 2, 4, 5], [1, 2, 4], [1, 2, 4, 5, 6], [3, 5]], chartRef: 'เ + ก + สะกด ง + ไม้เอก (ไม้เอกท้ายสุด)' },
+    /* ---- front-vowel order (สระหน้าอยู่ก่อนพยัญชนะ) - stage 3 ------- */
+    { section: 'front-vowel-order', stage: 3, input: 'เก', cells: [[1, 2, 4], [1, 2, 4, 5]], chartRef: 'สระ เ◌ อยู่ก่อน ก' },
+    { section: 'front-vowel-order', stage: 3, input: 'แก', cells: [[1, 2, 6], [1, 2, 4, 5]], chartRef: 'สระ แ◌ อยู่ก่อน ก' },
+    { section: 'front-vowel-order', stage: 3, input: 'โต', cells: [[2, 4], [1, 2, 5, 6]], chartRef: 'สระ โ◌ อยู่ก่อน ต' },
+    { section: 'front-vowel-order', stage: 3, input: 'ใจ', cells: [[1, 5, 6], [2], [2, 4, 5]], chartRef: 'สระ ใ◌ อยู่ก่อน จ' },
+    { section: 'front-vowel-order', stage: 3, input: 'ไก', cells: [[1, 5, 6], [1, 2, 4, 5]], chartRef: 'สระ ไ◌ อยู่ก่อน ก' },
+    { section: 'tone-order', stage: 3, input: 'เก่ง', cells: [[1, 2, 4], [1, 2, 4, 5], [1, 2, 4, 5, 6], [3, 5]], chartRef: 'เ + ก + สะกด ง + ไม้เอก (ไม้เอกท้ายสุด)' },
+    { section: 'front-vowel-order', stage: 3, input: 'โชกุน', cells: [[2, 4], [3, 4, 6], [1, 2, 4, 5], [1, 4], [1, 3, 4, 5]], chartRef: 'โชกุน = โ + ช + ก + ุ + น' },
 
     /* ---- compound vowels (สระประสมหลายส่วน) - engine stage 3 -------- */
     { section: 'compound-vowel', stage: 3, input: 'เกาะ', cells: [[1, 2, 4, 5], [1, 3, 5], [1]], chartRef: 'สระ เ◌าะ' },
@@ -98,6 +100,17 @@ module.exports = [
     { section: 'word-space', stage: 4, needsDict: true, input: 'สวัสดีครับ', spaces: 1, chartRef: 'สวัสดี | ครับ' },
     { section: 'word-space', stage: 4, needsDict: true, input: 'ผมชอบกินข้าว', spaces: 3, chartRef: 'ผม | ชอบ | กิน | ข้าว' },
     { section: 'word-space', stage: 4, needsDict: true, input: 'เขาไปโรงเรียน', spaces: 2, chartRef: 'เขา | ไป | โรงเรียน' },
+
+    // Regression guard: a proper name with no real word break must NOT get
+    // split just because short (<=2 char) dictionary words ("ติ", "พร")
+    // happen to be substrings of it. "ฐิ" never resolves, so the whole
+    // name must collapse into one unbroken token - zero space cells.
+    { section: 'word-space', stage: 4, needsDict: true, input: 'ฐิติพร', spaces: 0, chartRef: 'ฐิติพร (ชื่อเฉพาะ คำเดียว ไม่แยก)' },
+    // Same class: OCR read the nickname "พิตต้า" as one token, but "ต้า" is a
+    // real word, so maximal matching would cut "พิต | ต้า". A run that
+    // doesn't fully decompose into substantial dictionary words stays whole.
+    { section: 'word-space', stage: 4, needsDict: true, input: 'พิตต้า', spaces: 0, chartRef: 'พิตต้า (ชื่อเล่น คำเดียว ไม่แยก)' },
+    { section: 'word-space', stage: 4, needsDict: true, input: 'สกาย', spaces: 0, chartRef: 'สกาย (ชื่อเล่น ไม่แยก)' },
 
     /* ---- pagination (แบ่งหน้า 14 เซลล์ต่อหน้า) --------------------- */
     // lowercase Latin: 1 cell/char, no number/capital signs, no dictionary
