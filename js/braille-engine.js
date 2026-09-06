@@ -235,8 +235,19 @@ function prevBraillePage() {
  */
 function updateBrailleDisplay(text) {
     if (text === undefined || text === null) {
-        const inputEl = document.getElementById('thaiInput');
-        text = inputEl ? inputEl.value : '';
+        const mainInput = document.getElementById('mainTextInput');
+        let storedText = '';
+        if (typeof localStorage !== 'undefined') {
+            try { storedText = localStorage.getItem('braillend_last_ocr_text') || ''; } catch (e) {}
+        }
+        if (mainInput && mainInput.value && mainInput.value.trim() !== '') {
+            text = mainInput.value;
+        } else if (storedText && storedText.trim() !== '') {
+            text = storedText.trim();
+        } else {
+            const inputEl = document.getElementById('thaiInput');
+            text = inputEl ? inputEl.value : '';
+        }
     }
 
     currentBrailleFullText = text;

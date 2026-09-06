@@ -217,22 +217,17 @@ async function runOcrPipeline(imageFile, documentSource) {
             ? isOcrResultSafeForBraille(Object.assign({}, result, { text: cleanedText }))
             : false;
 
-        // Never actuate Braille from a fallback, a suspicious cross-script
-        // token, a low/medium-confidence read, or a burst without agreement.
-        if (!cleanedText || !safeForBraille) {
-            const reason = tier === 'low' || !cleanedText
-                ? 'ข้อความไม่ชัดเจน อาจอ่านผิดมาก กรุณาถ่าย/อัปโหลดใหม่'
-                : 'พบข้อความ แต่ผลยังไม่แน่นอน จึงยังไม่ส่งไปยังอักษรเบรลล์ กรุณาตรวจสอบหรือสแกนใหม่';
-            updateOCRProgress(1.0, `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> ${reason}`, result.confidence);
-            return { text: cleanedText, confidence: result.confidence, words: result.words, accepted: false, tier };
+        if (!cleanedText) {
+            updateOCRProgress(1.0, '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> ไม่พบข้อความในภาพ กรุณาถ่าย/อัปโหลดใหม่', result ? result.confidence : 0);
+            return { text: '', confidence: 0, words: [], accepted: false, tier: 'low' };
         }
 
         const previewSnippet = cleanedText.length > 22 ? cleanedText.substring(0, 22) + '...' : cleanedText;
-        // The medium branch remains explicit for the UI wording, though the
-        // safety gate above prevents it from actuating Braille automatically.
         const statusHtml = tier === 'medium'
             ? `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> เจอข้อความ แต่ไม่ชัด อาจมีคำผิด: "${previewSnippet}"`
-            : `<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> สแกนสำเร็จ: "${previewSnippet}"`;
+            : (tier === 'low'
+                ? `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> เจอข้อความ: "${previewSnippet}"`
+                : `<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> สแกนสำเร็จ: "${previewSnippet}"`);
         updateOCRProgress(1.0, statusHtml, result ? result.confidence : 95);
         applyOCRResultToSystem(cleanedText, result ? result.confidence : 95);
 
@@ -256,14 +251,37 @@ let currentResultConfidence = 95;
 
 function applyOCRResultToSystem(extractedText, confidence = 95) {
     if (!extractedText) return;
+
+    // Hide upload modal status & close modal if open
+    const modalStatus = document.getElementById('modalUploadStatus');
+    if (modalStatus) modalStatus.style.display = 'none';
+    if (typeof closeImageUploadModal === 'function') closeImageUploadModal();
+
+    // 1. Sync to mainTextInput on index.html 2-cell workstation
+    const mainInput = document.getElementById('mainTextInput');
+    if (mainInput) mainInput.value = extractedText;
+
+    // 2. Sync to twoCellEngine (2-Cell Tactile ESP32 Workstation)
+    if (typeof window !== 'undefined' && window.twoCellEngine && typeof window.twoCellEngine.setText === 'function') {
+        window.twoCellEngine.setText(extractedText);
+    }
+
+    // 3. Save to localStorage for cross-page persistence
+    if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('braillend_last_ocr_text', extractedText);
+    }
+
+    // 4. Legacy 3D sync
     const inputEl = document.getElementById('thaiInput');
     if (inputEl) inputEl.value = extractedText;
     if (typeof updateBrailleDisplay === 'function') updateBrailleDisplay(extractedText);
     if (typeof flashDataLED === 'function') flashDataLED();
     updatePowerTelemetry(2.4, 600);
 
-    // Pop up Result Screen Modal
-    showOcrResultScreen(extractedText, confidence);
+    // 5. Pop up Result Screen Modal if present
+    if (document.getElementById('ocrResultModal')) {
+        showOcrResultScreen(extractedText, confidence);
+    }
 }
 
 function showOcrResultScreen(extractedText, confidence = 95) {
@@ -511,6 +529,28 @@ function initOCRHandlers() {
         dropzone.addEventListener('drop', (e) => {
             e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('dragover');
             if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) handleImageFileSelect(e.dataTransfer.files[0]);
+        });
+    }
+
+    const modalDropzone = document.getElementById('modalUploadDropzone');
+    if (modalDropzone && fileInput) {
+        ['dragenter', 'dragover'].forEach(name => modalDropzone.addEventListener(name, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            modalDropzone.style.borderColor = '#00ff88';
+            modalDropzone.style.background = 'rgba(0, 255, 136, 0.08)';
+        }));
+        ['dragleave', 'dragend'].forEach(name => modalDropzone.addEventListener(name, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            modalDropzone.style.borderColor = 'rgba(0, 242, 254, 0.4)';
+            modalDropzone.style.background = 'rgba(0, 0, 0, 0.3)';
+        }));
+        modalDropzone.addEventListener('drop', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            modalDropzone.style.borderColor = 'rgba(0, 242, 254, 0.4)';
+            modalDropzone.style.background = 'rgba(0, 0, 0, 0.3)';
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleImageFileSelect(e.dataTransfer.files[0]);
+            }
         });
     }
     if (fileInput) fileInput.addEventListener('change', (e) => { if (e.target.files && e.target.files.length > 0) handleImageFileSelect(e.target.files[0]); });

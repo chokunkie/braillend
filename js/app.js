@@ -171,9 +171,30 @@ function initTwoCellWorkstation() {
             });
         }
 
-        // Initial default text
-        const initialText = mainInput ? mainInput.value : 'สวัสดี';
+        // Initial text (load from Camera OCR / Image Upload persistence if available)
+        let initialText = 'สวัสดี';
+        if (typeof localStorage !== 'undefined') {
+            const lastOcr = localStorage.getItem('braillend_last_ocr_text');
+            if (lastOcr && lastOcr.trim()) {
+                initialText = lastOcr.trim();
+            }
+        }
+        if (mainInput) mainInput.value = initialText;
+        if (legacyInput) legacyInput.value = initialText;
         twoCellEngine.setText(initialText);
+
+        // Realtime cross-tab storage listener
+        if (typeof window !== 'undefined') {
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'braillend_last_ocr_text' && e.newValue && e.newValue.trim()) {
+                    const txt = e.newValue.trim();
+                    if (mainInput) mainInput.value = txt;
+                    twoCellEngine.setText(txt);
+                    if (legacyInput) legacyInput.value = txt;
+                    if (typeof updateBrailleDisplay === 'function') updateBrailleDisplay(txt);
+                }
+            });
+        }
     }
 
     // 3. Tactile Shapes Manager

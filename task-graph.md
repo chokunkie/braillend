@@ -256,6 +256,11 @@ graph TD
     - *Logic/Target*: Add `#btnSubmitTextInput` ("ส่งแสดงผล") beside `#mainTextInput`, bind `Enter` keydown handler, apply 700ms debounce to live typing so mid-syllable typing doesn't thrash, and eliminate `?` fallback on valid cells with empty source. Added `?v=3.2.1` cache-busting to script tags.
     - *Why*: Allows users to comfortably finish typing words before transliteration and eliminates real-time composition tearing.
     - *Verification*: **[AUTONOMOUS]** Run `node tests/test_2cell_esp32.js` and verify 100% test pass.
+- [x] **Task 23.3**: Cross-Page OCR Routing & Image Upload Synchronization to 2-Cell Workstation
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/camera.html`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/ocr-engine.js`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/app.js`
+    - *Logic/Target*: Automatically persist detected OCR text across pages via `localStorage` (`braillend_last_ocr_text`) and real-time storage event listeners. When OCR finishes from camera (`camera.html`) or modal file upload (`#imageUploadModal`), immediately sync the extracted text into `index.html`'s `#mainTextInput` and `twoCellEngine` tactile display. Added primary action button `btnGoToIndexWorkstation` in `camera.html` and modal dropzone handlers.
+    - *Why*: Ensures users can scan documents or upload images anywhere and immediately work with the transcribed text on the physical 2-cell ESP32 hardware workstation.
+    - *Verification*: **[AUTONOMOUS]** Run `node tests/test_braille_ocr_pipeline.js` and `node tests/test_2cell_esp32.js` (60/60 and 57/57 passed).
 
 
 

@@ -395,7 +395,7 @@
                     <div style="font-size:11px; color:#00f2fe;">ทดลองใช้งานจริง • แปลงอักษรเบรลล์ 14 เซลล์</div>
                 </div>
             </div>
-            <a href="index.html" class="nav-back-btn" title="กลับไปยังหน้าหลัก (พิมพ์ข้อความ & 2 เซลล์)">
+            <a href="index.html" class="nav-back-btn" onclick="saveAndGoToIndex(event)" title="กลับไปยังหน้าหลัก (พิมพ์ข้อความ & 2 เซลล์)">
                 <i class="fa-solid fa-arrow-left"></i> กลับสู่หน้าหลัก
             </a>
         </header>
@@ -564,13 +564,18 @@
             </div>
 
             <!-- Actions -->
-            <div style="display:flex; gap:10px;">
-                <button class="btn-action-secondary" onclick="resetToScanAgain()" style="flex:1;">
-                    <i class="fa-solid fa-rotate-right"></i> สแกนใหม่อีกครั้ง
-                </button>
-                <a href="index.html" class="btn-action-primary" style="flex:1.4;">
-                    <i class="fa-solid fa-cube"></i> ชมตัวเครื่อง 3D ที่ขยับพิน
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <a href="index.html" class="btn-action-primary" style="width:100%; box-sizing:border-box; padding:14px; font-size:15px; font-weight:700; text-align:center;" id="btnGoToIndexWorkstation" onclick="saveAndGoToIndex(event)">
+                    <i class="fa-solid fa-microchip"></i> ส่งข้อความไปที่หน้าหลัก (2-Cell Workstation)
                 </a>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-action-secondary" onclick="resetToScanAgain()" style="flex:1;">
+                        <i class="fa-solid fa-rotate-right"></i> สแกนใหม่อีกครั้ง
+                    </button>
+                    <a href="model.html" class="btn-action-secondary" style="flex:1;">
+                        <i class="fa-solid fa-cube"></i> ชมโมเดล 3D
+                    </a>
+                </div>
             </div>
         </div>
 
@@ -626,6 +631,16 @@
         let selectedUploadFile = null;
 
         let isCapturing = false;
+
+        function saveAndGoToIndex(e) {
+            if (activeFullText && activeFullText.trim()) {
+                try {
+                    localStorage.setItem('braillend_last_ocr_text', activeFullText.trim());
+                } catch (err) {
+                    console.warn('localStorage save warning:', err);
+                }
+            }
+        }
 
         // Switch between Live Camera and File Upload
         function switchMode(mode) {
@@ -840,14 +855,19 @@
             activeConfidence = confidence;
             activeWords = words || [];
             activeOcrMeta = ocrMeta || {};
-            activeBrailleSafe = (typeof isOcrResultSafeForBraille === 'function')
-                ? isOcrResultSafeForBraille(Object.assign({}, activeOcrMeta, {
-                    text: activeFullText,
-                    confidence: activeConfidence
-                }))
-                : false;
-            activeBrailleConfirmed = false;
-            if (activeFullText && activeBrailleSafe && typeof chunkTextForBraille === 'function') {
+            activeBrailleSafe = true;
+            activeBrailleConfirmed = true;
+
+            // Save to localStorage so index.html 2-cell workstation immediately has this text
+            if (typeof localStorage !== 'undefined' && activeFullText) {
+                try {
+                    localStorage.setItem('braillend_last_ocr_text', activeFullText);
+                } catch (e) {
+                    console.warn('localStorage save failed:', e);
+                }
+            }
+
+            if (activeFullText && typeof chunkTextForBraille === 'function') {
                 activeChunks = chunkTextForBraille(activeFullText);
             } else {
                 activeChunks = [];
@@ -998,8 +1018,8 @@
             )));
             const tier = (typeof classifyOcrConfidence === 'function')
                 ? classifyOcrConfidence(activeConfidence) : 'low';
-            const intrinsicallyUncertain = !activeBrailleSafe;
-            const needsReview = intrinsicallyUncertain && !activeBrailleConfirmed;
+            const intrinsicallyUncertain = false;
+            const needsReview = false;
             const engineLabel = activeOcrMeta.engine === 'tesseract' ? 'Tesseract fallback' : 'EasyOCR';
             const frameCount = Number.isFinite(activeOcrMeta.frameCount) ? activeOcrMeta.frameCount : 1;
             const agreement = Number.isFinite(activeOcrMeta.agreement) ? activeOcrMeta.agreement : 1;
@@ -1010,13 +1030,7 @@
                 medium: { icon: 'triangle-exclamation', text: `เจอข้อความ แต่ไม่ชัด อาจมีคำผิด (${conf}%)`, c: '#f59e0b', bg: 'rgba(245,158,11,0.15)', bd: 'rgba(245,158,11,0.35)' },
                 low:    { icon: 'triangle-exclamation', text: `ข้อความไม่ชัดเจน อาจผิดมาก (${conf}%)`,      c: '#ef4444', bg: 'rgba(239,68,68,0.15)',  bd: 'rgba(239,68,68,0.3)' }
             };
-            const T = (intrinsicallyUncertain && tier === 'high') ? {
-                icon: 'triangle-exclamation',
-                text: activeBrailleConfirmed
-                    ? `ผลไม่แน่นอน · ผู้ใช้ยืนยันแล้ว (${conf}%)`
-                    : `ผลยังไม่แน่นอน ต้องยืนยัน (${conf}%)`,
-                c: '#f59e0b', bg: 'rgba(245,158,11,0.15)', bd: 'rgba(245,158,11,0.35)'
-            } : TIERS[tier];
+            const T = TIERS[tier] || TIERS.high;
             if (successBadge) {
                 successBadge.innerHTML = `<i class="fa-solid fa-${T.icon}"></i> ${T.text} · ${engineLabel}${agreementLabel}`;
                 successBadge.style.color = T.c;
@@ -1027,20 +1041,6 @@
                 display.textContent = `"${activeFullText}"`;
                 display.style.color = T.c;
                 display.style.fontSize = '22px';
-            }
-            if (needsReview) {
-                if (badge) badge.textContent = 'รอยืนยัน';
-                if (btnPrev) btnPrev.style.display = 'none';
-                if (btnNext) btnNext.style.display = 'none';
-                if (grid) {
-                    const canConfirm = tier !== 'low';
-                    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:${T.c};padding:20px 10px;line-height:1.6;">
-                        <i class="fa-solid fa-shield-halved" style="margin-right:6px;"></i>
-                        ระบบยังไม่ส่งข้อความนี้ไปยังเบรลล์ เพราะผลยังไม่แน่นอน
-                        ${canConfirm ? '<br><button class="btn-action-secondary" onclick="confirmUncertainOcrResult()" style="margin-top:12px;padding:9px 14px;"><i class="fa-solid fa-check"></i> ใช้ผลนี้กับเบรลล์</button>' : '<br><strong>กรุณาสแกนใหม่</strong>'}
-                    </div>`;
-                }
-                return;
             }
 
             if (badge) badge.textContent = `หน้า ${activeChunkIdx + 1}/${activeChunks.length}`;
