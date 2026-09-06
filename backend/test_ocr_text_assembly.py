@@ -15,9 +15,16 @@ width). See the module docstring in ocr_engine.py for the rationale.
 
 import sys
 
+import numpy as np
+
 from ocr_engine import (
     assemble_text, _line_char_width, _group_into_lines, filter_confident_words,
     _MIN_WORD_CONFIDENCE, _looks_like_text, _filter_layout_noise, _letter_ratio,
+    _median_glyph_height, _text_volume, _mean_conf,
+    _TARGET_GLYPH_PX, _GLYPH_PX_LO, _GLYPH_PX_HI, _RETRY_TOO_BIG, _RETRY_TOO_SMALL,
+)
+from preprocessing import (
+    resize_min_side, _is_clean_bilevel, MIN_SHORT_SIDE, MAX_LONG_SIDE,
 )
 
 
@@ -182,13 +189,17 @@ check(
 # ---------------------------------------------------------------------------
 # Case 9: digit/symbol-heavy hallucination is rejected, real text survives.
 # Regression guard for the "AIS wooden letters on wood grain -> '1 , 111
-# โ ) 1' at 54%" screenshot: near-zero real letters + mediocre confidence.
+# โ ) 1'" screenshot. Once the detector thresholds were loosened to keep
+# faint Thai diacritics, that same wood-grain noise started reading at 90%+,
+# so the low-letter branch no longer trusts confidence alone - it needs a
+# real run of digits (phone / id / account number).
 # ---------------------------------------------------------------------------
 check("hallucinated digit soup at 54% -> rejected", _looks_like_text("1 , 111โ ) 1", 54.0), False)
+check("same digit soup now reading at 91% -> still rejected", _looks_like_text("1 111 ) 1", 91.0), False)
 check("mixed alnum word 'hackathon2026' -> kept", _looks_like_text("hackathon2026", 76.0), True)
 check("real Thai line -> kept", _looks_like_text("ภารกิจ คิดเผือ ขับเคลือนอนาคต", 80.0), True)
-check("clearly-read phone number -> kept (high confidence)", _looks_like_text("081-234-5678", 88.0), True)
-check("digit soup but read very confidently -> kept", _looks_like_text(") ) 1 1 (", 90.0), True)
+check("clearly-read phone number -> kept (long digit run)", _looks_like_text("081-234-5678", 88.0), True)
+check("short scattered digits read 'confidently' -> rejected", _looks_like_text(") ) 1 1 (", 90.0), False)
 check("empty text -> not text", _looks_like_text("   ", 99.0), False)
 check("letter ratio of pure digits", round(_letter_ratio("2568"), 2), 0.0)
 
@@ -221,6 +232,54 @@ check("small box on the headline's own line survives",
 
 check("layout filter is a no-op below 3 boxes",
       len(_filter_layout_noise([word("a", 0, 0, 10, 10), word("b", 0, 0, 5, 5)], 100.0)), 2)
+
+# ---------------------------------------------------------------------------
+# Case 11: glyph-size retry helpers. EasyOCR fragments words once glyphs get
+# well past ~46px; run_ocr measures the pass-1 text height and only re-reads
+# when it's clearly too small/big, then keeps the re-read only if it didn't
+# lose text or confidence.
+# ---------------------------------------------------------------------------
+def det(text, x0, y0, x1, y1, conf=0.9):
+    """EasyOCR-shaped detection tuple: (4-point box, text, confidence)."""
+    return ([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], text, conf)
+
+
+big = [det("โชกุน", 40, 40, 400, 240), det("ภารกิจ", 40, 300, 500, 500)]  # both 200px tall
+check("median glyph height of an over-large read", _median_glyph_height(big), 200.0)
+in_band = [det("สวัสดี", 10, 10, 130, 58)]  # 48px
+check("in-band read reports ~48px", _median_glyph_height(in_band), 48.0)
+check("empty read -> 0 height", _median_glyph_height([]), 0.0)
+check("empty/whitespace boxes ignored", _median_glyph_height([det("  ", 0, 0, 10, 40)]), 0.0)
+check("text volume counts stripped chars", _text_volume(big), len("โชกุน") + len("ภารกิจ"))
+check("mean confidence over non-empty boxes",
+      round(_mean_conf([det("a", 0, 0, 1, 1, 0.4), det("b", 0, 0, 1, 1, 0.8), det(" ", 0, 0, 1, 1, 0.0)]), 2), 0.6)
+# Band the retry is gated on: ~46px target never retries; clearly-large does.
+check("46px target sits inside the no-retry band", _GLYPH_PX_LO <= _TARGET_GLYPH_PX <= _GLYPH_PX_HI, True)
+check("200px would trigger a retry", 200.0 > _RETRY_TOO_BIG, True)
+check("12px would trigger a retry", 12.0 < _RETRY_TOO_SMALL, True)
+check("a 78px paragraph is left alone (retry margin is wider than the band)",
+      not (78.0 < _RETRY_TOO_SMALL or 78.0 > _RETRY_TOO_BIG), True)
+
+# ---------------------------------------------------------------------------
+# Case 12: preprocessing gates.
+#   - resize_min_side clamps into coarse bounds (no fixed 1100 upscale)
+#   - _is_clean_bilevel spots a crisp black-on-white image so CLAHE / adaptive
+#     threshold get skipped (they only erode thin Thai diacritic strokes)
+# ---------------------------------------------------------------------------
+_, s_small = resize_min_side(np.full((300, 400, 3), 255, np.uint8))
+check("tiny image is upscaled toward the short-side floor", s_small > 1.0, True)
+_, s_huge = resize_min_side(np.full((4000, 6000, 3), 255, np.uint8))
+check("huge image is downscaled under the long-side cap", s_huge < 1.0, True)
+_, s_ok = resize_min_side(np.full((900, 1400, 3), 255, np.uint8))
+check("already-bounded image is left alone", s_ok, 1.0)
+check("MIN_SHORT_SIDE lowered from the old fixed 1100", MIN_SHORT_SIDE < 1100, True)
+
+crisp = np.full((200, 600), 255, np.uint8)
+crisp[80:130, 40:560] = 0  # solid black text band on white
+check("crisp black-on-white -> clean bilevel", _is_clean_bilevel(crisp), True)
+noisy = np.random.RandomState(0).randint(60, 190, (200, 600), dtype=np.uint8)  # all mid-grey
+check("mid-grey photo -> not clean bilevel", _is_clean_bilevel(noisy), False)
+check("empty array -> not clean bilevel", _is_clean_bilevel(np.zeros((0, 0), np.uint8)), False)
 
 print()
 print(f"{passed} passed, {failed} failed")

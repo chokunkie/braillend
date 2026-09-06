@@ -8,6 +8,7 @@ import re
 import statistics
 from typing import Any, Dict, List
 
+import cv2
 import easyocr
 
 # One EasyOCR reader per language set, built lazily and reused (loading the
@@ -87,14 +88,20 @@ def _letter_ratio(text: str) -> float:
 
 def _looks_like_text(text: str, overall_confidence: float) -> bool:
     """Rejects results that are mostly digits/symbols with barely any real
-    letters AND weren't read confidently - i.e. OCR hallucinating '1 , 111
-    โ ) 1' out of wood grain. A clearly-read numeric string (a phone number
-    on a sign) survives because its confidence is high."""
+    letters - i.e. OCR hallucinating '1 , 111 โ ) 1' out of wood grain.
+
+    The confidence-only escape hatch is gone: once the detector thresholds
+    were loosened to keep faint Thai diacritics, faint background noise
+    started reading "confidently" too. A genuine pure-number OCR target -
+    a phone number, an ID, an account number - is instead LONG, so the
+    low-letter branch only lets through a string with a real run of digits.
+    """
     if not text.strip():
         return False
     if _letter_ratio(text) >= 0.35:
         return True
-    return overall_confidence >= 65.0
+    digits = sum(c.isdigit() for c in text)
+    return digits >= 7 and overall_confidence >= 65.0
 
 
 def _filter_layout_noise(words: List[Dict[str, Any]], img_height: float) -> List[Dict[str, Any]]:
@@ -132,12 +139,109 @@ def _filter_layout_noise(words: List[Dict[str, Any]], img_height: float) -> List
     return kept if kept else words
 
 
+# EasyOCR's recognizer has a sweet spot around 30-70px per glyph. Push text
+# much bigger and the *detector* fragments a word into pieces and the
+# recognizer drops characters - this is where "โชกุน -> เชกน", "พิตต้า ->
+# พตตา", "สกาย -> สาย" came from (a clean upload whose ~90px glyphs got
+# upscaled to ~180px by the old fixed resize). run_ocr() reads once, measures
+# the text height it actually found, and if it's WELL outside the band,
+# resizes toward ~46px/glyph and reads again - keeping the re-read only if it
+# didn't lose text or confidence (multi-line pages with lots of context read
+# fine at larger sizes and a downscale-then-reread can only hurt them).
+_TARGET_GLYPH_PX = 46.0
+_GLYPH_PX_LO = 30.0            # no-retry band (measured pass-1 median height)
+_GLYPH_PX_HI = 70.0
+_RETRY_TOO_SMALL = 22.0       # ...but only actually retry outside this wider margin
+_RETRY_TOO_BIG = 92.0
+_RESIZE_MIN = 0.12
+_RESIZE_MAX = 2.8
+# Only relevant when preprocess UPSCALED a small image (scale > 1): don't then
+# crush it back down past ~35% of the original - that up-then-down round trip
+# smears the thin Thai strokes worse than a slightly-too-large read. When
+# preprocess downscaled a big photo (scale < 1) there's no round trip, so a
+# further clean single downscale toward the sweet spot is fine.
+_EFF_SCALE_FLOOR = 0.35
+
+
+def _readtext(reader: "easyocr.Reader", image):
+    """One detection+recognition pass with Thai-tuned detector knobs: a
+    slightly lower text_threshold so faint diacritic strokes stay in their
+    box, a higher y_ths so an above/below vowel merges into its line instead
+    of orphaning, a small add_margin so tone marks aren't clipped off the
+    top. text_threshold isn't dropped hard - that also makes faint background
+    noise read 'confidently'."""
+    try:
+        return reader.readtext(
+            image, paragraph=False,
+            text_threshold=0.6,
+            y_ths=1.5, x_ths=1.0, add_margin=0.1,
+        )
+    except Exception:
+        return reader.readtext(image, decoder="beamsearch", paragraph=False)
+
+
+def _median_glyph_height(raw_results) -> float:
+    heights = []
+    for box, text, _conf in raw_results:
+        if not str(text).strip():
+            continue
+        ys = [p[1] for p in box]
+        heights.append(max(ys) - min(ys))
+    return float(statistics.median(heights)) if heights else 0.0
+
+
+def _text_volume(raw_results) -> int:
+    return sum(len(str(t).strip()) for _b, t, _c in raw_results)
+
+
+def _mean_conf(raw_results) -> float:
+    cs = [float(c) for _b, t, c in raw_results if str(t).strip()]
+    return sum(cs) / len(cs) if cs else 0.0
+
+
+def _confident_volume(raw_results) -> int:
+    """Characters that would survive the downstream confidence filter. A
+    re-read that keeps every box but drops one line's confidence through the
+    floor loses volume HERE even though _text_volume() looks unchanged."""
+    floor = _MIN_WORD_CONFIDENCE / 100.0
+    return sum(len(str(t).strip()) for _b, t, c in raw_results
+              if str(t).strip() and float(c) >= floor)
+
+
 def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
     reader = get_reader(lang)
-    try:
-        raw_results = reader.readtext(image, y_ths=0.5, x_ths=1.0, paragraph=False)
-    except Exception:
-        raw_results = reader.readtext(image, decoder="beamsearch", paragraph=False)
+    raw_results = _readtext(reader, image)
+
+    factor = 1.0
+    med_h = _median_glyph_height(raw_results)
+    if med_h > 0.0 and (med_h < _RETRY_TOO_SMALL or med_h > _RETRY_TOO_BIG):
+        f = max(_RESIZE_MIN, min(_RESIZE_MAX, _TARGET_GLYPH_PX / med_h))
+        if f < 1.0 and scale > 1.0:
+            # preprocess upscaled - don't undo that and then some
+            f = max(f, _EFF_SCALE_FLOOR / scale)
+        if abs(f - 1.0) >= 0.15:
+            try:
+                interp = cv2.INTER_AREA if f < 1.0 else cv2.INTER_CUBIC
+                resized = cv2.resize(image, None, fx=f, fy=f, interpolation=interp)
+                retry = _readtext(reader, resized)
+                # Accept the re-read only if it held onto the text that would
+                # actually survive the downstream confidence filter. That
+                # single check is what protects a multi-line page (a lossy
+                # downscale-then-reread dropped one line to 0.2 confidence -
+                # its characters stop counting here) WITHOUT also blocking the
+                # far more common win: a single word that pass 1 read
+                # confidently-but-WRONG at a huge size, replaced by a correct
+                # re-read at the sweet spot (which often reads less
+                # "confidently" than the wrong-but-sure original). The mean
+                # confidence check is only a catastrophe backstop.
+                if (_median_glyph_height(retry) > 0.0
+                        and _confident_volume(retry) >= 0.7 * _confident_volume(raw_results)
+                        and _mean_conf(retry) >= _mean_conf(raw_results) - 0.35):
+                    raw_results, factor = retry, f
+            except Exception:
+                pass
+
+    eff_scale = scale * factor
 
     words = []
     for bbox_points, text, confidence in raw_results:
@@ -147,7 +251,7 @@ def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
         words.append(
             {
                 "text": text,
-                "bbox": _bbox_to_rect(bbox_points, scale),
+                "bbox": _bbox_to_rect(bbox_points, eff_scale),
                 "confidence": float(confidence) * 100.0,
             }
         )

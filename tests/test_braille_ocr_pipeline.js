@@ -505,9 +505,17 @@ runTest('Viewfinder Crop Coordinate Calculation & 85% Fallback in js/camera.js',
     assert(jsCameraContent.includes('drawImage(video, sx, sy, sw, sh'), 'Missing precise source crop drawImage coordinates');
 });
 
-runTest('Backend Preprocessing Pipeline (Resize, CLAHE, Adaptive Threshold, Source-Aware Denoise)', () => {
-    assert(backendPreprocessingContent.includes('MIN_SHORT_SIDE = 1100'), 'Missing 1100px minimum short-side resize target (raised from 640 for Thai x-height)');
+runTest('Backend Preprocessing Pipeline (Bounded Resize, Clean-Bilevel Gate, Adaptive Threshold, Source-Aware Denoise)', () => {
+    // Resize is now coarse bounds only - run_ocr() does the OCR-optimal
+    // sizing. The old fixed 1100px upscaled clean single-word uploads
+    // (~90px glyphs -> ~180px) into EasyOCR's fragmentation zone.
+    assert(/MIN_SHORT_SIDE = [1-9]\d{2}\b/.test(backendPreprocessingContent) && parseInt(backendPreprocessingContent.match(/MIN_SHORT_SIDE = (\d+)/)[1], 10) < 1100,
+        'MIN_SHORT_SIDE must be a modest detection floor, well below the old fixed 1100 upscale');
+    assert(backendPreprocessingContent.includes('MAX_LONG_SIDE') && backendPreprocessingContent.includes('MAX_UPSCALE'),
+        'resize must clamp into coarse bounds and cap how far it upscales (up-then-down round trip smears thin strokes)');
     assert(backendPreprocessingContent.includes('createCLAHE'), 'Missing CLAHE contrast enhancement');
+    assert(backendPreprocessingContent.includes('_is_clean_bilevel'),
+        'Missing the crisp-black-on-white gate that skips CLAHE / threshold (they only erode thin Thai diacritic strokes)');
     assert(backendPreprocessingContent.includes('adaptiveThreshold'), 'Missing adaptive threshold for uneven lighting');
     assert(backendPreprocessingContent.includes('_is_lighting_uneven'), 'Missing lighting-unevenness heuristic gating the adaptive threshold');
     assert(backendPreprocessingContent.includes('fastNlMeansDenoising'), 'Missing denoise step');
@@ -515,12 +523,27 @@ runTest('Backend Preprocessing Pipeline (Resize, CLAHE, Adaptive Threshold, Sour
     assert(backendPreprocessingContent.includes('detect_document_quad') && backendPreprocessingContent.includes('warpPerspective'), 'Missing document quad detection + perspective (deskew) warp');
 });
 
-runTest('EasyOCR Engine Configuration (Thai + English, Beamsearch, Per-Word Boxes)', () => {
+runTest('EasyOCR Engine Configuration (Thai + English, Glyph-Size Retry, Thai-Tuned Detector, Per-Word Boxes)', () => {
     assert(backendOcrEngineContent.includes('"th"') && backendOcrEngineContent.includes('"en"'), "EasyOCR must still support the th+en language set");
     assert(backendOcrEngineContent.includes('_LANG_SETS') && backendOcrEngineContent.includes('def get_reader'), 'Missing per-language reader cache (th vs th+en) for Thai-only accuracy mode');
-    assert(backendOcrEngineContent.includes('decoder="beamsearch"'), 'Missing decoder=\"beamsearch\" for accuracy');
+    assert(backendOcrEngineContent.includes('decoder="beamsearch"'), 'Missing decoder=\"beamsearch\" fallback for accuracy');
     assert(backendOcrEngineContent.includes('paragraph=False'), 'Missing paragraph=False for per-word bounding boxes');
     assert(backendOcrEngineContent.includes('_bbox_to_rect'), 'Missing conversion of EasyOCR polygon bbox to axis-aligned rect');
+    // Thai-tuned detector knobs: keep faint diacritic strokes / merge stacked
+    // vowels, but text_threshold stays only mildly lowered (a hard drop makes
+    // faint background noise read 'confidently' too).
+    assert(/y_ths=1\.\d/.test(backendOcrEngineContent) && backendOcrEngineContent.includes('add_margin='),
+        'Missing raised y_ths / add_margin so above-below vowels stay attached');
+    assert(backendOcrEngineContent.includes('text_threshold=0.6'),
+        'text_threshold should be mildly lowered (0.6), not hard-dropped');
+    // Glyph-size retry: read, measure text height, re-read at the sweet spot,
+    // keep the re-read only if it held onto text + confidence.
+    assert(backendOcrEngineContent.includes('def _median_glyph_height') && backendOcrEngineContent.includes('_TARGET_GLYPH_PX'),
+        'Missing the measure-and-resize retry that keeps glyphs near EasyOCR\'s ~46px sweet spot');
+    assert(backendOcrEngineContent.includes('def _confident_volume') && /_confident_volume\(retry\)\s*>=/.test(backendOcrEngineContent),
+        'Retry must be rejected when the text that survives filtering shrinks (multi-line regression guard)');
+    assert(backendOcrEngineContent.includes('eff_scale = scale * factor'),
+        'bbox coords must fold in the retry resize factor, not just the preprocess scale');
 });
 
 runTest('Backend OCR noise rejection (digit/symbol hallucination + layout logo strips)', () => {
