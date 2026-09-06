@@ -850,6 +850,42 @@ runTest('Continuous navigation sonar + haptics + dark/glare guards (js/voice-gui
     assert(jsOcrModuleContent.includes("formData.append('lang'"), 'recognize() must pass the OCR language set to the backend');
 });
 
+runTest('js/ocr.js pickBestBurstResult() - burst picker weighs completeness, not just confidence', () => {
+    const ctx = vm.createContext({});
+    vm.runInContext(jsOcrModuleContent, ctx);
+
+    // The core case: a slightly-lower-confidence frame that captured the
+    // trailing word must beat the crisp-but-truncated frame.
+    const chosen = ctx.pickBestBurstResult([
+        { text: 'HACKATHON', confidence: 95, words: [] },
+        { text: 'HACKATHON 2026', confidence: 88, words: [] },
+        { text: 'HACK', confidence: 70, words: [] },
+    ]);
+    assert.strictEqual(chosen.text, 'HACKATHON 2026', 'must prefer the more complete read within the confidence band');
+
+    // A wordier frame that reads MUCH lower is out of the band -> the crisp
+    // frame still wins (a garbled frame reads low and is wordy with junk).
+    const chosen2 = ctx.pickBestBurstResult([
+        { text: 'ภารกิจ', confidence: 90, words: [] },
+        { text: 'ภารกิจ คิด เผื่อ ขับ เคลื่อน โ ) นาคต', confidence: 55, words: [] },
+    ]);
+    assert.strictEqual(chosen2.text, 'ภารกิจ', 'a far-lower-confidence frame must not win on wordiness alone');
+
+    // Equal content -> higher confidence breaks the tie.
+    const chosen3 = ctx.pickBestBurstResult([
+        { text: 'สวัสดี', confidence: 80, words: [] },
+        { text: 'สวัสดี', confidence: 92, words: [] },
+    ]);
+    assert.strictEqual(chosen3.confidence, 92, 'equal content falls back to confidence');
+
+    // Punctuation/space noise doesn't inflate the content score.
+    assert.strictEqual(ctx.burstContentScore({ text: 'A B C' }), 3, 'spaces are not content');
+    assert.strictEqual(ctx.burstContentScore({ text: ') ) 1 1 (' }), 2, 'only the two digits count');
+
+    assert.strictEqual(ctx.pickBestBurstResult([]), null, 'no frames -> null');
+    assert.strictEqual(ctx.pickBestBurstResult([{ text: '   ', confidence: 9 }]), null, 'blank frames -> null');
+});
+
 runTest('Guidance toggle states persist to localStorage (js/voice-guidance.js)', () => {
     assert(jsVoiceContent.includes('function saveGuidancePrefs') && jsVoiceContent.includes('function loadGuidancePrefs'), 'Missing guidance-prefs persistence');
     assert(jsVoiceContent.includes('GUIDANCE_PREFS_KEY'), 'Missing localStorage key for guidance prefs');

@@ -106,12 +106,57 @@ async function recognize(imageFile, documentSource = 'upload', lang = 'th+en') {
     };
 }
 
+// How far below the best frame's confidence another frame can be and still
+// be considered "just as trustworthy" for the completeness tie-break below.
+const BURST_CONF_BAND = 12;
+
+/**
+ * Real-content size of an OCR read: letters + digits only (Latin + the Thai
+ * block), so a frame can't win the pick just by hallucinating extra
+ * "โ ) 1 ," punctuation fragments. Whitespace and symbols don't count.
+ */
+function burstContentScore(result) {
+    if (!result || typeof result.text !== 'string') return 0;
+    const m = result.text.match(/[0-9A-Za-zก-๎๐-๙]/g);
+    return m ? m.length : 0;
+}
+
+/**
+ * Picks the best read among burst frames. The highest-confidence frame is
+ * NOT always the most complete one - a frame can score 95% on "HACKATHON"
+ * while another reads the full "HACKATHON 2026" at 88% because the trailing
+ * word was only legible in that one. So: take every frame within
+ * BURST_CONF_BAND of the top confidence, then among those keep the one that
+ * captured the most real content. The band stops a genuinely garbled frame
+ * (which reads LOW) from winning just by being wordier.
+ * @param {Array<{text:string,confidence:number,words:Array}>} results
+ * @returns {object|null} the chosen result, or null if none had text
+ */
+function pickBestBurstResult(results) {
+    const usable = (results || []).filter(r => r && typeof r.text === 'string' && r.text.trim());
+    if (usable.length === 0) return null;
+
+    const maxConf = Math.max(...usable.map(r => r.confidence || 0));
+    const contenders = usable.filter(r => (r.confidence || 0) >= maxConf - BURST_CONF_BAND);
+
+    let best = contenders[0];
+    for (const r of contenders) {
+        const rScore = burstContentScore(r);
+        const bScore = burstContentScore(best);
+        if (rScore > bScore || (rScore === bScore && (r.confidence || 0) > (best.confidence || 0))) {
+            best = r;
+        }
+    }
+    return best;
+}
+
 /**
  * Burst helper: runs recognize() on several frames of the same shot and
- * returns the best result (highest confidence with non-empty text). A hand-
- * held capture almost always has one frame sharper than the rest; picking it
- * after the fact is cheaper and more reliable than trying to nail the single
- * perfect moment of the shutter.
+ * returns the best read. A hand-held capture almost always has one frame
+ * sharper than the rest; picking it after the fact is cheaper and more
+ * reliable than trying to nail the single perfect moment of the shutter.
+ * "Best" = most complete among the frames of comparable confidence
+ * (see pickBestBurstResult), not simply the highest confidence.
  * @param {Array<File|Blob>} imageFiles
  * @returns {Promise<{text: string, confidence: number, words: Array, warpedImage?: string}>}
  */
@@ -124,12 +169,7 @@ async function recognizeBest(imageFiles, documentSource = 'camera', lang = 'th+e
         files.map(f => recognize(f, documentSource, lang).catch(() => ({ text: '', confidence: 0, words: [] })))
     );
 
-    let best = null;
-    for (const r of results) {
-        if (!r || !r.text || !r.text.trim()) continue;
-        if (!best || (r.confidence || 0) > (best.confidence || 0)) best = r;
-    }
-    return best || results[0] || { text: '', confidence: 0, words: [] };
+    return pickBestBurstResult(results) || results[0] || { text: '', confidence: 0, words: [] };
 }
 
 /**
