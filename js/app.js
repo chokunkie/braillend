@@ -349,22 +349,44 @@ function loadQuickWord(word) {
  */
 function openTactileShapesModal() {
     const modal = document.getElementById('tactileShapesModal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+        modal.classList.add('active');
+        modal.style.display = 'flex';
+        modal.style.opacity = '1';
+        modal.style.pointerEvents = 'auto';
+        modal.style.zIndex = '9999';
+    }
 }
 
 function closeTactileShapesModal() {
     const modal = document.getElementById('tactileShapesModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        modal.style.pointerEvents = 'none';
+    }
 }
 
 function openPinDiagnosticModal() {
     const modal = document.getElementById('pinDiagnosticModal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+        modal.classList.add('active');
+        modal.style.display = 'flex';
+        modal.style.opacity = '1';
+        modal.style.pointerEvents = 'auto';
+        modal.style.zIndex = '9999';
+    }
 }
 
 function closePinDiagnosticModal() {
     const modal = document.getElementById('pinDiagnosticModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        modal.style.pointerEvents = 'none';
+    }
 }
 
 function testSinglePin(pinNum) {
@@ -412,12 +434,23 @@ function testL298NDriver(driverIdx) {
 
 function openImageUploadModal() {
     const modal = document.getElementById('imageUploadModal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+        modal.classList.add('active');
+        modal.style.display = 'flex';
+        modal.style.opacity = '1';
+        modal.style.pointerEvents = 'auto';
+        modal.style.zIndex = '9999';
+    }
 }
 
 function closeImageUploadModal() {
     const modal = document.getElementById('imageUploadModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        modal.style.pointerEvents = 'none';
+    }
 }
 
 // Initialize all subsystems when DOM content is fully loaded
