@@ -1051,7 +1051,8 @@
             const pageCells = page.cells || [];
             if (grid) {
                 grid.innerHTML = pageCells.map(cell => {
-                    const char = (cell.source !== undefined ? cell.source : cell.char) || ' ';
+                    const char = (cell.label !== undefined ? cell.label
+                        : (cell.source !== undefined ? cell.source : cell.char)) || ' ';
                     const activeList = cell.dots || cell.activeDots || [];
                     const dots = [1, 2, 3, 4, 5, 6].map(d => {
                         const isActive = Array.isArray(activeList) && activeList.includes(d);

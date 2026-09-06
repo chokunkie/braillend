@@ -215,13 +215,24 @@ function normalizeBurstText(text) {
         .toLocaleLowerCase('en-US');
 }
 
+// Braille renders for anything from OCR_CONF_MEDIUM up (matches
+// classifyOcrConfidence in js/textProcessor.js). A medium read is shown with
+// the amber "อาจมีคำผิด" badge + spoken caveat, not blocked behind a confirm
+// button - the target user is blind and cannot verify a plausible-but-wrong
+// word (สาย vs สกาย) by looking anyway, so the extra step is friction without
+// safety. The confirm gate is reserved for STRUCTURALLY unreliable output.
+const OCR_BRAILLE_MIN_CONFIDENCE = 45;
+
 /**
- * Only high-confidence, non-fallback, non-suspicious, agreed results may
- * actuate Braille without a user confirmation.
+ * Whether a result may actuate Braille directly. It may not when it is
+ * structurally unreliable - a fallback-engine read, a cross-script
+ * hallucination, a rescued mixed line, a burst without 2/3 agreement, or a
+ * confidence so low the text is likely wrong wholesale. Everything else
+ * renders (medium confidence carries a visible caveat).
  */
 function isOcrResultSafeForBraille(result) {
     if (!result || typeof result.text !== 'string' || !result.text.trim()) return false;
-    if (!(typeof result.confidence === 'number') || result.confidence < 72) return false;
+    if (!(typeof result.confidence === 'number') || result.confidence < OCR_BRAILLE_MIN_CONFIDENCE) return false;
     if (result.fallback || result.suspicious || detectSuspiciousOcrText(result.text, result.langUsed)) return false;
     // A rescue is useful evidence, but it also proves the first mixed pass
     // was unstable. Keep it visible and require confirmation rather than

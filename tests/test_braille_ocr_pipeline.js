@@ -999,6 +999,22 @@ runTest('Mixed OCR safety: Thai rescue signals, burst consensus, and Braille gat
         rescuedLines: 1, frameCount: 1, agreement: 1
     }), false, 'a rescued line proves the first pass was unstable and must require confirmation');
 
+    // A plain medium-confidence read is NOT gated behind a confirm button -
+    // it renders Braille with the visible amber "อาจมีคำผิด" caveat. The
+    // target user is blind and can't verify a plausible-but-wrong word by
+    // looking, so a confirm step there is friction without safety. Only
+    // STRUCTURALLY unreliable output (above) needs confirmation.
+    assert.strictEqual(ctx.isOcrResultSafeForBraille({
+        text: 'สกาย', confidence: 58, fallback: false, suspicious: false,
+        rescuedLines: 0, frameCount: 1, agreement: 1
+    }), true, 'a clean medium-confidence read renders Braille (amber-flagged, not gated)');
+    assert.strictEqual(ctx.isOcrResultSafeForBraille({
+        text: 'สกาย', confidence: 30, fallback: false, suspicious: false,
+        rescuedLines: 0, frameCount: 1, agreement: 1
+    }), false, 'a low-confidence read (< OCR_BRAILLE_MIN_CONFIDENCE) still stays out of Braille');
+    assert(jsOcrModuleContent.includes('OCR_BRAILLE_MIN_CONFIDENCE'),
+        'the Braille confidence floor should be a named constant aligned with classifyOcrConfidence');
+
     assert(jsOcrModuleContent.includes('empty successful EasyOCR read returns above'),
         'an empty successful backend read must return without silently falling through to Tesseract');
     const cameraHtmlContent = fs.readFileSync(path.join(projectRoot, 'camera.html'), 'utf-8');

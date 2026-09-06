@@ -66,9 +66,27 @@
     })();
 
     /* ----- helpers ------------------------------------------------------- */
+
+    // A lone Thai above/below vowel or tone mark (ั ิ ี ึ ื ฺ ุ ู ็ ่ ้ ๊ ๋ ์ ํ ๎)
+    // has no base consonant to attach to, so a renderer that just drops it
+    // into a <span> shows nothing (or a stray floating glyph). Prefix a
+    // dotted circle - the same notation the reference chart uses ("สระ ◌ิ") -
+    // so the cell label reads as an actual character. `source` stays the raw
+    // grapheme (used for the OLED text line and speech); `label` is display-only.
+    var RE_BARE_COMBINING_MARK = /^[ัิ-ฺ็-๎]$/;
+    function displayLabel(source) {
+        return (typeof source === 'string' && RE_BARE_COMBINING_MARK.test(source))
+            ? '◌' + source
+            : source;
+    }
+
     function cell(dots, source, kind) {
         var d = (dots || []).slice().sort(function (a, b) { return a - b; });
-        return { dots: d, source: source, kind: kind, char: source, activeDots: d };
+        return {
+            dots: d, source: source, kind: kind,
+            char: source, activeDots: d,
+            label: displayLabel(source)
+        };
     }
 
     // Expand a table entry ({cells:[[..],[..]]}) into Cell objects.
@@ -400,7 +418,26 @@
             }
         }
         flush();
-        return collapseAmbiguousShortMatches(result.length ? result : [{ text: run, isWord: false }]);
+        var tokens = collapseAmbiguousShortMatches(result.length ? result : [{ text: run, isWord: false }]);
+        return finalizeSegmentation(tokens, run);
+    }
+
+    // OCR delivers a whole line as one spaceless Thai run. Splitting that run
+    // into "words" is only safe when it clearly decomposes into a PHRASE:
+    // every piece is a real dictionary word AND at least one is substantial
+    // (>= 4 characters). A run with any unresolved fragment, or made only of
+    // 2-3 char dictionary substrings, is kept as a single unit - it is far
+    // more likely one word or a name (พิตต้า -> "พิต"+"ต้า", ฐิติพร, สมชาย)
+    // than a genuine multi-word phrase, and a space invented mid-name is a
+    // hard error for a Braille reader (a blank cell means "next word").
+    function finalizeSegmentation(tokens, run) {
+        if (tokens.length <= 1) { return tokens; }
+        var allWords = tokens.every(function (t) { return t.isWord; });
+        var hasSubstantial = tokens.some(function (t) {
+            return Array.from(t.text).length >= 4;
+        });
+        if (allWords && hasSubstantial) { return tokens; }
+        return [{ text: run, isWord: false }];
     }
 
     // A short (<=2 char) dictionary match sitting directly next to text the

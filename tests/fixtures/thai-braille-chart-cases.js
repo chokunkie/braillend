@@ -106,6 +106,11 @@ module.exports = [
     // happen to be substrings of it. "ฐิ" never resolves, so the whole
     // name must collapse into one unbroken token - zero space cells.
     { section: 'word-space', stage: 4, needsDict: true, input: 'ฐิติพร', spaces: 0, chartRef: 'ฐิติพร (ชื่อเฉพาะ คำเดียว ไม่แยก)' },
+    // Same class: OCR read the nickname "พิตต้า" as one token, but "ต้า" is a
+    // real word, so maximal matching would cut "พิต | ต้า". A run that
+    // doesn't fully decompose into substantial dictionary words stays whole.
+    { section: 'word-space', stage: 4, needsDict: true, input: 'พิตต้า', spaces: 0, chartRef: 'พิตต้า (ชื่อเล่น คำเดียว ไม่แยก)' },
+    { section: 'word-space', stage: 4, needsDict: true, input: 'สกาย', spaces: 0, chartRef: 'สกาย (ชื่อเล่น ไม่แยก)' },
 
     /* ---- pagination (แบ่งหน้า 14 เซลล์ต่อหน้า) --------------------- */
     // lowercase Latin: 1 cell/char, no number/capital signs, no dictionary
