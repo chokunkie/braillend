@@ -2463,6 +2463,18 @@ body.light-mode .inspector-details-bar {
     box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
 }
 
+.shape-btn-card.active {
+    background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(0, 255, 136, 0.25));
+    border-color: #00ff88;
+    box-shadow: 0 0 18px rgba(0, 255, 136, 0.45);
+    transform: translateY(-2px);
+}
+
+.shape-btn-card.active .shape-symbol-large {
+    color: #00ff88;
+    text-shadow: 0 0 12px #00ff88;
+}
+
 .shape-symbol-large {
     font-size: 26px;
     line-height: 1;

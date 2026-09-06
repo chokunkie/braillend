@@ -216,7 +216,8 @@ function renderTactileShapesModal() {
     gridEl.innerHTML = '';
     tactileShapesMgr.presets.forEach(p => {
         const card = document.createElement('div');
-        card.className = 'shape-btn-card';
+        card.className = `shape-btn-card ${(tactileShapesMgr.currentShape && tactileShapesMgr.currentShape.id === p.id) ? 'active' : ''}`;
+        card.id = `shape-card-${p.id.replace('.', '-')}`;
         card.title = `${p.name}: ${p.description}`;
         card.innerHTML = `
             <div class="shape-symbol-large">${p.symbol}</div>
@@ -238,7 +239,16 @@ function renderTactileShapesModal() {
 function selectTactileShape(id) {
     if (!tactileShapesMgr) return;
     const res = tactileShapesMgr.selectPreset(id);
-    if (res && res.bitstring) {
+    if (res && res.preset) {
+        // Highlight active shape card
+        document.querySelectorAll('.shape-btn-card').forEach(c => c.classList.remove('active'));
+        const activeCard = document.getElementById(`shape-card-${id.replace('.', '-')}`);
+        if (activeCard) activeCard.classList.add('active');
+
+        // Sync custom dots clicker with this shape's dots
+        tactileShapesMgr.customDots = new Set(res.preset.dots);
+        renderCustom12DotClicker();
+
         if (esp32Serial) esp32Serial.send12BitCommand(res.bitstring);
         // Also update 2-cell visual twin
         displayDirect12Bits(res.bitstring, `${res.preset.symbol} ${res.preset.name}`);
@@ -274,6 +284,10 @@ function renderCustom12DotClicker() {
 function toggleCustomDotClick(dotNum) {
     if (!tactileShapesMgr) return;
     const res = tactileShapesMgr.toggleCustomDot(dotNum);
+    
+    // De-highlight preset cards if custom configuration
+    document.querySelectorAll('.shape-btn-card').forEach(c => c.classList.remove('active'));
+
     renderCustom12DotClicker();
     if (res && res.bitstring) {
         if (esp32Serial) esp32Serial.send12BitCommand(res.bitstring);
@@ -284,6 +298,7 @@ function toggleCustomDotClick(dotNum) {
 function clearCustomDots() {
     if (!tactileShapesMgr) return;
     tactileShapesMgr.clearCustomDots();
+    document.querySelectorAll('.shape-btn-card').forEach(c => c.classList.remove('active'));
     renderCustom12DotClicker();
     const zeroBits = "000000000000";
     if (esp32Serial) esp32Serial.send12BitCommand(zeroBits);
@@ -504,3 +519,20 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// Explicit window bindings for modal interactions
+if (typeof window !== 'undefined') {
+    window.openTactileShapesModal = openTactileShapesModal;
+    window.closeTactileShapesModal = closeTactileShapesModal;
+    window.openPinDiagnosticModal = openPinDiagnosticModal;
+    window.closePinDiagnosticModal = closePinDiagnosticModal;
+    window.openImageUploadModal = openImageUploadModal;
+    window.closeImageUploadModal = closeImageUploadModal;
+    window.selectTactileShape = selectTactileShape;
+    window.toggleCustomDotClick = toggleCustomDotClick;
+    window.clearCustomDots = clearCustomDots;
+    window.testSinglePin = testSinglePin;
+    window.testL298NDriver = testL298NDriver;
+    window.loadQuickWord = loadQuickWord;
+    window.displayDirect12Bits = displayDirect12Bits;
+}
