@@ -360,48 +360,69 @@ function loadQuickWord(word) {
 }
 
 /**
- * Modal Toggles
+ * Workstation Tab Navigation & Embedded View Toggles
  */
-function openTactileShapesModal() {
-    const modal = document.getElementById('tactileShapesModal');
-    if (modal) {
-        modal.classList.add('active');
-        modal.style.display = 'flex';
-        modal.style.opacity = '1';
-        modal.style.pointerEvents = 'auto';
-        modal.style.zIndex = '9999';
+function setWorkstationTab(tab) {
+    const wrap = document.getElementById('workstationContentWrap');
+    if (wrap) wrap.style.display = 'flex';
+    const dock = document.getElementById('legacyFloatingDock');
+    if (dock) dock.style.display = 'none';
+
+    // 1. Update sidebar menu highlights
+    const sidebarMap = {
+        'text': 'menuLiveText',
+        'shapes': 'menuShapes',
+        'diag': 'menuDiag',
+        'upload': 'menuUpload'
+    };
+    document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
+    const activeBtn = document.getElementById(sidebarMap[tab] || 'menuLiveText');
+    if (activeBtn) activeBtn.classList.add('active');
+
+    // 2. Switch interactive cards
+    const allCards = ['tabCardText', 'tabCardShapes', 'tabCardDiag', 'tabCardUpload'];
+    allCards.forEach(cardId => {
+        const el = document.getElementById(cardId);
+        if (el) el.style.display = 'none';
+    });
+
+    const targetCardMap = {
+        'text': 'tabCardText',
+        'shapes': 'tabCardShapes',
+        'diag': 'tabCardDiag',
+        'upload': 'tabCardUpload'
+    };
+    const targetEl = document.getElementById(targetCardMap[tab] || 'tabCardText');
+    if (targetEl) targetEl.style.display = 'flex';
+
+    // 3. If shapes tab, re-render shapes presets grid and custom clicker
+    if (tab === 'shapes' && typeof renderTactileShapesModal === 'function') {
+        renderTactileShapesModal();
     }
+}
+
+function openTactileShapesModal() {
+    setWorkstationTab('shapes');
 }
 
 function closeTactileShapesModal() {
-    const modal = document.getElementById('tactileShapesModal');
-    if (modal) {
-        modal.classList.remove('active');
-        modal.style.display = 'none';
-        modal.style.opacity = '0';
-        modal.style.pointerEvents = 'none';
-    }
+    setWorkstationTab('text');
 }
 
 function openPinDiagnosticModal() {
-    const modal = document.getElementById('pinDiagnosticModal');
-    if (modal) {
-        modal.classList.add('active');
-        modal.style.display = 'flex';
-        modal.style.opacity = '1';
-        modal.style.pointerEvents = 'auto';
-        modal.style.zIndex = '9999';
-    }
+    setWorkstationTab('diag');
 }
 
 function closePinDiagnosticModal() {
-    const modal = document.getElementById('pinDiagnosticModal');
-    if (modal) {
-        modal.classList.remove('active');
-        modal.style.display = 'none';
-        modal.style.opacity = '0';
-        modal.style.pointerEvents = 'none';
-    }
+    setWorkstationTab('text');
+}
+
+function openImageUploadModal() {
+    setWorkstationTab('upload');
+}
+
+function closeImageUploadModal() {
+    setWorkstationTab('text');
 }
 
 function testSinglePin(pinNum) {
@@ -445,27 +466,6 @@ function testL298NDriver(driverIdx) {
         if (esp32Serial) esp32Serial.send12BitCommand(zeroBits);
         displayDirect12Bits(zeroBits, 'ตัดไฟ (พักหมุด)');
     }, 2000);
-}
-
-function openImageUploadModal() {
-    const modal = document.getElementById('imageUploadModal');
-    if (modal) {
-        modal.classList.add('active');
-        modal.style.display = 'flex';
-        modal.style.opacity = '1';
-        modal.style.pointerEvents = 'auto';
-        modal.style.zIndex = '9999';
-    }
-}
-
-function closeImageUploadModal() {
-    const modal = document.getElementById('imageUploadModal');
-    if (modal) {
-        modal.classList.remove('active');
-        modal.style.display = 'none';
-        modal.style.opacity = '0';
-        modal.style.pointerEvents = 'none';
-    }
 }
 
 // Initialize all subsystems when DOM content is fully loaded

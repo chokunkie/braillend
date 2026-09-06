@@ -155,7 +155,7 @@
                     <i class="fa-solid fa-camera"></i>
                     <span>กล้องนำทาง OCR</span>
                 </button>
-                <button class="sidebar-item" id="menuUpload" onclick="openImageUploadModal()">
+                <button class="sidebar-item" id="menuUpload" onclick="setWorkstationTab('upload')">
                     <i class="fa-solid fa-cloud-arrow-up"></i>
                     <span>อัปโหลดรูปภาพ OCR</span>
                 </button>
@@ -163,11 +163,11 @@
                     <i class="fa-solid fa-cube"></i>
                     <span>โมเดลจำลอง 3 มิติ</span>
                 </button>
-                <button class="sidebar-item" id="menuShapes" onclick="openTactileShapesModal()">
+                <button class="sidebar-item" id="menuShapes" onclick="setWorkstationTab('shapes')">
                     <i class="fa-solid fa-shapes"></i>
                     <span>สัญลักษณ์สัมผัส 12 จุด</span>
                 </button>
-                <button class="sidebar-item" id="menuDiag" onclick="openPinDiagnosticModal()">
+                <button class="sidebar-item" id="menuDiag" onclick="setWorkstationTab('diag')">
                     <i class="fa-solid fa-wrench"></i>
                     <span>ทดสอบโซลินอยด์ 12 จุด</span>
                 </button>
@@ -246,8 +246,8 @@
                     </div>
                 </div>
 
-                <!-- 4. Text Input & Word Bank Card -->
-                <div class="workstation-card" style="display:flex; flex-direction:column; gap:12px;">
+                <!-- 4. Tab 1: Text Input & Word Bank Card -->
+                <div class="workstation-card" id="tabCardText" style="display:flex; flex-direction:column; gap:12px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <span style="font-size:13px; font-weight:700; color:#f8fafc;">
                             <i class="fa-solid fa-pen-to-square" style="color:#00ff88;"></i> พิมพ์ข้อความแสดงผล (รองรับไทย, อังกฤษ, ตัวเลข)
@@ -277,110 +277,117 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Tab 2: Tactile Shapes & 12-Dot Graphic Matrix Card -->
+                <div class="workstation-card" id="tabCardShapes" style="display:none; flex-direction:column; gap:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:13px; font-weight:700; color:#00f2fe;">
+                            <i class="fa-solid fa-shapes"></i> สัญลักษณ์ & กราฟิกสัมผัส 12 จุด (ส่งตรงเข้าบอร์ดจำลอง 2 เซลล์ด้านบนทันที)
+                        </span>
+                        <button class="header-btn" style="padding:4px 10px; font-size:11px;" onclick="setWorkstationTab('text')">
+                            <i class="fa-solid fa-xmark"></i> ปิด
+                        </button>
+                    </div>
+
+                    <!-- 8 Presets Grid -->
+                    <div>
+                        <div style="font-size:11px; color:#94a3b8; font-weight:600; margin-bottom:8px;">
+                            <i class="fa-solid fa-list-check"></i> คลิกเลือก 8 รูปทรงมาตรฐาน (ดันหมุดขึ้นทันที):
+                        </div>
+                        <div class="shapes-grid-layout" id="shapesPresetGrid">
+                            <!-- Dynamic shapes injected by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Custom 12-Dot Interactive Matrix Clicker -->
+                    <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-size:11px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-hand-pointer"></i> คลิกเปิด-ปิดจุดอิสระ 12 จุด (3 แถว x 4 คอลัมน์):</span>
+                            <button class="header-btn" style="padding:4px 10px; font-size:11px;" onclick="clearCustomDots()">
+                                <i class="fa-solid fa-trash-can"></i> ล้างจุด
+                            </button>
+                        </div>
+                        <div class="custom-matrix-clicker" id="customMatrixClicker">
+                            <!-- Dynamic clickers injected by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Hardware Solenoid Direct Pin Diagnostics Card -->
+                <div class="workstation-card" id="tabCardDiag" style="display:none; flex-direction:column; gap:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:13px; font-weight:700; color:#00ff88;">
+                            <i class="fa-solid fa-wrench"></i> ทดสอบฮาร์ดแวร์โซลินอยด์ 12 จุด (ตรวจเช็คหมุดยกด้านบน)
+                        </span>
+                        <button class="header-btn" style="padding:4px 10px; font-size:11px;" onclick="setWorkstationTab('text')">
+                            <i class="fa-solid fa-xmark"></i> ปิด
+                        </button>
+                    </div>
+
+                    <div style="font-size:11px; color:#94a3b8;">
+                        ทดสอบยกทีละหมุดเพื่อตรวจเช็คว่าโซลินอยด์ตัวไหนติดขัดหรือไม่ (ดันขึ้น 2 วินาที):
+                    </div>
+
+                    <!-- Pin Buttons 1 to 12 -->
+                    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
+                        <button class="btn-ctrl" onclick="testSinglePin(1)">หมุด 1 (L1)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(2)">หมุด 2 (L1)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(3)">หมุด 3 (L1)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(4)">หมุด 4 (L1)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(5)">หมุด 5 (L2)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(6)">หมุด 6 (L2)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(7)">หมุด 7 (L2)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(8)">หมุด 8 (L2)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(9)">หมุด 9 (L3)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(10)">หมุด 10 (L3)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(11)">หมุด 11 (L3)</button>
+                        <button class="btn-ctrl" onclick="testSinglePin(12)">หมุด 12 (L3)</button>
+                    </div>
+
+                    <div style="font-size:11px; color:#94a3b8; margin-top:4px;">
+                        ทดสอบตามชุดไดรเวอร์ L298N:
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-ctrl" style="flex:1;" onclick="testL298NDriver(1)">L298N #1 (1-4)</button>
+                        <button class="btn-ctrl" style="flex:1;" onclick="testL298NDriver(2)">L298N #2 (5-8)</button>
+                        <button class="btn-ctrl" style="flex:1;" onclick="testL298NDriver(3)">L298N #3 (9-12)</button>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Image Upload OCR Card -->
+                <div class="workstation-card" id="tabCardUpload" style="display:none; flex-direction:column; gap:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:13px; font-weight:700; color:#00f2fe;">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> อัปโหลดรูปภาพ OCR เพื่อแปลงเป็นอักษรเบรลล์
+                        </span>
+                        <button class="header-btn" style="padding:4px 10px; font-size:11px;" onclick="setWorkstationTab('text')">
+                            <i class="fa-solid fa-xmark"></i> ปิด
+                        </button>
+                    </div>
+
+                    <div style="font-size:11px; color:#94a3b8;">
+                        เลือกรูปภาพที่มีข้อความภาษาไทยหรืออังกฤษ ระบบจะสแกนและส่งผลลัพธ์ไปยังหน้าจอ 2 เซลล์ และ ESP32 ทันที:
+                    </div>
+
+                    <div class="upload-dropzone-box" id="modalUploadDropzone" onclick="document.getElementById('imageFileInput').click();" style="border:2px dashed rgba(0,242,254,0.4); border-radius:14px; padding:28px 16px; text-align:center; background:rgba(0,0,0,0.3); cursor:pointer; transition:all 0.2s;">
+                        <i class="fa-solid fa-image" style="font-size:38px; color:#00f2fe; margin-bottom:10px;"></i>
+                        <div style="font-size:14px; font-weight:600; color:#f8fafc;">คลิกเพื่อเลือกไฟล์รูปภาพ หรือลากรูปมาวางที่นี่</div>
+                        <div style="font-size:11px; color:#64748b; margin-top:4px;">รองรับไฟล์ PNG, JPG, JPEG, WebP</div>
+                    </div>
+
+                    <div id="modalUploadStatus" style="display:none; margin-top:6px; font-size:12px; color:#00ff88; text-align:center;">
+                        <i class="fa-solid fa-spinner fa-spin"></i> กำลังประมวลผล OCR...
+                    </div>
+                </div>
             </div>
         </main>
     </div>
 
-    <!-- Tactile Shapes & 12-Dot Graphic Matrix Modal -->
-    <div class="modal-backdrop" id="tactileShapesModal" style="display:none;">
-        <div class="result-modal-card" style="max-width:580px;">
-            <div class="modal-header" style="padding:0 0 12px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
-                <div class="modal-title" style="font-size:16px; color:#00f2fe; display:flex; align-items:center; gap:8px;">
-                    <i class="fa-solid fa-shapes"></i> สัญลักษณ์ & กราฟิกสัมผัส 12 จุด
-                </div>
-                <button class="close-btn" onclick="closeTactileShapesModal()"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-
-            <!-- 8 Presets Grid -->
-            <div>
-                <div style="font-size:12px; color:#94a3b8; font-weight:600; margin-bottom:8px;">
-                    <i class="fa-solid fa-list-check"></i> เลือก 8 รูปทรงมาตรฐาน (ส่งออก ESP32 ทันที):
-                </div>
-                <div class="shapes-grid-layout" id="shapesPresetGrid">
-                    <!-- Dynamic shapes injected by JS -->
-                </div>
-            </div>
-
-            <!-- Custom 12-Dot Interactive Matrix Clicker -->
-            <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <span style="font-size:12px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-hand-pointer"></i> คลิกเปิด-ปิดจุดอิสระ 12 จุด (3 แถว x 4 คอลัมน์):</span>
-                    <button class="header-btn" style="padding:4px 10px; font-size:11px;" onclick="clearCustomDots()">
-                        <i class="fa-solid fa-trash-can"></i> ล้างจุด
-                    </button>
-                </div>
-                <div class="custom-matrix-clicker" id="customMatrixClicker">
-                    <!-- Dynamic clickers injected by JS -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Hardware Solenoid Direct Pin Diagnostics Modal -->
-    <div class="modal-backdrop" id="pinDiagnosticModal" style="display:none;">
-        <div class="result-modal-card" style="max-width:520px;">
-            <div class="modal-header" style="padding:0 0 12px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
-                <div class="modal-title" style="font-size:16px; color:#00ff88; display:flex; align-items:center; gap:8px;">
-                    <i class="fa-solid fa-wrench"></i> ทดสอบฮาร์ดแวร์โซลินอยด์ 12 จุด
-                </div>
-                <button class="close-btn" onclick="closePinDiagnosticModal()"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-
-            <div style="font-size:12px; color:#94a3b8; margin-bottom:10px;">
-                ทดสอบยกทีละหมุดเพื่อตรวจเช็คว่าโซลินอยด์ตัวไหนติดขัดหรือไม่:
-            </div>
-
-            <!-- Pin Buttons 1 to 12 -->
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:14px;">
-                <button class="btn-ctrl" onclick="testSinglePin(1)">หมุด 1 (L1)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(2)">หมุด 2 (L1)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(3)">หมุด 3 (L1)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(4)">หมุด 4 (L1)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(5)">หมุด 5 (L2)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(6)">หมุด 6 (L2)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(7)">หมุด 7 (L2)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(8)">หมุด 8 (L2)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(9)">หมุด 9 (L3)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(10)">หมุด 10 (L3)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(11)">หมุด 11 (L3)</button>
-                <button class="btn-ctrl" onclick="testSinglePin(12)">หมุด 12 (L3)</button>
-            </div>
-
-            <div style="font-size:12px; color:#94a3b8; margin-bottom:8px;">
-                ทดสอบตามชุดไดรเวอร์ L298N:
-            </div>
-            <div style="display:flex; gap:8px;">
-                <button class="btn-ctrl" style="flex:1;" onclick="testL298NDriver(1)">L298N #1 (1-4)</button>
-                <button class="btn-ctrl" style="flex:1;" onclick="testL298NDriver(2)">L298N #2 (5-8)</button>
-                <button class="btn-ctrl" style="flex:1;" onclick="testL298NDriver(3)">L298N #3 (9-12)</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Dedicated Image Upload OCR Modal -->
-    <div class="modal-backdrop" id="imageUploadModal" style="display:none;">
-        <div class="result-modal-card" style="max-width:540px;">
-            <div class="modal-header" style="padding:0 0 12px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
-                <div class="modal-title" style="font-size:16px; color:#00f2fe; display:flex; align-items:center; gap:8px;">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> อัปโหลดรูปภาพ OCR
-                </div>
-                <button class="close-btn" onclick="closeImageUploadModal()"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-
-            <div style="font-size:12px; color:#94a3b8; margin-bottom:12px;">
-                เลือกรูปภาพที่มีข้อความภาษาไทยหรืออังกฤษ ระบบจะสแกนและส่งผลลัพธ์ไปยังหน้าจอ 2 เซลล์ และ ESP32 ทันที:
-            </div>
-
-            <div class="upload-dropzone-box" id="modalUploadDropzone" onclick="document.getElementById('imageFileInput').click();" style="border:2px dashed rgba(0,242,254,0.4); border-radius:14px; padding:28px 16px; text-align:center; background:rgba(0,0,0,0.3); cursor:pointer; transition:all 0.2s;">
-                <i class="fa-solid fa-image" style="font-size:38px; color:#00f2fe; margin-bottom:10px;"></i>
-                <div style="font-size:14px; font-weight:600; color:#f8fafc;">คลิกเพื่อเลือกไฟล์รูปภาพ หรือลากรูปมาวางที่นี่</div>
-                <div style="font-size:11px; color:#64748b; margin-top:4px;">รองรับไฟล์ PNG, JPG, JPEG, WebP</div>
-            </div>
-
-            <div id="modalUploadStatus" style="display:none; margin-top:12px; font-size:12px; color:#00ff88; text-align:center;">
-                <i class="fa-solid fa-spinner fa-spin"></i> กำลังประมวลผล OCR...
-            </div>
-        </div>
+    <!-- Hidden Subsystems & Test DOM Anchors -->
+    <div style="display:none;">
+        <div id="tactileShapesModal"></div>
+        <div id="pinDiagnosticModal"></div>
+        <div id="imageUploadModal"></div>
     </div>
 
     <!-- 3D Mobile Floating Control Dock (Preserved for tests) -->
@@ -685,7 +692,40 @@
             isWorkstationFocused = true;
             const dock = document.getElementById('legacyFloatingDock');
             if (dock) dock.style.display = 'none';
+
+            // 1. Update sidebar menu highlights
+            const sidebarMap = {
+                'text': 'menuLiveText',
+                'shapes': 'menuShapes',
+                'diag': 'menuDiag',
+                'upload': 'menuUpload'
+            };
+            document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
+            const activeBtn = document.getElementById(sidebarMap[tab] || 'menuLiveText');
+            if (activeBtn) activeBtn.classList.add('active');
+
+            // 2. Switch interactive cards
+            const allCards = ['tabCardText', 'tabCardShapes', 'tabCardDiag', 'tabCardUpload'];
+            allCards.forEach(cardId => {
+                const el = document.getElementById(cardId);
+                if (el) el.style.display = 'none';
+            });
+
+            const targetCardMap = {
+                'text': 'tabCardText',
+                'shapes': 'tabCardShapes',
+                'diag': 'tabCardDiag',
+                'upload': 'tabCardUpload'
+            };
+            const targetEl = document.getElementById(targetCardMap[tab] || 'tabCardText');
+            if (targetEl) targetEl.style.display = 'flex';
+
+            // 3. If shapes tab, re-render shapes presets grid and custom clicker
+            if (tab === 'shapes' && typeof renderTactileShapesModal === 'function') {
+                renderTactileShapesModal();
+            }
         }
+        window.setWorkstationTab = setWorkstationTab;
     </script>
 </body>
 </html>
