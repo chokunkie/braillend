@@ -514,8 +514,10 @@
 
             <!-- Detected Text Card -->
             <div class="result-card-box">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <span style="font-size:12px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-font"></i> ข้อความที่ตรวจจับได้</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                    <span style="font-size:12px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-font"></i> ข้อความที่ตรวจจับได้
+                        <span id="resConfidenceBadge" style="font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; margin-left:6px; border:1px solid transparent;"></span>
+                    </span>
                     <div style="display:flex; gap:6px;">
                         <button class="header-btn" onclick="speakResultText()" style="padding:4px 10px; font-size:11px;">
                             <i class="fa-solid fa-volume-high"></i> อ่านออกเสียง

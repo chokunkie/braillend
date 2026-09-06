@@ -56,3 +56,19 @@ function normalizeOcrText(text) {
     normalized = normalized.replace(/\s+/g, ' ').trim();
     return normalized;
 }
+
+// OCR confidence buckets shared by every result screen, so the badge isn't
+// a misleading binary green/red. A 54% read is NOT "detected text" - it's
+// "we saw something but half of it is probably wrong".
+const OCR_CONF_HIGH = 72;
+const OCR_CONF_MEDIUM = 45;
+
+/**
+ * @returns {'high'|'medium'|'low'} confidence bucket for an OCR result.
+ */
+function classifyOcrConfidence(confidence) {
+    const c = (typeof confidence === 'number' && isFinite(confidence)) ? confidence : 0;
+    if (c >= OCR_CONF_HIGH) return 'high';
+    if (c >= OCR_CONF_MEDIUM) return 'medium';
+    return 'low';
+}

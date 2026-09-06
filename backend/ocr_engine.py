@@ -4,6 +4,7 @@ across requests, since loading the Thai+English recognition models is
 expensive.
 """
 
+import re
 import statistics
 from typing import Any, Dict, List
 
@@ -63,6 +64,74 @@ def filter_confident_words(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [w for w in words if w["confidence"] >= _MIN_WORD_CONFIDENCE]
 
 
+# A detection box shorter than this fraction of the tallest box on the page
+# is treated as fine print / a logo caption rather than the subject text -
+# e.g. photographing a sign whose headline reads fine but whose bottom strip
+# of sponsor logos ("AIS Academy", "NIA", "okmd") gets misread and glued on
+# as "als academy ni okmd". Only applied when there IS a clear headline to
+# compare against, and small boxes that sit on the same line as a kept box
+# are still kept.
+_SMALL_BOX_HEIGHT_RATIO = 0.45
+_BOTTOM_STRIP_FRAC = 0.12  # boxes whose centre is in the bottom 12% of the frame...
+_BOTTOM_STRIP_MIN_ABOVE = 2  # ...are dropped only when this many boxes sit above them
+
+_LETTER_RE = re.compile(r"[A-Za-zก-๏]")
+
+
+def _letter_ratio(text: str) -> float:
+    stripped = text.replace(" ", "")
+    if not stripped:
+        return 0.0
+    return len(_LETTER_RE.findall(stripped)) / len(stripped)
+
+
+def _looks_like_text(text: str, overall_confidence: float) -> bool:
+    """Rejects results that are mostly digits/symbols with barely any real
+    letters AND weren't read confidently - i.e. OCR hallucinating '1 , 111
+    โ ) 1' out of wood grain. A clearly-read numeric string (a phone number
+    on a sign) survives because its confidence is high."""
+    if not text.strip():
+        return False
+    if _letter_ratio(text) >= 0.35:
+        return True
+    return overall_confidence >= 65.0
+
+
+def _filter_layout_noise(words: List[Dict[str, Any]], img_height: float) -> List[Dict[str, Any]]:
+    if len(words) < 3:
+        return words
+
+    heights = [w["bbox"]["y1"] - w["bbox"]["y0"] for w in words]
+    max_h = max(heights) if heights else 0.0
+    if max_h <= 0:
+        return words
+
+    big = [w for w in words if (w["bbox"]["y1"] - w["bbox"]["y0"]) >= _SMALL_BOX_HEIGHT_RATIO * max_h]
+    if not big:
+        return words
+
+    def on_a_big_line(w: Dict[str, Any]) -> bool:
+        return any(_vertical_overlap_ratio(w["bbox"], b["bbox"]) >= _LINE_OVERLAP_THRESHOLD for b in big)
+
+    kept: List[Dict[str, Any]] = []
+    for w in words:
+        h = w["bbox"]["y1"] - w["bbox"]["y0"]
+        y_centre = (w["bbox"]["y0"] + w["bbox"]["y1"]) / 2.0
+
+        # tiny box that isn't riding along a headline line -> fine print
+        if h < _SMALL_BOX_HEIGHT_RATIO * max_h and not on_a_big_line(w):
+            continue
+        # box parked in the bottom strip while real content sits above -> logo row
+        if img_height > 0 and y_centre > img_height * (1.0 - _BOTTOM_STRIP_FRAC):
+            above = sum(1 for o in words if o is not w and
+                        ((o["bbox"]["y0"] + o["bbox"]["y1"]) / 2.0) < img_height * 0.80)
+            if above >= _BOTTOM_STRIP_MIN_ABOVE and not on_a_big_line(w):
+                continue
+        kept.append(w)
+
+    return kept if kept else words
+
+
 def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
     reader = get_reader(lang)
     try:
@@ -83,13 +152,22 @@ def run_ocr(image, scale: float = 1.0, lang: str = "th+en") -> Dict[str, Any]:
             }
         )
 
-    kept_words = filter_confident_words(words)
+    try:
+        img_height = float(image.shape[0]) / scale if scale else float(image.shape[0])
+    except Exception:
+        img_height = 0.0
+
+    kept_words = _filter_layout_noise(filter_confident_words(words), img_height)
     overall_confidence = (
         (sum(w["confidence"] for w in kept_words) / len(kept_words)) if kept_words else 0.0
     )
 
+    text = assemble_text(kept_words)
+    if not _looks_like_text(text, overall_confidence):
+        text = ""
+
     return {
-        "text": assemble_text(kept_words),
+        "text": text,
         "confidence": overall_confidence,
         "words": words,
     }

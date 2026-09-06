@@ -856,6 +856,32 @@
             if (resSec) resSec.classList.add('active');
 
             renderResultData();
+            speakOcrResultCue();
+        }
+
+        // Spoken counterpart of the on-screen confidence badge: a blind user
+        // can't see the green/amber/red tag, so the same "how much to trust
+        // this" signal has to be said out loud once, right after the result
+        // lands. Deliberately NOT a read-aloud of the detected text - that
+        // stays on the manual button (with its stop control).
+        function speakOcrResultCue() {
+            if (typeof speakVoiceGuidance !== 'function') return;
+            const hasText = !!(activeFullText && activeFullText.trim().length > 0);
+            let cue;
+            if (!hasText) {
+                cue = 'ไม่พบข้อความในภาพ ลองจัดแสงหรือขยับกล้องให้ตรงข้อความ แล้วถ่ายใหม่';
+            } else {
+                const tier = (typeof classifyOcrConfidence === 'function')
+                    ? classifyOcrConfidence(activeConfidence || 85) : 'high';
+                if (tier === 'low') {
+                    cue = 'อ่านข้อความได้ไม่ชัด อาจมีจุดผิดหลายจุด แนะนำให้ถ่ายใหม่ หรือกดปุ่มอ่านออกเสียงเพื่อฟังผลลัพธ์';
+                } else if (tier === 'medium') {
+                    cue = 'พบข้อความแล้ว แต่บางคำอาจไม่ชัดเจน กดปุ่มอ่านออกเสียงเพื่อฟังผลลัพธ์';
+                } else {
+                    cue = 'พบข้อความแล้ว กดปุ่มอ่านออกเสียงเพื่อฟังผลลัพธ์';
+                }
+            }
+            speakVoiceGuidance(cue, true);
         }
 
         function drawBoundingBoxesOnCanvas(imageSrc, words = []) {
@@ -951,17 +977,25 @@
                 return;
             }
 
-            // Real text detected
+            // Real text detected - but say how sure we are, not just a green tick.
+            const conf = Math.max(10, Math.min(100, Math.round(activeConfidence || 85)));
+            const tier = (typeof classifyOcrConfidence === 'function')
+                ? classifyOcrConfidence(activeConfidence || 85) : 'high';
+            const TIERS = {
+                high:   { icon: 'circle-check',        text: `ตรวจพบข้อความ (${conf}%)`,               c: '#00ff88', bg: 'rgba(0,255,136,0.15)',  bd: 'rgba(0,255,136,0.3)' },
+                medium: { icon: 'triangle-exclamation', text: `เจอข้อความ แต่ไม่ชัด อาจมีคำผิด (${conf}%)`, c: '#f59e0b', bg: 'rgba(245,158,11,0.15)', bd: 'rgba(245,158,11,0.35)' },
+                low:    { icon: 'triangle-exclamation', text: `ข้อความไม่ชัดเจน อาจผิดมาก (${conf}%)`,      c: '#ef4444', bg: 'rgba(239,68,68,0.15)',  bd: 'rgba(239,68,68,0.3)' }
+            };
+            const T = TIERS[tier];
             if (successBadge) {
-                const conf = Math.max(10, Math.min(100, Math.round(activeConfidence || 85)));
-                successBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจพบข้อความ (${conf}%)`;
-                successBadge.style.color = '#00ff88';
-                successBadge.style.background = 'rgba(0,255,136,0.15)';
-                successBadge.style.borderColor = 'rgba(0,255,136,0.3)';
+                successBadge.innerHTML = `<i class="fa-solid fa-${T.icon}"></i> ${T.text}`;
+                successBadge.style.color = T.c;
+                successBadge.style.background = T.bg;
+                successBadge.style.borderColor = T.bd;
             }
             if (display) {
                 display.textContent = `"${activeFullText}"`;
-                display.style.color = '#00ff88';
+                display.style.color = T.c;
                 display.style.fontSize = '22px';
             }
             if (badge) badge.textContent = `หน้า ${activeChunkIdx + 1}/${activeChunks.length}`;

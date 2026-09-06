@@ -15,7 +15,10 @@ width). See the module docstring in ocr_engine.py for the rationale.
 
 import sys
 
-from ocr_engine import assemble_text, _line_char_width, _group_into_lines, filter_confident_words, _MIN_WORD_CONFIDENCE
+from ocr_engine import (
+    assemble_text, _line_char_width, _group_into_lines, filter_confident_words,
+    _MIN_WORD_CONFIDENCE, _looks_like_text, _filter_layout_noise, _letter_ratio,
+)
 
 
 def word(text, x0, y0, x1, y1):
@@ -175,6 +178,49 @@ check(
     len(filter_confident_words([word_conf("ok", 0, 0, 5, 5, _MIN_WORD_CONFIDENCE)])),
     1,
 )
+
+# ---------------------------------------------------------------------------
+# Case 9: digit/symbol-heavy hallucination is rejected, real text survives.
+# Regression guard for the "AIS wooden letters on wood grain -> '1 , 111
+# โ ) 1' at 54%" screenshot: near-zero real letters + mediocre confidence.
+# ---------------------------------------------------------------------------
+check("hallucinated digit soup at 54% -> rejected", _looks_like_text("1 , 111โ ) 1", 54.0), False)
+check("mixed alnum word 'hackathon2026' -> kept", _looks_like_text("hackathon2026", 76.0), True)
+check("real Thai line -> kept", _looks_like_text("ภารกิจ คิดเผือ ขับเคลือนอนาคต", 80.0), True)
+check("clearly-read phone number -> kept (high confidence)", _looks_like_text("081-234-5678", 88.0), True)
+check("digit soup but read very confidently -> kept", _looks_like_text(") ) 1 1 (", 90.0), True)
+check("empty text -> not text", _looks_like_text("   ", 99.0), False)
+check("letter ratio of pure digits", round(_letter_ratio("2568"), 2), 0.0)
+
+# ---------------------------------------------------------------------------
+# Case 10: a small logo/caption strip at the bottom of a sign is dropped,
+# the headline is kept. Regression guard for "MAMO" coming back as
+# "mamo als academy ni okmd".
+# ---------------------------------------------------------------------------
+layout_case = [
+    word("MAMO", 60, 200, 500, 320),        # headline, height 120
+    word("AIS", 40, 560, 92, 578),          # sponsor logo strip, height 18, bottom 3.7%
+    word("Academy", 96, 560, 170, 578),
+    word("NIA", 210, 560, 250, 578),
+    word("okmd", 290, 560, 350, 578),
+]
+kept_layout = _filter_layout_noise(layout_case, img_height=600.0)
+check("layout filter keeps the headline, drops the logo strip",
+      sorted(w["text"] for w in kept_layout), ["MAMO"])
+
+# ...but a caption ON the same line as the headline is kept.
+same_line_case = [
+    word("HEADLINE", 60, 200, 400, 320),
+    word("*", 410, 250, 424, 270),          # small mark riding the headline line
+    word("tiny", 40, 900, 70, 912),         # ...but this stray one still goes
+]
+kept_same = _filter_layout_noise(same_line_case, img_height=1000.0)
+check("small box on the headline's own line survives",
+      "HEADLINE" in [w["text"] for w in kept_same] and "*" in [w["text"] for w in kept_same],
+      True)
+
+check("layout filter is a no-op below 3 boxes",
+      len(_filter_layout_noise([word("a", 0, 0, 10, 10), word("b", 0, 0, 5, 5)], 100.0)), 2)
 
 print()
 print(f"{passed} passed, {failed} failed")

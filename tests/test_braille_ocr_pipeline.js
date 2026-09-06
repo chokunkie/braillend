@@ -354,6 +354,23 @@ runTest('Compile js/textProcessor.js with Node vm.Script (Thai-aware NFC normali
     assert(jsTextProcessorContent.includes('function normalizeOcrText'), 'Missing normalizeOcrText');
     assert(jsTextProcessorContent.includes("normalize('NFC')"), 'Missing Unicode NFC normalization');
     assert(!/toUpperCase/.test(jsTextProcessorContent), 'textProcessor.js must not force uppercase - Thai has no case');
+    assert(jsTextProcessorContent.includes('function classifyOcrConfidence'), 'Missing classifyOcrConfidence bucket helper');
+});
+
+runTest('js/textProcessor.js classifyOcrConfidence() - three honest confidence buckets, not binary', () => {
+    const ctx = vm.createContext({});
+    vm.runInContext(jsTextProcessorContent, ctx);
+
+    assert.strictEqual(ctx.classifyOcrConfidence(95), 'high', '95% -> high');
+    assert.strictEqual(ctx.classifyOcrConfidence(72), 'high', 'exactly 72 -> high (>=)');
+    assert.strictEqual(ctx.classifyOcrConfidence(60), 'medium', '60% -> medium (saw text, half is probably wrong)');
+    assert.strictEqual(ctx.classifyOcrConfidence(45), 'medium', 'exactly 45 -> medium (>=)');
+    assert.strictEqual(ctx.classifyOcrConfidence(30), 'low', '30% -> low');
+    assert.strictEqual(ctx.classifyOcrConfidence(0), 'low', '0% -> low');
+    // Garbage in never throws - defaults to the most cautious bucket.
+    assert.strictEqual(ctx.classifyOcrConfidence(undefined), 'low', 'undefined -> low');
+    assert.strictEqual(ctx.classifyOcrConfidence(NaN), 'low', 'NaN -> low');
+    assert.strictEqual(ctx.classifyOcrConfidence('nonsense'), 'low', 'non-number -> low');
 });
 
 runTest('Compile js/demoMode.js with Node vm.Script (isolated from real OCR)', () => {
@@ -461,6 +478,26 @@ runTest('EasyOCR Engine Configuration (Thai + English, Beamsearch, Per-Word Boxe
     assert(backendOcrEngineContent.includes('_bbox_to_rect'), 'Missing conversion of EasyOCR polygon bbox to axis-aligned rect');
 });
 
+runTest('Backend OCR noise rejection (digit/symbol hallucination + layout logo strips)', () => {
+    // Regression guards for the real test-photo failures:
+    //  - "AIS" wooden letters on a wood-grain table came back as "1 , 111
+    //    โ ) 1" at 54% - mostly digits/punctuation, mediocre confidence.
+    //  - A "MAMO" headline came back with the sponsor-logo strip glued on
+    //    ("mamo als academy ni okmd").
+    // See backend/test_ocr_text_assembly.py Cases 9 & 10 for the behavioural
+    // tests; this just pins that the guards are still wired into run_ocr().
+    assert(backendOcrEngineContent.includes('def _looks_like_text'),
+        'Missing _looks_like_text() digit/symbol-soup rejection');
+    assert(backendOcrEngineContent.includes('def _letter_ratio'),
+        'Missing _letter_ratio() helper');
+    assert(backendOcrEngineContent.includes('def _filter_layout_noise'),
+        'Missing _filter_layout_noise() logo/fine-print stripper');
+    assert(/_filter_layout_noise\(\s*filter_confident_words\(/.test(backendOcrEngineContent),
+        'run_ocr must chain filter_confident_words -> _filter_layout_noise before assembly');
+    assert(/if not _looks_like_text\(/.test(backendOcrEngineContent),
+        'run_ocr must blank the text when _looks_like_text() rejects it');
+});
+
 runTest('FastAPI /ocr Endpoint Contract', () => {
     assert(backendMainContent.includes('@app.post("/ocr")'), 'Missing POST /ocr route');
     assert(backendMainContent.includes('CORSMiddleware'), 'Missing CORS middleware for the local frontend');
@@ -477,8 +514,15 @@ runTest('Single Unified OCR Call Path (Upload & Camera share runOcrPipeline; doc
     assert(/runOcrPipeline\(\s*file\s*,\s*['"]camera['"]\s*\)/.test(jsOcrContent), 'Camera flow must call runOcrPipeline(file, \'camera\')');
     assert(jsOcrContent.includes('await recognize(imageFile, documentSource)'), 'runOcrPipeline must delegate the actual OCR call to js/ocr.js\'s recognize()');
     assert(jsOcrContent.includes('normalizeOcrText(result.text)'), 'runOcrPipeline must normalize OCR text via js/textProcessor.js');
-    assert(jsOcrContent.includes('OCR_LOW_CONFIDENCE_THRESHOLD'), 'Missing low-confidence gate constant');
-    assert(jsOcrContent.includes('result.confidence < OCR_LOW_CONFIDENCE_THRESHOLD'), 'Missing low-confidence gate blocking Braille actuation on unclear images');
+    // The low-confidence gate that blocks Braille actuation on unclear reads
+    // now routes through the shared three-bucket classifier instead of a
+    // local numeric cutoff, so camera.html and this modal agree.
+    assert(jsOcrContent.includes('ocrConfidenceTier') || jsOcrContent.includes('classifyOcrConfidence'),
+        'Missing shared confidence-tier classification');
+    assert(/tier === 'low'/.test(jsOcrContent),
+        'Missing low-tier gate blocking Braille actuation on unclear images');
+    assert(/tier === 'medium'/.test(jsOcrContent),
+        "Missing medium tier - a borderline read must show the result but labelled 'อาจมีคำผิด', not a green success");
 });
 
 runTest('Visual OCR Bounding Box Inspector Canvas Rendering & Glowing Bounding Boxes', () => {
@@ -615,6 +659,36 @@ runTest('Stop-reading button next to every read-aloud button (long OCR text must
     assert(jsOcrContent.includes('function stopSpeakingResult()') &&
         jsOcrContent.includes('window.speechSynthesis.cancel()'),
         'js/ocr-engine.js missing stopSpeakingResult() calling speechSynthesis.cancel()');
+});
+
+runTest('OCR result confidence is a 3-tier signal (high / medium / low), not a binary green tick', () => {
+    const cameraHtmlContent = fs.readFileSync(path.join(projectRoot, 'camera.html'), 'utf-8');
+
+    // camera.html result screen: the success badge + detected-text colour
+    // must be driven by classifyOcrConfidence, with an explicit "อาจมีคำผิด"
+    // wording for the medium bucket. Regression guard for the screenshot
+    // where a 54% read of wood-grain noise showed a confident green
+    // "ตรวจพบข้อความ".
+    assert(cameraHtmlContent.includes('classifyOcrConfidence'),
+        'camera.html renderResultData must classify OCR confidence into tiers');
+    assert(cameraHtmlContent.includes('อาจมีคำผิด'),
+        'camera.html must warn "อาจมีคำผิด" on a medium-confidence read instead of a plain success badge');
+
+    // ...and a blind user, who can't see that badge, must hear the same
+    // caveat spoken once when the result lands (not a full read-aloud - that
+    // stays on the manual button).
+    assert(cameraHtmlContent.includes('function speakOcrResultCue'),
+        'camera.html must speak a confidence cue after the OCR result lands');
+    assert(/speakOcrResultCue\(\)/.test(cameraHtmlContent),
+        'speakOcrResultCue() must actually be called from displayOCRResult');
+
+    // js/ocr-engine.js result modal: same tiering, plus a visible badge.
+    assert(jsOcrContent.includes('ocrConfidenceTier') || jsOcrContent.includes('classifyOcrConfidence'),
+        'js/ocr-engine.js must classify OCR confidence into tiers');
+    assert(jsOcrContent.includes('resConfidenceBadge'),
+        'js/ocr-engine.js renderResultScreenData must populate the result-modal confidence badge');
+    assert(indexContent.includes('id="resConfidenceBadge"'),
+        'index.html result modal must have a confidence badge element');
 });
 
 runTest('speechSynthesis unlock on first user gesture (beeps-but-no-voice regression guard)', () => {
