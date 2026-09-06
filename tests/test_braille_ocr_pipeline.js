@@ -355,6 +355,7 @@ runTest('Compile js/textProcessor.js with Node vm.Script (Thai-aware NFC normali
     assert(jsTextProcessorContent.includes("normalize('NFC')"), 'Missing Unicode NFC normalization');
     assert(!/toUpperCase/.test(jsTextProcessorContent), 'textProcessor.js must not force uppercase - Thai has no case');
     assert(jsTextProcessorContent.includes('function classifyOcrConfidence'), 'Missing classifyOcrConfidence bucket helper');
+    assert(jsTextProcessorContent.includes('function repairThaiToneMarks'), 'Missing repairThaiToneMarks() Thai tone-mark repair pass');
 });
 
 runTest('js/textProcessor.js classifyOcrConfidence() - three honest confidence buckets, not binary', () => {
@@ -371,6 +372,50 @@ runTest('js/textProcessor.js classifyOcrConfidence() - three honest confidence b
     assert.strictEqual(ctx.classifyOcrConfidence(undefined), 'low', 'undefined -> low');
     assert.strictEqual(ctx.classifyOcrConfidence(NaN), 'low', 'NaN -> low');
     assert.strictEqual(ctx.classifyOcrConfidence('nonsense'), 'low', 'non-number -> low');
+});
+
+runTest('js/textProcessor.js repairThaiToneMarks() - restores unambiguous dropped tone marks, never corrupts real words', () => {
+    const wl = require(path.join(projectRoot, 'js', 'thai-wordlist.js'));
+    const ctx = vm.createContext({ THAI_WORDLIST: wl, console });
+    vm.runInContext(jsTextProcessorContent, ctx);
+    const R = ctx.repairThaiToneMarks;
+
+    // Dropped tone mark, exactly one dictionary reading -> restored.
+    assert.strictEqual(R('ให'), 'ให้', 'ให -> ให้ (dropped mai tho)');
+    assert.strictEqual(R('แลว'), 'แล้ว', 'แลว -> แล้ว');
+    // The mark belongs after the above-vowel, not the consonant.
+    assert.strictEqual(R('ขึน'), 'ขึ้น', 'ขึน -> ขึ้น (mark sits after ึ)');
+
+    // Correctly-read words are NEVER touched - idempotent over the whole list.
+    let altered = 0;
+    for (const w of wl.set) { if (R(w) !== w) { altered++; if (altered <= 3) console.log('   altered:', w, '->', R(w)); } }
+    assert.strictEqual(altered, 0, 'no dictionary word may be rewritten by the repair pass');
+
+    // "ขาว" (white) is a real word; even though "ข้าว" (rice) is one tone
+    // edit away, an in-dictionary token is left alone.
+    assert.strictEqual(R('ขาว'), 'ขาว', 'a valid word one edit from another valid word is left as-is');
+
+    // Ambiguous / unknown -> unchanged (never a wrong guess).
+    assert.strictEqual(R('พด'), 'พด', 'พด has no unambiguous tone-only repair -> unchanged');
+    assert.strictEqual(R('ผมชอบกินขาว'), 'ผมชอบกินขาว', 'long glued token (>6 chars) is not touched');
+
+    // Multi-token strings are repaired per whitespace token, spacing preserved.
+    assert.strictEqual(R('แลว ผม ให คุณ'), 'แล้ว ผม ให้ คุณ', 'per-token repair, whitespace kept');
+
+    // Non-Thai and mixed tokens pass straight through.
+    assert.strictEqual(R('HELLO ครบ'), 'HELLO ครบ', 'latin token untouched; ครบ has no unambiguous repair');
+    assert.strictEqual(R('abc123'), 'abc123');
+
+    // Runtime kill-switch.
+    ctx.ENABLE_THAI_OCR_REPAIR = false;
+    assert.strictEqual(R('ให'), 'ให', 'globalThis.ENABLE_THAI_OCR_REPAIR = false disables the pass');
+    ctx.ENABLE_THAI_OCR_REPAIR = true;
+
+    // Degrades to a no-op with no wordlist loaded.
+    const bare = vm.createContext({ console });
+    vm.runInContext(jsTextProcessorContent, bare);
+    assert.strictEqual(bare.repairThaiToneMarks('ให'), 'ให', 'no wordlist -> no-op');
+    assert.strictEqual(bare.normalizeOcrText('  Hello   สวัสดี  '), 'Hello สวัสดี', 'normalizeOcrText still works without wordlist');
 });
 
 runTest('Compile js/demoMode.js with Node vm.Script (isolated from real OCR)', () => {
