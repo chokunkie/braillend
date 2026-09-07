@@ -2098,11 +2098,11 @@ body.light-mode .inspector-details-bar {
     box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
 }
 
-/* Full-Text Ribbon View */
+/* Full-Text Ribbon View (Expanded & Prominent Display) */
 .ribbon-section {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
 .ribbon-header-row {
@@ -2112,25 +2112,26 @@ body.light-mode .inspector-details-bar {
 }
 
 .ribbon-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 700;
+    color: #f8fafc;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
 .ribbon-track-wrapper {
-    background: rgba(7, 10, 19, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 10px 12px;
+    background: rgba(7, 10, 19, 0.8);
+    border: 1.5px solid rgba(0, 240, 255, 0.25);
+    border-radius: 14px;
+    padding: 12px 14px;
     overflow-x: auto;
     white-space: nowrap;
     display: flex;
-    gap: 8px;
-    min-height: 64px;
+    gap: 10px;
+    min-height: 84px;
     align-items: center;
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.1) inset;
 }
 
 .ribbon-cell-card {
@@ -2138,53 +2139,58 @@ body.light-mode .inspector-details-bar {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 44px;
-    height: 54px;
-    padding: 4px 6px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    min-width: 54px;
+    height: 72px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     cursor: pointer;
     transition: all 0.2s;
     user-select: none;
+    box-sizing: border-box;
 }
 
 .ribbon-cell-card:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(0, 242, 254, 0.4);
-}
-
-.ribbon-cell-card.active-cell {
-    background: rgba(0, 242, 254, 0.22);
-    border: 1.5px solid #00f2fe;
-    box-shadow: 0 0 12px rgba(0, 242, 254, 0.45);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(0, 242, 254, 0.45);
     transform: translateY(-2px);
 }
 
+.ribbon-cell-card.active-cell {
+    background: rgba(0, 242, 254, 0.25);
+    border: 1.5px solid #00f2fe;
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.5);
+    transform: translateY(-3px) scale(1.04);
+}
+
 .ribbon-cell-char {
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 700;
     color: #f8fafc;
+    line-height: 1.2;
 }
 
 .ribbon-cell-braille {
-    font-size: 14px;
+    font-size: 20px;
     color: #00ff88;
     line-height: 1;
+    margin: 2px 0;
+    text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
 }
 
 .ribbon-cell-idx {
-    font-size: 9px;
-    color: #64748b;
+    font-size: 10px;
+    color: #94a3b8;
     font-family: 'JetBrains Mono', monospace;
 }
 
 .ribbon-empty-tip {
-    font-size: 12px;
+    font-size: 13px;
     color: #64748b;
     width: 100%;
     text-align: center;
-    padding: 12px 0;
+    padding: 16px 0;
 }
 
 /* 2-Cell Hardware Digital Twin Board */
@@ -2711,6 +2717,16 @@ body.light-mode .inspector-details-bar {
     /* Provide clean clearance for floating side hamburger on mobile */
     .ribbon-section .ribbon-header-row {
         padding-left: 48px;
+    }
+
+    .ribbon-track-wrapper {
+        min-height: 88px;
+        padding: 12px 14px;
+    }
+
+    .ribbon-cell-card {
+        min-width: 54px;
+        height: 74px;
     }
 
     .shapes-grid-layout {
