@@ -360,9 +360,40 @@ function loadQuickWord(word) {
 }
 
 /**
+ * Mobile Sidebar Drawer Toggle & Backdrop Handlers
+ */
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('appSidebar');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    const icon = document.getElementById('hamburgerIcon');
+    if (!sidebar) return;
+
+    const isOpen = sidebar.classList.toggle('open');
+    if (backdrop) {
+        if (isOpen) backdrop.classList.add('active');
+        else backdrop.classList.remove('active');
+    }
+    if (icon) {
+        icon.className = isOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-bars';
+    }
+}
+
+function closeMobileSidebar() {
+    const sidebar = document.getElementById('appSidebar');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    const icon = document.getElementById('hamburgerIcon');
+    if (sidebar) sidebar.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('active');
+    if (icon) icon.className = 'fa-solid fa-bars';
+}
+
+/**
  * Workstation Tab Navigation & Embedded View Toggles
  */
 function setWorkstationTab(tab) {
+    // Auto close mobile sidebar drawer on selection
+    closeMobileSidebar();
+
     const wrap = document.getElementById('workstationContentWrap');
     if (wrap) wrap.style.display = 'flex';
     const dock = document.getElementById('legacyFloatingDock');
@@ -714,4 +745,6 @@ if (typeof window !== 'undefined') {
     window.speakFlowResult = speakFlowResult;
     window.stopSpeakingFlowResult = stopSpeakingFlowResult;
     window.checkPendingOcr = checkPendingOcr;
+    window.toggleMobileSidebar = toggleMobileSidebar;
+    window.closeMobileSidebar = closeMobileSidebar;
 }

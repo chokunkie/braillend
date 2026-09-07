@@ -117,6 +117,9 @@
 
     <!-- 2-Cell ESP32 Realtime Tactile Workstation (Main App) -->
     <div class="workstation-app" id="workstationApp">
+        <!-- Sidebar Backdrop Overlay for Mobile -->
+        <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeMobileSidebar()"></div>
+
         <!-- Sidebar Navigation -->
         <aside class="app-sidebar" id="appSidebar">
             <div class="sidebar-header">
@@ -125,6 +128,9 @@
                     <div class="sidebar-title">BrailBox</div>
                     <div class="sidebar-subtitle">ESP32 2-Cell Tactile</div>
                 </div>
+                <button class="btn-close-sidebar" id="btnCloseSidebar" onclick="closeMobileSidebar()" title="ปิดเมนู">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
 
             <!-- ESP32 Hardware Status Card -->
@@ -186,6 +192,23 @@
 
         <!-- Central Workstation Area -->
         <main class="workstation-main">
+            <!-- Mobile Top Bar with Hamburger (ขีดสามขีด) Button -->
+            <div class="mobile-top-bar" id="mobileTopBar">
+                <button class="btn-hamburger" id="btnToggleMobileSidebar" onclick="toggleMobileSidebar()" title="เปิดเมนูแถบข้าง">
+                    <i class="fa-solid fa-bars" id="hamburgerIcon"></i>
+                </button>
+                <div class="mobile-top-brand">
+                    <div class="sidebar-logo" style="width:30px; height:30px; font-size:14px;"><i class="fa-solid fa-braille"></i></div>
+                    <div>
+                        <div style="font-size:14px; font-weight:700; color:#f8fafc; line-height:1.2;">BrailBox</div>
+                        <div style="font-size:10px; color:#00f2fe;">ESP32 2-Cell</div>
+                    </div>
+                </div>
+                <button class="header-btn" onclick="cycleStudioTheme()" style="padding:6px 10px; font-size:12px;" title="เปลี่ยนสีธีม">
+                    <i class="fa-solid fa-palette"></i>
+                </button>
+            </div>
+
             <div class="workstation-content-wrap" id="workstationContentWrap">
                 <!-- 1. Full-Text Ribbon Card -->
                 <div class="workstation-card ribbon-section">
