@@ -192,22 +192,10 @@
 
         <!-- Central Workstation Area -->
         <main class="workstation-main">
-            <!-- Mobile Top Bar with Hamburger (ขีดสามขีด) Button -->
-            <div class="mobile-top-bar" id="mobileTopBar">
-                <button class="btn-hamburger" id="btnToggleMobileSidebar" onclick="toggleMobileSidebar()" title="เปิดเมนูแถบข้าง">
-                    <i class="fa-solid fa-bars" id="hamburgerIcon"></i>
-                </button>
-                <div class="mobile-top-brand">
-                    <div class="sidebar-logo" style="width:30px; height:30px; font-size:14px;"><i class="fa-solid fa-braille"></i></div>
-                    <div>
-                        <div style="font-size:14px; font-weight:700; color:#f8fafc; line-height:1.2;">BrailBox</div>
-                        <div style="font-size:10px; color:#00f2fe;">ESP32 2-Cell</div>
-                    </div>
-                </div>
-                <button class="header-btn" onclick="cycleStudioTheme()" style="padding:6px 10px; font-size:12px;" title="เปลี่ยนสีธีม">
-                    <i class="fa-solid fa-palette"></i>
-                </button>
-            </div>
+            <!-- Mobile Floating Side Hamburger Button (ปุ่มขีดสามขีดลอยอยู่ข้างๆ) -->
+            <button class="btn-side-hamburger" id="btnToggleMobileSidebar" onclick="toggleMobileSidebar()" title="เปิดเมนูแถบข้าง">
+                <i class="fa-solid fa-bars" id="hamburgerIcon"></i>
+            </button>
 
             <div class="workstation-content-wrap" id="workstationContentWrap">
                 <!-- 1. Full-Text Ribbon Card -->
