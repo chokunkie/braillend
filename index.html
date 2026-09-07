@@ -257,21 +257,21 @@
                     </div>
                 </div>
 
-                <!-- 4. Tab 1: Text Input Card (Expanded Full Width) -->
-                <div class="workstation-card" id="tabCardText" style="display:flex; flex-direction:column; gap:12px; flex:1;">
+                <!-- 4. Tab 1: Text Input Card (Expanded Full Width & Clean Action) -->
+                <div class="workstation-card" id="tabCardText" style="display:flex; flex-direction:column; gap:10px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:14px; font-weight:700; color:#f8fafc;">
-                            <i class="fa-solid fa-pen-to-square" style="color:#00ff88;"></i> พิมพ์ข้อความแสดงผล (รองรับภาษาไทย, อังกฤษ, ตัวเลข)
+                        <span style="font-size:13px; font-weight:700; color:#f8fafc;">
+                            <i class="fa-solid fa-pen-to-square" style="color:#00ff88;"></i> พิมพ์ข้อความแสดงผล (รองรับไทย, อังกฤษ, ตัวเลข)
                         </span>
                         <span style="font-size:11px; color:#00f2fe; font-family:'JetBrains Mono',monospace;">
                             <i class="fa-solid fa-bolt"></i> Realtime 2-Cell
                         </span>
                     </div>
 
-                    <div style="display:flex; gap:10px; align-items:center; width:100%; box-sizing:border-box;">
-                        <input type="text" id="mainTextInput" value="สวัสดี" placeholder="พิมพ์ข้อความที่ต้องการ แล้วกดปุ่มส่ง หรือ Enter..." style="flex:1; box-sizing:border-box; padding:16px 18px; border-radius:12px; background:rgba(0,0,0,0.5); border:1.5px solid rgba(0,242,254,0.4); color:#f8fafc; font-size:17px; font-weight:600; font-family:'Prompt',sans-serif; outline:none; box-shadow:0 0 15px rgba(0,242,254,0.15) inset; transition:border-color 0.2s, box-shadow 0.2s;" />
-                        <button id="btnSubmitTextInput" class="nav-btn primary" style="padding:16px 24px; display:flex; align-items:center; gap:8px; white-space:nowrap; background:linear-gradient(135deg, #00f2fe, #00ff88); color:#070d18; font-weight:700; border:none; border-radius:12px; cursor:pointer; font-size:15px; box-shadow:0 4px 15px rgba(0,242,254,0.3); transition:all 0.2s;" title="กดเพื่อแปลงข้อความเป็นอักษรเบรลล์">
-                            <i class="fa-solid fa-paper-plane"></i> ส่งแสดงผล
+                    <div style="display:flex; flex-direction:column; gap:8px; width:100%; box-sizing:border-box;">
+                        <input type="text" id="mainTextInput" value="สวัสดี" placeholder="พิมพ์ข้อความที่ต้องการ แล้วกดปุ่มส่ง หรือ Enter..." class="workstation-text-input" />
+                        <button id="btnSubmitTextInput" class="btn-submit-main-text" title="กดเพื่อแปลงข้อความเป็นอักษรเบรลล์">
+                            <i class="fa-solid fa-paper-plane"></i> <span>ส่งแสดงผลอักษรเบรลล์ (Enter)</span>
                         </button>
                     </div>
                 </div>

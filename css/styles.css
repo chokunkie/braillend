@@ -2594,6 +2594,54 @@ body.light-mode .inspector-details-bar {
     border-color: #ff0055;
 }
 
+/* Full-Text Input Card Elements */
+.workstation-text-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: rgba(7, 10, 19, 0.85);
+    border: 1.5px solid rgba(0, 242, 254, 0.35);
+    color: #f8fafc;
+    font-size: 16px;
+    font-weight: 500;
+    font-family: 'Prompt', sans-serif;
+    outline: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 14px rgba(0, 242, 254, 0.1) inset;
+}
+
+.workstation-text-input:focus {
+    border-color: #00ff88 !important;
+    box-shadow: 0 0 18px rgba(0, 255, 136, 0.3) inset, 0 0 12px rgba(0, 255, 136, 0.25) !important;
+}
+
+.btn-submit-main-text {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 13px 18px;
+    background: linear-gradient(135deg, rgba(0, 242, 254, 0.95), rgba(0, 255, 136, 0.95));
+    color: #051a14;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: 'Prompt', sans-serif;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 18px rgba(0, 242, 254, 0.35);
+    transition: all 0.2s ease;
+}
+
+.btn-submit-main-text:hover, .btn-submit-main-text:active {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(0, 255, 136, 0.5);
+    background: linear-gradient(135deg, #00f2fe, #00ff88);
+}
+
 /* Responsive adjustment for Mobile screens */
 @media (max-width: 768px) {
     .workstation-app {
@@ -2636,10 +2684,28 @@ body.light-mode .inspector-details-bar {
     }
 
     .workstation-main {
-        padding: 12px 14px 24px;
+        padding: 10px 12px 14px;
         height: 100vh;
         height: 100dvh;
+        box-sizing: border-box;
         overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .workstation-content-wrap {
+        height: 100%;
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 10px;
+        flex: 1;
+    }
+
+    .workstation-card {
+        padding: 12px 14px;
+        border-radius: 16px;
     }
 
     /* Provide clean clearance for floating side hamburger on mobile */
