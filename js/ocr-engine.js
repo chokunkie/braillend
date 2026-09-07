@@ -416,6 +416,10 @@ function handleImageFileSelect(file) {
         return;
     }
     showPreview(file, file.name || 'image.png');
+    if (typeof window !== 'undefined' && typeof window.triggerOcrFlowModal === 'function') {
+        window.triggerOcrFlowModal(file, 'upload');
+        return;
+    }
     runOcrPipeline(file, 'upload');
 }
 

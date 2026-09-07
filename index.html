@@ -16,7 +16,7 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="css/styles.css?v=3.2.2">
+    <link rel="stylesheet" href="css/styles.css">
 
     <style>
         body {
@@ -538,6 +538,77 @@
                     </div>
                     <div class="mech-desc-box" id="mechDesc"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OCR Processing Flow Modal (Spinning Loader & Confirmation Screen) -->
+    <div class="ocr-flow-modal" id="ocrFlowModal">
+        <div class="ocr-flow-card">
+            <!-- 1. LOADING STATE (SPINNER) -->
+            <div id="ocrFlowLoadingState" class="ocr-flow-spinner-wrap">
+                <div class="ocr-flow-spinner"></div>
+                <div>
+                    <div style="font-size:17px; font-weight:700; color:#00f2fe; margin-bottom:4px;" id="ocrFlowLoadingTitle">
+                        กำลังประมวลผล OCR...
+                    </div>
+                    <div style="font-size:12px; color:#94a3b8;" id="ocrFlowLoadingSubtitle">
+                        กำลังถอดรหัสข้อความภาษาไทยและอังกฤษจากภาพถ่าย
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SUMMARY / RESULT STATE -->
+            <div id="ocrFlowSummaryState" style="display:none; width:100%; flex-direction:column; gap:16px; align-items:center;">
+                <!-- Header Status -->
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                    <span style="font-size:14px; font-weight:700; color:#00f2fe;">
+                        <i class="fa-solid fa-microchip"></i> ตรวจจับข้อความสำเร็จ
+                    </span>
+                    <span id="ocrFlowConfBadge" style="font-size:11px; font-weight:700; color:#00ff88; background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.3); padding:3px 10px; border-radius:12px;">
+                        ความแม่นยำ 95%
+                    </span>
+                </div>
+
+                <!-- Detected Text Box -->
+                <div class="ocr-detected-box" id="ocrFlowDetectedText">
+                    "สวัสดีครับ"
+                </div>
+
+                <!-- Detection Statistics Grid -->
+                <div class="ocr-flow-stats-grid">
+                    <div class="flow-stat-pill">
+                        <i class="fa-solid fa-font"></i>
+                        <span>จำนวนคำ: <b id="ocrFlowWordCount" style="color:#00ff88;">1 คำ</b></span>
+                    </div>
+                    <div class="flow-stat-pill">
+                        <i class="fa-solid fa-braille"></i>
+                        <span>แปลงเป็น: <b id="ocrFlowBrailleCount" style="color:#00f2fe;">7 เซลล์</b></span>
+                    </div>
+                    <div class="flow-stat-pill">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>โหมด: <b id="ocrFlowEngineType" style="color:#cbd5e1;">EasyOCR</b></span>
+                    </div>
+                    <div class="flow-stat-pill">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <span>ความสมบูรณ์: <b id="ocrFlowHealthText" style="color:#00ff88;">ชัดเจน</b></span>
+                    </div>
+                </div>
+
+                <!-- Voice Preview Buttons -->
+                <div style="display:flex; gap:8px; width:100%;">
+                    <button class="btn-ctrl" onclick="speakFlowResult()" style="flex:1; justify-content:center;">
+                        <i class="fa-solid fa-volume-high"></i> ฟังเสียงอ่าน
+                    </button>
+                    <button class="btn-ctrl" onclick="stopSpeakingFlowResult()" style="flex:0.6; justify-content:center;">
+                        <i class="fa-solid fa-stop"></i> หยุด
+                    </button>
+                </div>
+
+                <!-- Confirmation Button -->
+                <button class="btn-flow-confirm" id="btnOcrFlowConfirm" onclick="confirmOcrFlowResult()">
+                    <i class="fa-solid fa-check"></i> ตกลง (ส่งข้อความเข้าหน้าหลัก)
+                </button>
             </div>
         </div>
     </div>

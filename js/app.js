@@ -468,6 +468,175 @@ function testL298NDriver(driverIdx) {
     }, 2000);
 }
 
+/**
+ * OCR Flow Modal & Pending Image Processor (Camera -> Index Redirect)
+ */
+let activeFlowOcrText = '';
+let activeFlowConfidence = 95;
+
+function dataUrlToBlob(dataUrl) {
+    try {
+        const arr = dataUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
+    } catch (e) {
+        console.warn('dataUrlToBlob error:', e);
+        return null;
+    }
+}
+
+async function triggerOcrFlowModal(fileOrBlob, source = 'upload') {
+    const modal = document.getElementById('ocrFlowModal');
+    const loadingState = document.getElementById('ocrFlowLoadingState');
+    const summaryState = document.getElementById('ocrFlowSummaryState');
+    if (!modal) return;
+
+    // 1. Show spinning loading state
+    modal.classList.add('active');
+    if (loadingState) loadingState.style.display = 'flex';
+    if (summaryState) summaryState.style.display = 'none';
+
+    let result = null;
+    try {
+        if (typeof recognize === 'function') {
+            result = await recognize(fileOrBlob, source);
+        }
+    } catch (err) {
+        console.warn('OCR execution failed:', err);
+    }
+
+    let rawText = (result && typeof result.text === 'string') ? result.text.trim() : '';
+    if (typeof normalizeOcrText === 'function' && rawText) {
+        rawText = normalizeOcrText(rawText);
+    }
+    const conf = (result && typeof result.confidence === 'number') ? Math.round(result.confidence) : 90;
+    const words = (result && Array.isArray(result.words)) ? result.words : [];
+
+    activeFlowOcrText = rawText;
+    activeFlowConfidence = conf;
+
+    // 2. Populate Summary State UI
+    const detectedBox = document.getElementById('ocrFlowDetectedText');
+    const confBadge = document.getElementById('ocrFlowConfBadge');
+    const wordCountEl = document.getElementById('ocrFlowWordCount');
+    const brailleCountEl = document.getElementById('ocrFlowBrailleCount');
+    const engineTypeEl = document.getElementById('ocrFlowEngineType');
+    const healthTextEl = document.getElementById('ocrFlowHealthText');
+
+    if (detectedBox) {
+        detectedBox.textContent = rawText ? `"${rawText}"` : 'ไม่พบข้อความในภาพ';
+        detectedBox.style.color = rawText ? '#00ff88' : '#ef4444';
+    }
+
+    if (confBadge) {
+        confBadge.textContent = `ความแม่นยำ ${conf}%`;
+    }
+
+    if (wordCountEl) {
+        const wCount = words.length > 0 ? words.length : (rawText ? rawText.split(/\s+/).length : 0);
+        wordCountEl.textContent = `${wCount} คำ`;
+    }
+
+    if (brailleCountEl) {
+        let cellCount = 0;
+        if (typeof textToBrailleCells === 'function' && rawText) {
+            cellCount = textToBrailleCells(rawText).length;
+        } else if (rawText) {
+            cellCount = rawText.length;
+        }
+        brailleCountEl.textContent = `${cellCount} เซลล์`;
+    }
+
+    if (engineTypeEl) {
+        engineTypeEl.textContent = (result && result.engine === 'tesseract') ? 'Tesseract' : 'EasyOCR';
+    }
+
+    if (healthTextEl) {
+        const health = conf >= 72 ? 'ชัดเจน' : (conf >= 45 ? 'อาจมีคำผิด' : 'ไม่ชัดเจน');
+        healthTextEl.textContent = health;
+        healthTextEl.style.color = conf >= 72 ? '#00ff88' : (conf >= 45 ? '#f59e0b' : '#ef4444');
+    }
+
+    // 3. Switch to Summary View
+    if (loadingState) loadingState.style.display = 'none';
+    if (summaryState) summaryState.style.display = 'flex';
+}
+
+function confirmOcrFlowResult() {
+    const modal = document.getElementById('ocrFlowModal');
+    if (modal) modal.classList.remove('active');
+
+    // Remove pending storage items
+    if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('braillend_pending_ocr_image');
+        sessionStorage.removeItem('braillend_pending_ocr_source');
+    }
+
+    if (activeFlowOcrText) {
+        const mainInput = document.getElementById('mainTextInput');
+        const legacyInput = document.getElementById('thaiInput');
+
+        if (mainInput) mainInput.value = activeFlowOcrText;
+        if (legacyInput) legacyInput.value = activeFlowOcrText;
+
+        if (twoCellEngine && typeof twoCellEngine.setText === 'function') {
+            twoCellEngine.setText(activeFlowOcrText);
+        }
+
+        if (typeof updateBrailleDisplay === 'function') {
+            updateBrailleDisplay(activeFlowOcrText);
+        }
+
+        if (typeof localStorage !== 'undefined') {
+            try {
+                localStorage.setItem('braillend_last_ocr_text', activeFlowOcrText);
+            } catch (e) {}
+        }
+    }
+}
+
+function speakFlowResult() {
+    if ('speechSynthesis' in window && activeFlowOcrText) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(activeFlowOcrText);
+        utter.lang = 'th-TH';
+        utter.rate = 0.95;
+        window.speechSynthesis.speak(utter);
+    }
+}
+
+function stopSpeakingFlowResult() {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+    }
+}
+
+function checkPendingOcr() {
+    if (typeof sessionStorage === 'undefined') return;
+    const pendingImage = sessionStorage.getItem('braillend_pending_ocr_image');
+    const pendingSource = sessionStorage.getItem('braillend_pending_ocr_source') || 'camera';
+
+    // Clean query param from URL
+    if (typeof window !== 'undefined' && window.location.search.includes('ocr=pending')) {
+        try {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (e) {}
+    }
+
+    if (pendingImage) {
+        const blob = dataUrlToBlob(pendingImage);
+        if (blob) {
+            triggerOcrFlowModal(blob, pendingSource);
+        }
+    }
+}
+
 // Initialize all subsystems when DOM content is fully loaded
 window.addEventListener('DOMContentLoaded', () => {
     // 1. Initialize 2-Cell ESP32 Tactile Workstation (PRIMARY FOR INDEX.HTML)
@@ -518,6 +687,11 @@ window.addEventListener('DOMContentLoaded', () => {
             console.warn('[OCR Handlers skipped]:', e);
         }
     }
+
+    // 6. Check for Pending Camera / Upload OCR on Page Load
+    setTimeout(() => {
+        checkPendingOcr();
+    }, 150);
 });
 
 // Explicit window bindings for modal interactions
@@ -535,4 +709,9 @@ if (typeof window !== 'undefined') {
     window.testL298NDriver = testL298NDriver;
     window.loadQuickWord = loadQuickWord;
     window.displayDirect12Bits = displayDirect12Bits;
+    window.triggerOcrFlowModal = triggerOcrFlowModal;
+    window.confirmOcrFlowResult = confirmOcrFlowResult;
+    window.speakFlowResult = speakFlowResult;
+    window.stopSpeakingFlowResult = stopSpeakingFlowResult;
+    window.checkPendingOcr = checkPendingOcr;
 }
