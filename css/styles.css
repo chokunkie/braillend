@@ -2098,11 +2098,11 @@ body.light-mode .inspector-details-bar {
     box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
 }
 
-/* Full-Text Ribbon View (Expanded & Prominent Display) */
+/* Full-Text Ribbon View (Multi-Line Grid / แสดงข้อความได้จุใจหลายแถว) */
 .ribbon-section {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
 }
 
 .ribbon-header-row {
@@ -2121,16 +2121,18 @@ body.light-mode .inspector-details-bar {
 }
 
 .ribbon-track-wrapper {
-    background: rgba(7, 10, 19, 0.8);
+    background: rgba(7, 10, 19, 0.85);
     border: 1.5px solid rgba(0, 240, 255, 0.25);
     border-radius: 14px;
-    padding: 12px 14px;
-    overflow-x: auto;
-    white-space: nowrap;
+    padding: 10px 12px;
     display: flex;
-    gap: 10px;
-    min-height: 84px;
-    align-items: center;
+    flex-wrap: wrap; /* Multi-line wrapping: shows lots of text/cells across multiple rows! */
+    gap: 6px;
+    min-height: 96px;
+    max-height: 180px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    align-content: flex-start;
     box-shadow: 0 0 16px rgba(0, 242, 254, 0.1) inset;
 }
 
@@ -2139,10 +2141,12 @@ body.light-mode .inspector-details-bar {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 54px;
-    height: 72px;
-    padding: 6px 8px;
-    border-radius: 10px;
+    width: calc(14.28% - 6px); /* 7 cells per row on mobile, wraps cleanly */
+    min-width: 36px;
+    max-width: 48px;
+    height: 50px;
+    padding: 2px 4px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.12);
     cursor: pointer;
@@ -2152,45 +2156,45 @@ body.light-mode .inspector-details-bar {
 }
 
 .ribbon-cell-card:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.12);
     border-color: rgba(0, 242, 254, 0.45);
     transform: translateY(-2px);
 }
 
 .ribbon-cell-card.active-cell {
-    background: rgba(0, 242, 254, 0.25);
+    background: rgba(0, 242, 254, 0.28);
     border: 1.5px solid #00f2fe;
-    box-shadow: 0 0 16px rgba(0, 242, 254, 0.5);
-    transform: translateY(-3px) scale(1.04);
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.55);
+    transform: translateY(-2px) scale(1.05);
 }
 
 .ribbon-cell-char {
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 700;
     color: #f8fafc;
-    line-height: 1.2;
+    line-height: 1.1;
 }
 
 .ribbon-cell-braille {
-    font-size: 20px;
+    font-size: 14px;
     color: #00ff88;
     line-height: 1;
-    margin: 2px 0;
-    text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+    margin: 1px 0;
+    text-shadow: 0 0 6px rgba(0, 255, 136, 0.5);
 }
 
 .ribbon-cell-idx {
-    font-size: 10px;
+    font-size: 8px;
     color: #94a3b8;
     font-family: 'JetBrains Mono', monospace;
 }
 
 .ribbon-empty-tip {
-    font-size: 13px;
+    font-size: 12px;
     color: #64748b;
     width: 100%;
     text-align: center;
-    padding: 16px 0;
+    padding: 24px 0;
 }
 
 /* 2-Cell Hardware Digital Twin Board */
@@ -2720,13 +2724,19 @@ body.light-mode .inspector-details-bar {
     }
 
     .ribbon-track-wrapper {
-        min-height: 88px;
-        padding: 12px 14px;
+        min-height: 96px;
+        max-height: 160px;
+        padding: 8px 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
     }
 
     .ribbon-cell-card {
-        min-width: 54px;
-        height: 74px;
+        width: calc(14.28% - 5px);
+        min-width: 34px;
+        max-width: 46px;
+        height: 48px;
     }
 
     .shapes-grid-layout {
