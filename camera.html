@@ -535,7 +535,7 @@
                     </div>
                 </div>
                 <div class="result-headline" id="detectedTextDisplay">
-                    "สวัสดีครับผมชื่อสมชาย ยินดีที่ได้รู้จักครับ"
+                    "สวัสดีครับพวกเราทีมรับเหมาก่อเรื่อง"
                 </div>
             </div>
 
@@ -1136,12 +1136,11 @@
             }
         }
 
-        // Initialize Live Camera & Prewarm OCR on Page Load
+        // Initialize Live Camera on Page Load (No auto-download of heavy models)
         window.addEventListener('DOMContentLoaded', () => {
             restoreOcrLang();
             if (typeof syncGuidanceButtons === 'function') syncGuidanceButtons();
             startLiveCamera();
-            prewarmOCR();
         });
     </script>
 </body>

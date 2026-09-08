@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="color-scheme" content="dark light">
     <title>BrailBox 3D - โมเดลจำลองตัวเครื่อง 3 มิติ</title>
     <!-- Three.js and OrbitControls -->
@@ -19,6 +19,11 @@
     <link rel="stylesheet" href="css/styles.css">
 
     <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         body {
             background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%);
             color: #0f172a;
@@ -26,72 +31,659 @@
             overflow: hidden;
             font-family: 'Prompt', sans-serif;
             height: 100vh;
+            height: 100dvh;
             width: 100vw;
             touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         #webgl-container {
             width: 100vw;
             height: 100vh;
+            height: 100dvh;
             position: absolute;
             top: 0;
             left: 0;
             z-index: 1;
         }
 
+        /* Top Header */
         .model-top-header {
-            position: absolute;
-            top: 16px;
-            left: 18px;
-            right: 18px;
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            right: 14px;
             z-index: 50;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(15, 23, 42, 0.88);
-            border: 1px solid rgba(0, 240, 255, 0.25);
-            border-radius: 14px;
-            padding: 10px 18px;
-            backdrop-filter: blur(14px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+            background: rgba(15, 23, 42, 0.90);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 16px;
+            padding: 8px 14px;
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+            gap: 10px;
+        }
+
+        .header-left, .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .btn-back-home {
-            background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(79, 172, 254, 0.3));
-            border: 1px solid rgba(0, 242, 254, 0.4);
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.22), rgba(79, 172, 254, 0.28));
+            border: 1px solid rgba(0, 242, 254, 0.45);
             color: #00f2fe;
-            padding: 8px 16px;
+            padding: 7px 14px;
             border-radius: 10px;
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 7px;
             text-decoration: none;
-            transition: all 0.2s;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .btn-back-home:hover {
-            background: linear-gradient(135deg, rgba(0, 242, 254, 0.35), rgba(79, 172, 254, 0.45));
-            box-shadow: 0 0 14px rgba(0, 242, 254, 0.4);
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.38), rgba(79, 172, 254, 0.5));
+            box-shadow: 0 0 14px rgba(0, 242, 254, 0.45);
             transform: translateX(-2px);
         }
 
+        .header-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow: hidden;
+        }
+
+        .header-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #f8fafc;
+            white-space: nowrap;
+        }
+
+        .header-subtitle-desc {
+            color: #94a3b8;
+            font-weight: 400;
+            font-size: 13px;
+        }
+
+        .mobile-badge {
+            background: rgba(0, 240, 255, 0.15);
+            border: 1px solid rgba(0, 240, 255, 0.35);
+            color: #00f0ff;
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 14px;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .header-btn {
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #e2e8f0;
+            padding: 7px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-family: 'Prompt', sans-serif;
+            flex-shrink: 0;
+        }
+
+        .header-btn:hover {
+            background: rgba(0, 240, 255, 0.16);
+            border-color: rgba(0, 240, 255, 0.45);
+            color: #00f0ff;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+        }
+
+        /* Perspective Floating Pills (Positioned cleanly above bottom dock) */
+        .view-preset-pills {
+            position: fixed;
+            bottom: max(78px, calc(env(safe-area-inset-bottom, 16px) + 68px));
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 45;
+            display: flex;
+            gap: 6px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 22px;
+            padding: 4px 8px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 6px 22px rgba(0,0,0,0.55);
+        }
+
+        .preset-pill-btn {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Prompt', sans-serif;
+            white-space: nowrap;
+        }
+
+        .preset-pill-btn.active, .preset-pill-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.3), rgba(0, 255, 136, 0.25));
+            color: #00f2fe;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.35);
+        }
+
+        /* Interactive Mobile Touch Gesture Hint */
+        .touch-hint-pill {
+            position: fixed;
+            top: 72px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 40;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(0, 255, 136, 0.35);
+            color: #00ff88;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 14px;
+            border-radius: 20px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .touch-hint-pill.fade-out {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-8px);
+        }
+
+        /* Exploded View Depth Slider */
+        .exploded-slider-wrap {
+            position: fixed;
+            top: 70px;
+            right: 16px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(0, 255, 136, 0.35);
+            border-radius: 14px;
+            padding: 10px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-muted);
+            z-index: 45;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            width: 220px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+
+        .slider-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .slider-header-row label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #00ff88;
+            font-weight: 600;
+            font-size: 11px;
+            margin: 0;
+        }
+
+        .slider-val-badge {
+            font-family: 'JetBrains Mono', monospace;
+            color: #00f0ff;
+            font-weight: 700;
+            font-size: 11px;
+        }
+
+        .exploded-slider-wrap input[type="range"] {
+            width: 100%;
+            accent-color: #00ff88;
+            cursor: pointer;
+            height: 6px;
+        }
+
+        /* Floating Controls Dock */
         .floating-controls-dock {
-            position: absolute;
-            bottom: 24px;
+            position: fixed;
+            bottom: max(16px, env(safe-area-inset-bottom, 16px));
             left: 50%;
             transform: translateX(-50%);
             z-index: 50;
             display: flex;
-            gap: 12px;
-            background: rgba(15, 23, 42, 0.92);
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.94);
             border: 1px solid rgba(0, 240, 255, 0.35);
             border-radius: 16px;
-            padding: 10px 18px;
+            padding: 8px 14px;
             backdrop-filter: blur(16px);
-            box-shadow: 0 12px 35px rgba(0,0,0,0.6);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.65);
+        }
+
+        .dock-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #cbd5e1;
+            padding: 9px 16px;
+            border-radius: 12px;
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: 'Prompt', sans-serif;
+            white-space: nowrap;
+            touch-action: manipulation;
+        }
+
+        .dock-btn:hover {
+            background: rgba(0, 240, 255, 0.15);
+            border-color: rgba(0, 240, 255, 0.4);
+            color: #00f0ff;
+            transform: translateY(-2px);
+        }
+
+        .dock-btn.active {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(0, 255, 136, 0.2));
+            border-color: #00f0ff;
+            color: #00f0ff;
+            box-shadow: 0 0 16px rgba(0, 240, 255, 0.4);
+        }
+
+        .dock-btn i {
+            font-size: 14px;
+        }
+
+        /* Single-Pin Mechanism Cutaway Modal */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            background: rgba(4, 7, 14, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            padding: 16px;
+        }
+
+        .modal-backdrop.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            width: 920px;
+            max-width: 95vw;
+            height: 600px;
+            max-height: 88vh;
+            max-height: 88dvh;
+            background: #0f172a;
+            border: 1px solid #00f0ff;
+            border-radius: 18px;
+            box-shadow: 0 0 45px rgba(0, 240, 255, 0.35);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: scale(0.95);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .modal-backdrop.active .modal-card {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            padding: 14px 20px;
+            background: rgba(15, 23, 42, 0.95);
+            border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .modal-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #00f0ff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .close-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #94a3b8;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+            color: #f43f5e;
+            border-color: #f43f5e;
+            background: rgba(244, 63, 94, 0.15);
+        }
+
+        .modal-body {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .mech-canvas-container {
+            flex: 1.2;
+            position: relative;
+            background: radial-gradient(circle at center, #151F36 0%, #080D1A 100%);
+            min-height: 200px;
+        }
+
+        #mech-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .mech-controls {
+            flex: 1;
+            padding: 18px;
+            background: rgba(15, 23, 42, 0.85);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .state-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .state-btn {
+            padding: 9px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+            font-size: 11.5px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+            font-family: 'Prompt', sans-serif;
+        }
+
+        .state-btn:hover, .state-btn.active {
+            border-color: #00f0ff;
+            background: rgba(0, 240, 255, 0.18);
+            color: #00f0ff;
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+        }
+
+        .mech-params {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 10px;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+        }
+
+        .param-label {
+            color: #94a3b8;
+        }
+
+        .param-val {
+            color: #00ff88;
+            font-weight: 700;
+        }
+
+        .mech-desc-box {
+            background: rgba(0, 240, 255, 0.06);
+            border: 1px solid rgba(0, 240, 255, 0.22);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 12px;
+            line-height: 1.55;
+            color: #e2e8f0;
+            flex: 1;
+        }
+
+        /* 📱 Mobile Specific Styles */
+        @media (max-width: 768px) {
+            .model-top-header {
+                top: 8px;
+                left: 8px;
+                right: 8px;
+                padding: 6px 10px;
+                border-radius: 13px;
+                gap: 6px;
+            }
+
+            .header-left {
+                gap: 6px;
+                overflow: hidden;
+            }
+
+            .header-right {
+                gap: 5px;
+            }
+
+            .btn-back-home {
+                padding: 6px 9px;
+                font-size: 12px;
+                gap: 5px;
+                border-radius: 8px;
+            }
+
+            .header-title {
+                font-size: 13.5px;
+            }
+
+            .header-subtitle-desc {
+                display: none;
+            }
+
+            .mobile-badge {
+                display: none;
+            }
+
+            .header-btn {
+                padding: 6px 8px;
+                font-size: 11px;
+                border-radius: 8px;
+            }
+
+            .header-btn .btn-text {
+                display: none;
+            }
+
+            .header-btn i {
+                font-size: 13px;
+            }
+
+            .view-preset-pills {
+                bottom: max(68px, calc(env(safe-area-inset-bottom, 10px) + 58px));
+                left: 50%;
+                transform: translateX(-50%);
+                top: auto;
+                padding: 3px 6px;
+                gap: 4px;
+            }
+
+            .preset-pill-btn {
+                padding: 3px 8px;
+                font-size: 10.5px;
+            }
+
+            .touch-hint-pill {
+                top: 62px;
+                font-size: 10.5px;
+                padding: 4px 10px;
+            }
+
+            .exploded-slider-wrap {
+                top: 62px;
+                left: 8px;
+                right: 8px;
+                width: auto;
+                max-width: 320px;
+                margin: 0 auto;
+                padding: 8px 12px;
+            }
+
+            .floating-controls-dock {
+                bottom: max(10px, env(safe-area-inset-bottom, 10px));
+                left: 8px;
+                right: 8px;
+                transform: none;
+                width: auto;
+                max-width: 100%;
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 6px;
+                padding: 6px 8px;
+                border-radius: 14px;
+            }
+
+            .dock-btn {
+                flex-direction: column;
+                justify-content: center;
+                gap: 3px;
+                padding: 7px 4px;
+                font-size: 10.5px;
+                border-radius: 10px;
+                min-height: 46px;
+                text-align: center;
+            }
+
+            .dock-btn i {
+                font-size: 14px;
+                margin-bottom: 1px;
+            }
+
+            /* Modal Mobile */
+            .modal-backdrop {
+                padding: 8px;
+            }
+
+            .modal-card {
+                width: 100%;
+                max-width: 100%;
+                height: 86vh;
+                height: 86dvh;
+                max-height: 86dvh;
+                border-radius: 16px;
+            }
+
+            .modal-header {
+                padding: 10px 14px;
+            }
+
+            .modal-title {
+                font-size: 13.5px;
+            }
+
+            .modal-body {
+                flex-direction: column;
+                overflow-y: auto;
+            }
+
+            .mech-canvas-container {
+                height: 180px;
+                min-height: 180px;
+                flex: none;
+                width: 100%;
+                border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+            }
+
+            .mech-controls {
+                padding: 12px;
+                gap: 10px;
+                border-left: none;
+            }
+
+            .state-buttons {
+                gap: 6px;
+            }
+
+            .state-btn {
+                padding: 7px 6px;
+                font-size: 10.5px;
+            }
+
+            .mech-params {
+                font-size: 10px;
+                padding: 8px;
+                gap: 4px;
+            }
+
+            .mech-desc-box {
+                font-size: 11px;
+                padding: 10px;
+                line-height: 1.5;
+            }
         }
     </style>
 </head>
@@ -99,25 +691,44 @@
 
     <!-- Top Navigation Header -->
     <header class="model-top-header">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <a href="index.html" class="btn-back-home" title="กลับไปยังหน้าหลัก (พิมพ์ข้อความ & เบรลล์ 2 เซลล์)">
-                <i class="fa-solid fa-arrow-left"></i> กลับสู่หน้าหลัก
+        <div class="header-left">
+            <a href="index.html" class="btn-back-home" title="กลับไปยังหน้าหลัก">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span class="btn-text">หน้าหลัก</span>
             </a>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <div style="font-size:16px; font-weight:700; color:#f8fafc;">โมเดล 3 มิติ (Three.js 14-Cell Simulator)</div>
-                <span class="mobile-badge">Interactive 3D</span>
+            <div class="header-title-wrap">
+                <div class="header-title">โมเดลจำลอง 3 มิติ <span class="header-subtitle-desc">(BrailBox 3D)</span></div>
+                <span class="mobile-badge"><i class="fa-solid fa-cube"></i> 3D</span>
             </div>
         </div>
 
-        <div style="display:flex; gap:8px;">
+        <div class="header-right">
+            <a href="tactile.html" class="header-btn" title="เปิดหน้าสัญลักษณ์สัมผัส 12 จุด">
+                <i class="fa-solid fa-shapes"></i>
+                <span class="btn-text">สัมผัส 12 จุด</span>
+            </a>
             <button class="header-btn" onclick="cycleStudioTheme()" title="เปลี่ยนเฉดสีพื้นหลังสตูดิโอ">
-                <i class="fa-solid fa-palette"></i> เปลี่ยนสีพื้นหลัง
+                <i class="fa-solid fa-palette"></i>
+                <span class="btn-text">สีพื้นหลัง</span>
             </button>
-            <button class="header-btn" onclick="resetCamera()" title="รีเซ็ตมุมกล้อง">
-                <i class="fa-solid fa-rotate"></i> รีเซ็ตมุมมอง
+            <button class="header-btn" onclick="resetCameraViewSmooth()" title="รีเซ็ตมุมกล้องกลับสู่ตำแหน่งเริ่มต้น">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span class="btn-text">รีเซ็ตมุม</span>
             </button>
         </div>
     </header>
+
+    <!-- Perspective View Pills (Top Left) -->
+    <div class="view-preset-pills">
+        <button class="preset-pill-btn active" id="btnPill3D" onclick="setPresetCamera('3d')" title="มุมมอง 3 มิติ (Isometric)">3D</button>
+        <button class="preset-pill-btn" id="btnPillFront" onclick="setPresetCamera('front')" title="มุมมองด้านบน">ด้านบน</button>
+        <button class="preset-pill-btn" id="btnPillBack" onclick="setPresetCamera('back')" title="มุมมองด้านล่าง">ด้านล่าง</button>
+    </div>
+
+    <!-- Interactive Mobile Touch Gesture Hint -->
+    <div class="touch-hint-pill" id="touchHintPill">
+        <i class="fa-solid fa-hand-pointer"></i> แตะหมุน / 2 นิ้วซูม 3D
+    </div>
 
     <!-- WebGL 3D Hardware Canvas Container -->
     <div id="webgl-container"></div>
@@ -128,14 +739,16 @@
 
     <!-- Exploded View Depth Slider -->
     <div class="exploded-slider-wrap" id="explodedSliderWrap" style="display:none;">
-        <label for="explodedSlider"><i class="fa-solid fa-arrows-up-down"></i> ระยะแยก</label>
+        <div class="slider-header-row">
+            <label for="explodedSlider"><i class="fa-solid fa-arrows-up-down"></i> ระยะแยกชิ้นส่วน</label>
+            <span id="explodedSliderVal" class="slider-val-badge">100%</span>
+        </div>
         <input type="range" id="explodedSlider" min="0" max="100" value="100" oninput="setExplodedAmount(this.value)">
-        <span id="explodedSliderVal" style="font-family:'JetBrains Mono', monospace; color:var(--accent-cyan);">100%</span>
     </div>
 
     <!-- 3D View Floating Controls Dock -->
     <div class="floating-controls-dock">
-        <button class="dock-btn" id="explodedBtn" onclick="toggleExplodedView()" title="แยกชิ้นส่วนโครงสร้าง">
+        <button class="dock-btn" id="explodedBtn" onclick="toggleExplodedView()" title="แยกชิ้นส่วนโครงสร้างฮาร์ดแวร์">
             <i class="fa-solid fa-layer-group"></i>
             <span>แยกชิ้นส่วน</span>
         </button>
@@ -145,9 +758,9 @@
             <span>ดูภายใน (X-Ray)</span>
         </button>
 
-        <button class="dock-btn" onclick="openMechanismModal()" title="ดูกลไก 1 หมุดเบรลล์">
+        <button class="dock-btn" onclick="openMechanismModal()" title="ดูกลไก 1 หมุดเบรลล์ (Actuator)">
             <i class="fa-solid fa-microchip"></i>
-            <span>กลไกหมุด (Actuator)</span>
+            <span>กลไกหมุด</span>
         </button>
     </div>
 
@@ -158,7 +771,7 @@
                 <div class="modal-title">
                     <i class="fa-solid fa-microchip"></i> กลไก 1 หมุดเบรลล์ (Bistable Actuator)
                 </div>
-                <button class="close-btn" onclick="closeMechanismModal()"><i class="fa-solid fa-xmark"></i></button>
+                <button class="close-btn" onclick="closeMechanismModal()" title="ปิดหน้าต่าง"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
                 <div class="mech-canvas-container">
@@ -166,9 +779,9 @@
                 </div>
                 <div class="mech-controls">
                     <div class="state-buttons">
-                        <button class="state-btn active" id="stBtn1" onclick="setMechState(1)">State 1: พัก</button>
+                        <button class="state-btn active" id="stBtn1" onclick="setMechState(1)">State 1: พัก (0W)</button>
                         <button class="state-btn" id="stBtn2" onclick="setMechState(2)">State 2: จ่ายไฟ</button>
-                        <button class="state-btn" id="stBtn3" onclick="setMechState(3)">State 3: ตัดไฟ</button>
+                        <button class="state-btn" id="stBtn3" onclick="setMechState(3)">State 3: ตัดไฟ (0W)</button>
                         <button class="state-btn" id="stBtn4" onclick="setMechState(4)">State 4: สลับขั้ว</button>
                     </div>
                     <div class="mech-params">
@@ -187,7 +800,7 @@
 
     <!-- Hidden Subsystems required by 3D Engine -->
     <div style="display:none;">
-        <textarea id="thaiInput">HELLO</textarea>
+        <textarea id="thaiInput">รับเหมาก่อเรื่อง</textarea>
         <div id="cellsGrid"></div>
         <button id="btnPrevPage"></button>
         <div id="pageIndicator"></div>
@@ -226,16 +839,51 @@
             if (container) container.style.background = bg;
         }
 
+        function setPresetCamera(view) {
+            document.querySelectorAll('.preset-pill-btn').forEach(btn => btn.classList.remove('active'));
+            if (view === '3d') {
+                const b = document.getElementById('btnPill3D');
+                if (b) b.classList.add('active');
+            } else if (view === 'front') {
+                const b = document.getElementById('btnPillFront');
+                if (b) b.classList.add('active');
+            } else if (view === 'back') {
+                const b = document.getElementById('btnPillBack');
+                if (b) b.classList.add('active');
+            }
+            if (typeof setCameraView === 'function') {
+                setCameraView(view);
+            }
+        }
+
+        function resetCameraViewSmooth() {
+            setPresetCamera('3d');
+            if (typeof resetCamera === 'function') {
+                resetCamera();
+            }
+        }
+
+        // Auto-dismiss Touch Hint Pill
+        function setupTouchHintDismiss() {
+            const hint = document.getElementById('touchHintPill');
+            if (!hint) return;
+            const dismiss = () => {
+                hint.classList.add('fade-out');
+                setTimeout(() => { hint.style.display = 'none'; }, 600);
+            };
+            window.addEventListener('pointerdown', dismiss, { once: true, passive: true });
+            window.addEventListener('touchstart', dismiss, { once: true, passive: true });
+            setTimeout(dismiss, 4500);
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             if (typeof initMain3D === 'function') {
                 initMain3D();
             }
             if (typeof updateScreenCanvas === 'function') {
-                updateScreenCanvas("BRAILLBOX 3D");
+                updateScreenCanvas("รับเหมาก่อเรื่อง");
             }
-            if (typeof updateBrailleDisplay === 'function') {
-                updateBrailleDisplay("BRAILLBOX");
-            }
+            setupTouchHintDismiss();
         });
     </script>
 </body>

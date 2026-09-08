@@ -172,10 +172,10 @@ function initTwoCellWorkstation() {
         }
 
         // Initial text (load from Camera OCR / Image Upload persistence if available)
-        let initialText = 'สวัสดี';
+        let initialText = 'รับเหมาก่อเรื่อง';
         if (typeof localStorage !== 'undefined') {
             const lastOcr = localStorage.getItem('braillend_last_ocr_text');
-            if (lastOcr && lastOcr.trim()) {
+            if (lastOcr && lastOcr.trim() && lastOcr !== 'กันต์กวี' && lastOcr !== 'สวัสดี') {
                 initialText = lastOcr.trim();
             }
         }

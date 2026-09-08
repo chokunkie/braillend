@@ -992,7 +992,7 @@
             oledCtx = ctx;
             oledTexture = screenTexture;
 
-            drawScreenContent('สวัสดีครับผมชื่อสมชาย');
+            drawScreenContent('รับเหมาก่อเรื่อง');
             if (screenTexture) screenTexture.needsUpdate = true;
             if (oledTexture) oledTexture.needsUpdate = true;
         }
@@ -1024,7 +1024,7 @@
                 currentText = text;
                 currentLCDText = text;
             }
-            const displayStr = (currentText && currentText.trim() !== '') ? currentText : 'สวัสดีครับผมชื่อสมชาย';
+            const displayStr = (currentText && currentText.trim() !== '') ? currentText : 'รับเหมาก่อเรื่อง';
 
             pulseAnimFrame += 0.08;
 

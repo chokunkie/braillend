@@ -285,7 +285,7 @@ function applyOCRResultToSystem(extractedText, confidence = 95) {
 }
 
 function showOcrResultScreen(extractedText, confidence = 95) {
-    currentResultText = extractedText || 'สวัสดีครับผมชื่อสมชาย';
+    currentResultText = extractedText || 'สวัสดีครับพวกเราทีมรับเหมาก่อเรื่อง';
     currentResultConfidence = (typeof confidence === 'number' && isFinite(confidence)) ? confidence : 95;
     if (typeof chunkTextForBraille === 'function') {
         currentResultChunks = chunkTextForBraille(currentResultText);

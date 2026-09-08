@@ -95,7 +95,7 @@ function initScreenDisplay() {
     oledCtx = ctx;
     oledTexture = screenTexture;
 
-    drawScreenContent('สวัสดีครับผมชื่อสมชาย');
+    drawScreenContent('รับเหมาก่อเรื่อง');
     if (screenTexture) screenTexture.needsUpdate = true;
     if (oledTexture) oledTexture.needsUpdate = true;
 }
@@ -132,7 +132,7 @@ function drawScreenContent(text) {
         currentLCDText = text;
         if (typeof currentText !== 'undefined') currentText = text;
     }
-    const displayStr = (currentLCDText && currentLCDText.trim() !== '') ? currentLCDText : 'สวัสดีครับผมชื่อสมชาย';
+    const displayStr = (currentLCDText && currentLCDText.trim() !== '') ? currentLCDText : 'รับเหมาก่อเรื่อง';
     pulseAnimFrame += 0.08;
 
     let activePinCount = 0;
@@ -1364,8 +1364,21 @@ function initMechanism3D() {
 function openMechanismModal() {
     const modal = document.getElementById('mechanismModal');
     if (modal) modal.classList.add('active');
-    if (!mechScene) setTimeout(initMechanism3D, 50);
-    setMechState(1);
+    setTimeout(() => {
+        if (!mechScene) {
+            initMechanism3D();
+        } else {
+            const canvas = document.getElementById('mech-canvas');
+            if (canvas && canvas.parentElement && mechRenderer && mechCamera) {
+                const w = canvas.parentElement.clientWidth || 320;
+                const h = canvas.parentElement.clientHeight || 200;
+                mechCamera.aspect = w / h;
+                mechCamera.updateProjectionMatrix();
+                mechRenderer.setSize(w, h);
+            }
+        }
+        setMechState(1);
+    }, 60);
 }
 
 function closeMechanismModal() {

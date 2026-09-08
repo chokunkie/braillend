@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="color-scheme" content="dark light">
+    <title>BrailBox - สัญลักษณ์สัมผัส & ทดสอบโซลินอยด์ 12 จุด</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Prompt & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #080d1a;
+            background: radial-gradient(circle at 50% 20%, #151f38 0%, #080d1a 75%, #020617 100%);
+            color: #f8fafc;
+            margin: 0;
+            padding: 0;
+            font-family: 'Prompt', sans-serif;
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Top Header */
+        .tactile-page-header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.94);
+            border-bottom: 1px solid rgba(0, 240, 255, 0.28);
+            padding: 10px 16px;
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            box-shadow: 0 6px 25px rgba(0,0,0,0.6);
+            gap: 10px;
+        }
+
+        .header-left, .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-back-nav {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.22), rgba(79, 172, 254, 0.28));
+            border: 1px solid rgba(0, 242, 254, 0.45);
+            color: #00f2fe;
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-back-nav:hover {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.38), rgba(79, 172, 254, 0.5));
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.4);
+            transform: translateX(-2px);
+        }
+
+        .header-page-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .header-badge {
+            background: rgba(0, 255, 136, 0.15);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            color: #00ff88;
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn-header-act {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            color: #cbd5e1;
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            font-family: 'Prompt', sans-serif;
+            white-space: nowrap;
+        }
+
+        .btn-header-act:hover {
+            border-color: #00f0ff;
+            color: #00f0ff;
+            background: rgba(0, 240, 255, 0.15);
+        }
+
+        .btn-header-act.connected {
+            border-color: #00ff88;
+            color: #00ff88;
+            background: rgba(0, 255, 136, 0.15);
+        }
+
+        /* Main Scrollable Container */
+        .tactile-main-container {
+            flex: 1;
+            padding: 14px;
+            max-width: 720px;
+            margin: 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        /* 1. Two-Cell Digital Twin Hardware Display Card */
+        .hardware-twin-card {
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(0, 240, 255, 0.32);
+            border-radius: 18px;
+            padding: 16px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .twin-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .twin-title {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #00f0ff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .twin-status-pill {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .twin-status-pill b {
+            color: #00ff88;
+        }
+
+        /* 12 Pins Hardware Matrix Board (3 Rows x 4 Cols) */
+        .tactile-board-wrap {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 14px 10px;
+        }
+
+        .cell-display-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cell-tag-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 12px;
+            letter-spacing: 0.5px;
+            font-family: 'Prompt', sans-serif;
+        }
+
+        .cell-tag-badge.c1 {
+            background: rgba(0, 242, 254, 0.15);
+            border: 1px solid rgba(0, 242, 254, 0.35);
+            color: #00f2fe;
+        }
+
+        .cell-tag-badge.c2 {
+            background: rgba(0, 255, 136, 0.15);
+            border: 1px solid rgba(0, 255, 136, 0.35);
+            color: #00ff88;
+        }
+
+        .cell-pins-matrix {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: repeat(3, 1fr);
+            gap: 8px;
+            width: 100%;
+            max-width: 180px;
+        }
+
+        /* Tactile Pin Component (Push/Pop Animation) */
+        .twin-pin-node {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 8px 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            cursor: pointer;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            min-height: 48px;
+        }
+
+        .pin-dot-circle {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #1e293b;
+            border: 2px solid #475569;
+            transition: all 0.15s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5) inset;
+            position: relative;
+        }
+
+        .pin-label-text {
+            font-size: 10px;
+            font-weight: 700;
+            color: #94a3b8;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .twin-pin-node:active {
+            transform: scale(0.92);
+        }
+
+        /* Active Pin State (Popped UP) */
+        .twin-pin-node.active {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.22), rgba(0, 255, 136, 0.18));
+            border-color: #00ff88;
+            box-shadow: 0 0 14px rgba(0, 255, 136, 0.35);
+            transform: translateY(-2px);
+        }
+
+        .twin-pin-node.active .pin-dot-circle {
+            background: #00ff88;
+            border-color: #ffffff;
+            box-shadow: 0 0 10px #00ff88, 0 0 20px rgba(0, 255, 136, 0.6);
+        }
+
+        .twin-pin-node.active .pin-label-text {
+            color: #00ff88;
+        }
+
+        /* Bitstring Telemetry Readout */
+        .bitstring-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 8px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11.5px;
+            color: #94a3b8;
+        }
+
+        .bitstring-val {
+            color: #00f2fe;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        /* 2. Action Controls Bar */
+        .act-controls-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1.3fr 0.9fr;
+            gap: 8px;
+        }
+
+        .btn-act {
+            padding: 10px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s;
+            font-family: 'Prompt', sans-serif;
+            border: none;
+            touch-action: manipulation;
+            white-space: nowrap;
+        }
+
+        .btn-act-push {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(79, 172, 254, 0.35));
+            border: 1px solid rgba(0, 242, 254, 0.5);
+            color: #00f2fe;
+        }
+
+        .btn-act-push:hover, .btn-act-push:active {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.4), rgba(79, 172, 254, 0.6));
+            box-shadow: 0 0 14px rgba(0, 242, 254, 0.45);
+        }
+
+        .btn-act-wave {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #e2e8f0;
+        }
+
+        .btn-act-wave:hover, .btn-act-wave:active {
+            background: rgba(0, 240, 255, 0.2);
+            color: #00f0ff;
+            border-color: #00f0ff;
+        }
+
+        .btn-act-stop {
+            background: linear-gradient(135deg, #f43f5e, #e11d48);
+            color: #ffffff;
+            box-shadow: 0 4px 16px rgba(225, 29, 72, 0.45);
+        }
+
+        .btn-act-stop:hover, .btn-act-stop:active {
+            box-shadow: 0 6px 20px rgba(225, 29, 72, 0.65);
+            transform: translateY(-1px);
+        }
+
+        .btn-act-clear {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #94a3b8;
+        }
+
+        .btn-act-clear:hover, .btn-act-clear:active {
+            color: #f8fafc;
+            border-color: #cbd5e1;
+        }
+
+        /* 3. 12 Tactile Shape Preset Grid Card */
+        .shapes-card {
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            border-radius: 18px;
+            padding: 16px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .shapes-card-title {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #00ff88;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .shapes-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .shape-card-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            padding: 12px 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .shape-card-item:hover {
+            background: rgba(0, 242, 254, 0.15);
+            border-color: #00f2fe;
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+            transform: translateY(-2px);
+        }
+
+        .shape-card-item:active {
+            transform: scale(0.95);
+        }
+
+        .shape-card-item.active {
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(0, 255, 136, 0.22));
+            border-color: #00ff88;
+            box-shadow: 0 0 16px rgba(0, 255, 136, 0.45);
+            transform: translateY(-2px);
+        }
+
+        .shape-glyph {
+            font-size: 26px;
+            line-height: 1;
+            color: #00ff88;
+            transition: all 0.2s;
+        }
+
+        .shape-card-item.active .shape-glyph {
+            color: #ffffff;
+            text-shadow: 0 0 12px #00ff88;
+        }
+
+        .shape-title-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: #f8fafc;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .shape-dots-preview {
+            font-size: 9px;
+            color: #00f2fe;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* 📱 Mobile Responsive Tweaks (Max Width: 640px) */
+        @media (max-width: 640px) {
+            .tactile-page-header {
+                padding: 8px 10px;
+            }
+
+            .btn-back-nav {
+                padding: 5px 10px;
+                font-size: 12px;
+            }
+
+            .header-page-title {
+                font-size: 13px;
+            }
+
+            .header-badge {
+                display: none;
+            }
+
+            .btn-header-act span {
+                display: none;
+            }
+
+            .btn-header-act {
+                padding: 6px 8px;
+            }
+
+            .tactile-main-container {
+                padding: 10px;
+                gap: 10px;
+            }
+
+            .hardware-twin-card {
+                padding: 12px;
+                gap: 10px;
+            }
+
+            .tactile-board-wrap {
+                gap: 8px;
+                padding: 10px 6px;
+            }
+
+            .cell-pins-matrix {
+                gap: 6px;
+                max-width: 150px;
+            }
+
+            .twin-pin-node {
+                min-height: 42px;
+                padding: 6px 2px;
+            }
+
+            .pin-dot-circle {
+                width: 15px;
+                height: 15px;
+            }
+
+            .pin-label-text {
+                font-size: 9px;
+            }
+
+            .act-controls-row {
+                grid-template-columns: 1fr 1fr 1fr 0.8fr;
+                gap: 6px;
+            }
+
+            .btn-act {
+                font-size: 11px;
+                padding: 8px 4px;
+                gap: 4px;
+            }
+
+            .shapes-card {
+                padding: 12px;
+                gap: 10px;
+            }
+
+            .shapes-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+            }
+
+            .shape-card-item {
+                padding: 10px 4px;
+            }
+
+            .shape-glyph {
+                font-size: 22px;
+            }
+
+            .shape-title-text {
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Navigation Header -->
+    <header class="tactile-page-header">
+        <div class="header-left">
+            <a href="index.html" class="btn-back-nav" title="กลับไปยังหน้าหลัก">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>หน้าหลัก</span>
+            </a>
+            <div class="header-page-title">
+                <i class="fa-solid fa-braille" style="color:#00f2fe;"></i> สัญลักษณ์สัมผัส 12 จุด
+                <span class="header-badge">Solenoid Matrix</span>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <button class="btn-header-act" id="btnEsp32Connect" onclick="toggleEsp32Port()" title="เชื่อมต่อบอร์ด ESP32 Hardware">
+                <i class="fa-solid fa-microchip"></i>
+                <span id="esp32StatusText">เชื่อมต่อ ESP32</span>
+            </button>
+            <a href="model.html" class="btn-header-act" title="เปิดโมเดลจำลอง 3 มิติ">
+                <i class="fa-solid fa-cube"></i>
+                <span>โมเดล 3D</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="tactile-main-container">
+
+        <!-- 1. Two-Cell Digital Twin Hardware Display Board -->
+        <section class="hardware-twin-card">
+            <div class="twin-card-header">
+                <div class="twin-title">
+                    <i class="fa-solid fa-layer-group"></i> บอร์ดจำลอง 2 เซลล์สัมผัส (12 โซลินอยด์)
+                </div>
+                <div class="twin-status-pill">
+                    <span>หมุดดัน:</span> <b id="activePinsCount">0/12 จุด</b>
+                    <span style="margin-left:6px;">สถานะ:</span> <b id="solenoidPowerTag">0.0W (IDLE)</b>
+                </div>
+            </div>
+
+            <!-- 12 Pins Matrix Board -->
+            <div class="tactile-board-wrap">
+                <!-- Cell 1 (Left: Dots 1 to 6) -->
+                <div class="cell-display-block">
+                    <span class="cell-tag-badge c1"><i class="fa-solid fa-microchip"></i> เซลล์ที่ 1 (จุด 1-6)</span>
+                    <div class="cell-pins-matrix">
+                        <!-- Col 1: Dots 1, 2, 3 -->
+                        <div class="twin-pin-node" id="pinNode_1" onclick="togglePinDirect(1)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 1 (S1)</span>
+                        </div>
+                        <!-- Col 2: Dots 4, 5, 6 -->
+                        <div class="twin-pin-node" id="pinNode_4" onclick="togglePinDirect(4)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 4 (S4)</span>
+                        </div>
+
+                        <div class="twin-pin-node" id="pinNode_2" onclick="togglePinDirect(2)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 2 (S2)</span>
+                        </div>
+                        <div class="twin-pin-node" id="pinNode_5" onclick="togglePinDirect(5)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 5 (S5)</span>
+                        </div>
+
+                        <div class="twin-pin-node" id="pinNode_3" onclick="togglePinDirect(3)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 3 (S3)</span>
+                        </div>
+                        <div class="twin-pin-node" id="pinNode_6" onclick="togglePinDirect(6)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 6 (S6)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cell 2 (Right: Dots 7 to 12) -->
+                <div class="cell-display-block">
+                    <span class="cell-tag-badge c2"><i class="fa-solid fa-microchip"></i> เซลล์ที่ 2 (จุด 7-12)</span>
+                    <div class="cell-pins-matrix">
+                        <!-- Col 1: Dots 7, 8, 9 -->
+                        <div class="twin-pin-node" id="pinNode_7" onclick="togglePinDirect(7)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 7 (S7)</span>
+                        </div>
+                        <!-- Col 2: Dots 10, 11, 12 -->
+                        <div class="twin-pin-node" id="pinNode_10" onclick="togglePinDirect(10)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 10 (S10)</span>
+                        </div>
+
+                        <div class="twin-pin-node" id="pinNode_8" onclick="togglePinDirect(8)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 8 (S8)</span>
+                        </div>
+                        <div class="twin-pin-node" id="pinNode_11" onclick="togglePinDirect(11)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 11 (S11)</span>
+                        </div>
+
+                        <div class="twin-pin-node" id="pinNode_9" onclick="togglePinDirect(9)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 9 (S9)</span>
+                        </div>
+                        <div class="twin-pin-node" id="pinNode_12" onclick="togglePinDirect(12)">
+                            <div class="pin-dot-circle"></div>
+                            <span class="pin-label-text">จุด 12 (S12)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bitstring Readout -->
+            <div class="bitstring-bar">
+                <span><i class="fa-solid fa-network-wired"></i> รหัสส่งบอร์ด ESP32 (12-bit):</span>
+                <span class="bitstring-val" id="telemetryBitstring">000000 000000</span>
+            </div>
+        </section>
+
+        <!-- 2. Action Controls Bar -->
+        <div class="act-controls-row">
+            <button class="btn-act btn-act-push" onclick="pushAll12Pins()" title="ดันหมุดสัมผัสทั้ง 12 จุดขึ้นพร้อมกัน">
+                <i class="fa-solid fa-bolt"></i> <span>ดันหมุด 12 จุด</span>
+            </button>
+
+            <button class="btn-act btn-act-wave" id="btnWaveTest" onclick="toggleWaveTest()" title="ทดสอบสลับคลื่นโซลินอยด์ทีละจุด">
+                <i class="fa-solid fa-wave-square"></i> <span>ทดสอบคลื่น</span>
+            </button>
+
+            <button class="btn-act btn-act-stop" onclick="stopAndDropAllPins()" title="หยุดการทำงานทันที และดรอปหมุดทุกตัวลงตำแหน่งพัก (0W)">
+                <i class="fa-solid fa-circle-stop"></i> <span>⏹ หยุดแสดงผล</span>
+            </button>
+
+            <button class="btn-act btn-act-clear" onclick="stopAndDropAllPins()" title="ล้างจุดทั้งหมด">
+                <i class="fa-solid fa-trash-can"></i> <span>ล้างจุด</span>
+            </button>
+        </div>
+
+        <!-- 3. 12 Tactile Shapes Presets Matrix -->
+        <section class="shapes-card">
+            <div class="shapes-card-title">
+                <span><i class="fa-solid fa-shapes"></i> สัญลักษณ์ & รูปทรงสัมผัสมาตรฐาน 12 รูปทรง (กดแล้วเด้งทันที)</span>
+                <span style="font-size:11px; color:#94a3b8; font-weight:500;">คลิกเลือกรูปทรง:</span>
+            </div>
+
+            <div class="shapes-grid" id="shapesGridContainer">
+                <!-- 12 Shape Cards injected dynamically by JS -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Scripts -->
+    <script src="js/esp32-serial.js"></script>
+    <script src="js/tactile-shapes.js"></script>
+
+    <script>
+        // 12 Standard Tactile Presets
+        const TACTILE_12_PRESETS = [
+            { id: '1.1', name: 'สามเหลี่ยมขึ้น', symbol: '▲', dots: [2, 4, 5, 7, 8, 11] },
+            { id: '1.2', name: 'สามเหลี่ยมลง', symbol: '▼', dots: [2, 5, 6, 8, 9, 11] },
+            { id: '1.3', name: 'ลูกศรซ้าย', symbol: '◄', dots: [2, 4, 5, 6, 8, 11] },
+            { id: '1.4', name: 'ลูกศรขวา', symbol: '►', dots: [2, 5, 7, 8, 9, 11] },
+            { id: '2.1', name: 'สี่เหลี่ยมทึบ', symbol: '■', dots: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+            { id: '2.2', name: 'สี่เหลี่ยมกรอบ', symbol: '□', dots: [1, 2, 3, 4, 6, 7, 9, 10, 11, 12] },
+            { id: '3.1', name: 'วงกลมโปร่ง', symbol: '○', dots: [2, 4, 6, 7, 9, 11] },
+            { id: '3.2', name: 'วงกลมทึบ', symbol: '●', dots: [2, 4, 5, 6, 7, 8, 9, 11] },
+            { id: '5',   name: 'กากบาท', symbol: '✕', dots: [1, 3, 5, 8, 10, 12] },
+            { id: '6',   name: 'เครื่องหมายถูก', symbol: '✓', dots: [2, 6, 8, 10] },
+            { id: '7',   name: 'เครื่องหมายบวก', symbol: '➕', dots: [2, 4, 5, 6, 8, 11] },
+            { id: '8',   name: 'เครื่องหมายลบ', symbol: '➖', dots: [2, 5, 8, 11] }
+        ];
+
+        // State of active 12 dots (1..12)
+        const activeDots = new Set();
+        let esp32Serial = null;
+        let waveTimer = null;
+        let isWaveActive = false;
+
+        // Initialize Web Serial for ESP32
+        function initSerial() {
+            if (typeof ESP32SerialDriver !== 'undefined') {
+                esp32Serial = new ESP32SerialDriver();
+                esp32Serial.onStateChange = (connected) => {
+                    const btn = document.getElementById('btnEsp32Connect');
+                    const text = document.getElementById('esp32StatusText');
+                    if (btn && text) {
+                        if (connected) {
+                            btn.classList.add('connected');
+                            text.textContent = 'ESP32 เชื่อมต่อแล้ว';
+                        } else {
+                            btn.classList.remove('connected');
+                            text.textContent = 'เชื่อมต่อ ESP32';
+                        }
+                    }
+                };
+            }
+        }
+
+        async function toggleEsp32Port() {
+            if (!esp32Serial) initSerial();
+            if (!esp32Serial) return;
+            if (esp32Serial.isConnected) {
+                await esp32Serial.disconnect();
+            } else {
+                await esp32Serial.connect();
+            }
+        }
+
+        // Render 12 Shape Cards
+        function renderShapeCards() {
+            const container = document.getElementById('shapesGridContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            TACTILE_12_PRESETS.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'shape-card-item';
+                item.id = `shapeItem_${p.id.replace('.', '_')}`;
+                item.title = `${p.name} (จุด ${p.dots.join(', ')})`;
+                item.innerHTML = `
+                    <div class="shape-glyph">${p.symbol}</div>
+                    <div class="shape-title-text">${p.name}</div>
+                    <div class="shape-dots-preview">จุด: ${p.dots.join(',')}</div>
+                `;
+                item.addEventListener('click', () => {
+                    selectShapePreset(p);
+                });
+                container.appendChild(item);
+            });
+        }
+
+        function dotsToBitstring(dotsArr) {
+            const bits = new Array(12).fill('0');
+            dotsArr.forEach(d => {
+                const idx = d - 1;
+                if (idx >= 0 && idx < 12) bits[idx] = '1';
+            });
+            return bits.join('');
+        }
+
+        function updateBoardUI() {
+            // Update 12 Pin Nodes
+            for (let i = 1; i <= 12; i++) {
+                const node = document.getElementById(`pinNode_${i}`);
+                if (node) {
+                    if (activeDots.has(i)) node.classList.add('active');
+                    else node.classList.remove('active');
+                }
+            }
+
+            // Update Telemetry
+            const activeCount = activeDots.size;
+            const countEl = document.getElementById('activePinsCount');
+            const powerEl = document.getElementById('solenoidPowerTag');
+            const bitEl = document.getElementById('telemetryBitstring');
+
+            if (countEl) countEl.textContent = `${activeCount}/12 จุด`;
+            if (powerEl) powerEl.textContent = activeCount > 0 ? '0.0W (LATCH)' : '0.0W (IDLE)';
+
+            const bitstring = dotsToBitstring(Array.from(activeDots));
+            if (bitEl) {
+                bitEl.textContent = `${bitstring.slice(0, 6)} ${bitstring.slice(6, 12)}`;
+            }
+
+            // Send to ESP32 Hardware
+            if (esp32Serial && esp32Serial.isConnected) {
+                esp32Serial.send12BitCommand(bitstring);
+            }
+        }
+
+        function togglePinDirect(dotNum) {
+            stopWaveOnly();
+            document.querySelectorAll('.shape-card-item').forEach(c => c.classList.remove('active'));
+
+            if (activeDots.has(dotNum)) {
+                activeDots.delete(dotNum);
+            } else {
+                activeDots.add(dotNum);
+            }
+            updateBoardUI();
+
+            if ('vibrate' in navigator) {
+                try { navigator.vibrate(25); } catch(e){}
+            }
+        }
+
+        function selectShapePreset(preset) {
+            stopWaveOnly();
+            document.querySelectorAll('.shape-card-item').forEach(c => c.classList.remove('active'));
+            const activeCard = document.getElementById(`shapeItem_${preset.id.replace('.', '_')}`);
+            if (activeCard) activeCard.classList.add('active');
+
+            activeDots.clear();
+            preset.dots.forEach(d => activeDots.add(d));
+            updateBoardUI();
+
+            if ('vibrate' in navigator) {
+                try { navigator.vibrate([20, 30, 20]); } catch(e){}
+            }
+        }
+
+        function pushAll12Pins() {
+            stopWaveOnly();
+            document.querySelectorAll('.shape-card-item').forEach(c => c.classList.remove('active'));
+            for (let i = 1; i <= 12; i++) activeDots.add(i);
+            updateBoardUI();
+
+            if ('vibrate' in navigator) {
+                try { navigator.vibrate([20, 40, 20]); } catch(e){}
+            }
+        }
+
+        function stopAndDropAllPins() {
+            stopWaveOnly();
+            document.querySelectorAll('.shape-card-item').forEach(c => c.classList.remove('active'));
+            activeDots.clear();
+            updateBoardUI();
+
+            if ('vibrate' in navigator) {
+                try { navigator.vibrate(40); } catch(e){}
+            }
+        }
+
+        function stopWaveOnly() {
+            if (waveTimer) {
+                clearInterval(waveTimer);
+                waveTimer = null;
+            }
+            isWaveActive = false;
+            const btn = document.getElementById('btnWaveTest');
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-wave-square"></i> <span>ทดสอบคลื่น</span>';
+                btn.style.background = 'rgba(255, 255, 255, 0.08)';
+                btn.style.color = '#e2e8f0';
+            }
+        }
+
+        function toggleWaveTest() {
+            if (isWaveActive) {
+                stopWaveOnly();
+                return;
+            }
+            isWaveActive = true;
+            const btn = document.getElementById('btnWaveTest');
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-pause"></i> <span>หยุดคลื่น</span>';
+                btn.style.background = 'rgba(0, 240, 255, 0.25)';
+                btn.style.color = '#00f0ff';
+            }
+
+            document.querySelectorAll('.shape-card-item').forEach(c => c.classList.remove('active'));
+            activeDots.clear();
+
+            let currentDot = 1;
+            waveTimer = setInterval(() => {
+                activeDots.clear();
+                activeDots.add(currentDot);
+                updateBoardUI();
+                currentDot = (currentDot % 12) + 1;
+            }, 180);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderShapeCards();
+            updateBoardUI();
+            initSerial();
+        });
+    </script>
+</body>
+</html>

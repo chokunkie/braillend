@@ -283,9 +283,15 @@ class TwoCellDisplayEngine {
     }
 
     /**
-     * Trigger Pulse Actuation (ดันหมุดชั่วคราวตามเวลาวินาทีที่ตั้งไว้ แล้วตัดไฟอัตโนมัติ)
+     * Trigger Pulse Actuation (ดันหมุดชั่วคราวตามเวลาวินาทีที่ตั้งไว้ หรือกดซ้ำเพื่อหยุดทันที)
      */
     triggerPulseActuation(durationMs = null) {
+        // If already actuating, clicking again stops actuation immediately (กดหยุดได้ทันที)
+        if (this.isActuating) {
+            this.releaseActuation();
+            return;
+        }
+
         const frame = this.getCurrentFrame();
         if (!frame) return;
 
@@ -341,9 +347,17 @@ class TwoCellDisplayEngine {
         if (pulseBtn) {
             if (active) {
                 pulseBtn.classList.add('actuating');
-                pulseBtn.innerHTML = '<i class="fa-solid fa-bolt-lightning fa-beat"></i> <span>กำลังดันหมุด...</span>';
+                pulseBtn.style.background = 'linear-gradient(135deg, #f43f5e, #e11d48)';
+                pulseBtn.style.borderColor = '#f43f5e';
+                pulseBtn.style.color = '#ffffff';
+                pulseBtn.style.boxShadow = '0 0 16px rgba(244, 63, 94, 0.45)';
+                pulseBtn.innerHTML = '<i class="fa-solid fa-circle-stop fa-beat"></i> <span>หยุดดันหมุด</span>';
             } else {
                 pulseBtn.classList.remove('actuating');
+                pulseBtn.style.background = '';
+                pulseBtn.style.borderColor = '';
+                pulseBtn.style.color = '';
+                pulseBtn.style.boxShadow = '';
                 pulseBtn.innerHTML = '<i class="fa-solid fa-bolt"></i> <span>ดันหมุดแสดงผล</span>';
             }
         }

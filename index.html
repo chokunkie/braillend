@@ -169,23 +169,9 @@
                     <i class="fa-solid fa-cube"></i>
                     <span>โมเดลจำลอง 3 มิติ</span>
                 </button>
-                <button class="sidebar-item" id="menuShapes" onclick="setWorkstationTab('shapes')">
+                <button class="sidebar-item" id="menuTactile" onclick="window.location.href='tactile.html';">
                     <i class="fa-solid fa-shapes"></i>
-                    <span>สัญลักษณ์สัมผัส 12 จุด</span>
-                </button>
-                <button class="sidebar-item" id="menuDiag" onclick="setWorkstationTab('diag')">
-                    <i class="fa-solid fa-wrench"></i>
-                    <span>ทดสอบโซลินอยด์ 12 จุด</span>
-                </button>
-            </div>
-
-            <!-- Bottom Mode Bar -->
-            <div style="padding:12px; border-top:1px solid rgba(255,255,255,0.08); display:flex; gap:6px;">
-                <button class="header-btn" style="flex:1; justify-content:center;" onclick="cycleStudioTheme()" title="เปลี่ยนสีพื้นหลัง">
-                    <i class="fa-solid fa-palette"></i> ธีม
-                </button>
-                <button class="header-btn" style="flex:1; justify-content:center;" onclick="resetCamera()" title="รีเซ็ตมุมมอง">
-                    <i class="fa-solid fa-rotate"></i> รีเซ็ต
+                    <span>สัญลักษณ์ & โซลินอยด์ 12 จุด</span>
                 </button>
             </div>
         </aside>
@@ -269,7 +255,7 @@
                     </div>
 
                     <div style="display:flex; flex-direction:column; gap:8px; width:100%; box-sizing:border-box;">
-                        <input type="text" id="mainTextInput" value="สวัสดี" placeholder="พิมพ์ข้อความที่ต้องการ แล้วกดปุ่มส่ง หรือ Enter..." class="workstation-text-input" />
+                        <input type="text" id="mainTextInput" value="รับเหมาก่อเรื่อง" placeholder="พิมพ์ข้อความที่ต้องการ แล้วกดปุ่มส่ง หรือ Enter..." class="workstation-text-input" />
                         <button id="btnSubmitTextInput" class="btn-submit-main-text" title="กดเพื่อแปลงข้อความเป็นอักษรเบรลล์">
                             <i class="fa-solid fa-paper-plane"></i> <span>ส่งแสดงผลอักษรเบรลล์ (Enter)</span>
                         </button>

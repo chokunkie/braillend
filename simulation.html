@@ -535,7 +535,7 @@
             }
         }
 
-        // Draw ONLY the clean text "สวัสดีครับผมชื่อสมชายยินดีที่ได้รู้จักครับ" on the Paper
+        // Draw ONLY the clean text "รับเหมาก่อเรื่อง" on the Paper
         function renderPaperTexture(highlightIndex) {
             if (!paperCanvas) {
                 paperCanvas = document.createElement('canvas');
@@ -596,7 +596,7 @@
             tableMesh3D.receiveShadow = true;
             scene.add(tableMesh3D);
 
-            // 2. 3D Document Page with ONLY "สวัสดีครับผมชื่อสมชายยินดีที่ได้รู้จักครับ"
+            // 2. 3D Document Page with ONLY "รับเหมาก่อเรื่อง"
             renderPaperTexture(0);
             paperTexture = new THREE.CanvasTexture(paperCanvas);
             paperTexture.minFilter = THREE.LinearFilter;
