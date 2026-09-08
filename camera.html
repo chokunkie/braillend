@@ -829,29 +829,64 @@
             }
         }
 
-        // --- Run OCR Engine & Send Text ---
+        // --- Run OCR Engine with Local /tessdata (Fast & Reliable on Mobile) ---
+        let _tesseractWorker = null;
+
+        async function getTesseractWorker(onProgress) {
+            if (_tesseractWorker) return _tesseractWorker;
+
+            if (typeof Tesseract === 'undefined') {
+                throw new Error('Tesseract library is not loaded');
+            }
+
+            const origin = window.location.origin;
+            const path = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+            const localLangPath = `${origin}${path}tessdata`;
+
+            try {
+                const worker = await Tesseract.createWorker('tha', 1, {
+                    langPath: localLangPath,
+                    gzip: true,
+                    logger: m => {
+                        if (typeof onProgress === 'function') onProgress(m);
+                    }
+                });
+                _tesseractWorker = worker;
+                console.log('[Tesseract.js]: Local Thai traineddata loaded successfully!');
+                return _tesseractWorker;
+            } catch (err) {
+                console.warn('[Tesseract Local Load Warning, using CDN fallback]:', err);
+                const fallbackWorker = await Tesseract.createWorker('tha+eng', 1, {
+                    logger: m => {
+                        if (typeof onProgress === 'function') onProgress(m);
+                    }
+                });
+                _tesseractWorker = fallbackWorker;
+                return _tesseractWorker;
+            }
+        }
+
         async function runOcrOnCapture(imageSrc) {
             const sheet = document.getElementById('ocrResultSection');
             const display = document.getElementById('detectedTextDisplay');
             if (sheet) sheet.classList.add('active');
-            if (display) display.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังอ่านข้อความภาษาไทย (0%)...';
+            if (display) display.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังเตรียมโมเดลภาษาไทย...';
 
             try {
                 let recognizedText = '';
                 let confidence = 95;
 
-                if (typeof Tesseract !== 'undefined') {
-                    const ret = await Tesseract.recognize(imageSrc, 'tha+eng', {
-                        logger: m => {
-                            if (m && m.status && display) {
-                                const pct = m.progress ? Math.round(m.progress * 100) : 0;
-                                display.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${m.status === 'recognizing text' ? 'กำลังสแกนข้อความ' : 'กำลังเตรียมโมเดล'} (${pct}%)`;
-                            }
-                        }
-                    });
-                    recognizedText = ret.data.text ? ret.data.text.trim() : '';
-                    confidence = ret.data.confidence ? Math.round(ret.data.confidence) : 90;
-                }
+                const worker = await getTesseractWorker(m => {
+                    if (m && m.status && display) {
+                        const pct = m.progress ? Math.round(m.progress * 100) : 0;
+                        const statusMsg = m.status === 'recognizing text' ? 'กำลังสแกนอ่านข้อความ' : 'กำลังเตรียมโมเดล';
+                        display.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg} (${pct}%)`;
+                    }
+                });
+
+                const ret = await worker.recognize(imageSrc);
+                recognizedText = ret && ret.data && ret.data.text ? ret.data.text.trim() : '';
+                confidence = ret && ret.data && ret.data.confidence ? Math.round(ret.data.confidence) : 90;
 
                 activeFullText = recognizedText || 'ไม่พบข้อความในภาพ (ลองถ่ายในที่สว่าง)';
                 if (display) display.textContent = `"${activeFullText}"`;
@@ -864,13 +899,13 @@
                 }
 
                 // Auto sync immediately to PC workstation
-                if (typeof BrailleSync !== 'undefined' && activeFullText) {
+                if (typeof BrailleSync !== 'undefined' && activeFullText && !activeFullText.includes('ไม่พบข้อความ')) {
                     BrailleSync.sendOCRResult(activeFullText, { confidence: confidence, rawText: activeFullText });
                 }
 
             } catch (err) {
                 console.error('[OCR Error]:', err);
-                if (display) display.textContent = 'เกิดข้อผิดพลาดในการอ่านข้อความ';
+                if (display) display.textContent = 'เกิดข้อผิดพลาดในการอ่านข้อความ: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง');
             } finally {
                 isCapturing = false;
             }
