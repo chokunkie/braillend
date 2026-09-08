@@ -1,17 +1,19 @@
 /**
- * BrailleSyncManager - Real-time Multi-Device Sync Engine (PeerJS WebRTC + Firestore + BroadcastChannel)
- * Works 100% out-of-the-box on Vercel with zero server setup required!
+ * BrailleSyncManager - Zero-Config Auto-Connect Real-Time Sync Engine
+ * Seamlessly connects Mobile Camera and PC Display automatically with zero room codes needed!
  */
 
 (function(window) {
     'use strict';
 
+    const GLOBAL_ROOM_ID = 'BRAILBOX-MAIN';
+
     class BrailleSyncManager {
         constructor() {
-            this.activeRoomId = null;
+            this.activeRoomId = GLOBAL_ROOM_ID;
             this.isHost = false;
             this.peer = null;
-            this.peerConn = null;
+            this.connections = [];
             this.broadcastChannel = null;
             this.callbacks = {
                 onData: [],
@@ -19,7 +21,7 @@
                 onDeviceJoin: []
             };
 
-            // 1. BroadcastChannel for same-device multi-tab testing
+            // 1. BroadcastChannel for local cross-tab sync
             if ('BroadcastChannel' in window) {
                 try {
                     this.broadcastChannel = new BroadcastChannel('braillbox_realtime_sync');
@@ -41,7 +43,7 @@
         }
 
         async init() {
-            console.log('[Sync] Initializing BrailleSyncManager with PeerJS WebRTC P2P Support...');
+            console.log('[Sync] Auto-connecting to Global Channel:', this.activeRoomId);
             return true;
         }
 
@@ -52,26 +54,42 @@
 
         getRoomFromUrl() {
             const params = new URLSearchParams(window.location.search);
-            return params.get('room') || params.get('roomId') || null;
+            return params.get('room') || params.get('roomId') || GLOBAL_ROOM_ID;
         }
 
         /**
-         * Host (PC) creates a room and listens for incoming connections
+         * Host (PC) automatically hosts the global channel
          */
-        async createRoom(customRoomId = null) {
-            const roomId = (customRoomId || this.generateRoomId()).toUpperCase();
-            this.activeRoomId = roomId;
+        async createRoom(roomId = GLOBAL_ROOM_ID) {
+            this.activeRoomId = (roomId || GLOBAL_ROOM_ID).toUpperCase();
             this.isHost = true;
-            localStorage.setItem('braillbox_active_room', roomId);
+            this._setupPeerServer(true);
+            this._notifyStatus({ state: 'connected', roomId: this.activeRoomId });
+            return this.activeRoomId;
+        }
 
-            // Connect to PeerJS Free Cloud Server
-            if (window.Peer) {
-                try {
-                    if (this.peer) this.peer.destroy();
-                    
-                    const peerId = `braillbox-${roomId.toLowerCase()}`;
-                    this.peer = new Peer(peerId, {
-                        debug: 1,
+        /**
+         * Mobile automatically joins the global channel
+         */
+        async joinRoom(roomId = GLOBAL_ROOM_ID, deviceName = 'Mobile Camera') {
+            this.activeRoomId = (roomId || GLOBAL_ROOM_ID).toUpperCase();
+            this.isHost = false;
+            this._setupPeerServer(false, deviceName);
+            this._notifyStatus({ state: 'connected', roomId: this.activeRoomId });
+            return true;
+        }
+
+        _setupPeerServer(isHost, deviceName = 'Mobile') {
+            if (!window.Peer) return;
+
+            try {
+                if (this.peer) this.peer.destroy();
+
+                const peerHostId = `braillbox-host-${this.activeRoomId.toLowerCase()}`;
+
+                if (isHost) {
+                    this.peer = new Peer(peerHostId, {
+                        debug: 0,
                         config: {
                             iceServers: [
                                 { urls: 'stun:stun.l.google.com:19302' },
@@ -81,55 +99,27 @@
                     });
 
                     this.peer.on('open', (id) => {
-                        console.log('[PeerJS Host Open]: Room listening on Peer ID:', id);
-                        this._notifyStatus({ state: 'waiting_mobile', roomId: roomId });
+                        console.log('[PeerJS Host]: Ready to receive mobile OCR text on:', id);
                     });
 
                     this.peer.on('connection', (conn) => {
-                        console.log('[PeerJS Host Connection Received from Mobile!]:', conn.peer);
-                        this.peerConn = conn;
+                        console.log('[PeerJS Host]: Mobile connected!');
+                        this.connections.push(conn);
 
                         conn.on('open', () => {
-                            this._notifyDeviceJoin({ deviceName: 'Mobile Scanner (P2P)', roomId: roomId });
-                            conn.send({ type: 'HOST_ACK', roomId: roomId });
+                            this._notifyDeviceJoin({ deviceName: 'Mobile Phone', roomId: this.activeRoomId });
+                            conn.send({ type: 'HOST_ACK', roomId: this.activeRoomId });
                         });
 
                         conn.on('data', (data) => {
-                            console.log('[PeerJS Host Data Received]:', data);
+                            console.log('[PeerJS Host Received Data]:', data);
                             this._handleIncomingMessage(data);
                         });
                     });
 
-                    this.peer.on('error', (err) => {
-                        console.warn('[PeerJS Host Notice]:', err);
-                    });
-                } catch (e) {
-                    console.warn('[PeerJS Init Notice]:', e);
-                }
-            }
-
-            this._notifyStatus({ state: 'waiting_mobile', roomId: roomId });
-            return roomId;
-        }
-
-        /**
-         * Mobile joins an existing room and dials the host PC
-         */
-        async joinRoom(roomId, deviceName = 'Mobile Camera') {
-            const normalizedRoom = roomId.trim().toUpperCase();
-            this.activeRoomId = normalizedRoom;
-            this.isHost = false;
-            localStorage.setItem('braillbox_active_room', normalizedRoom);
-
-            const peerTargetId = `braillbox-${normalizedRoom.toLowerCase()}`;
-
-            // Connect to Host via PeerJS
-            if (window.Peer) {
-                try {
-                    if (this.peer) this.peer.destroy();
-
+                } else {
                     this.peer = new Peer({
-                        debug: 1,
+                        debug: 0,
                         config: {
                             iceServers: [
                                 { urls: 'stun:stun.l.google.com:19302' },
@@ -139,16 +129,16 @@
                     });
 
                     this.peer.on('open', () => {
-                        console.log('[PeerJS Mobile Open]: Dialing Host Peer ID:', peerTargetId);
-                        const conn = this.peer.connect(peerTargetId, { reliable: true });
-                        this.peerConn = conn;
+                        console.log('[PeerJS Mobile]: Dialing Host at:', peerHostId);
+                        const conn = this.peer.connect(peerHostId, { reliable: true });
 
                         conn.on('open', () => {
-                            console.log('[PeerJS Mobile Connected to Host Successfully!]:');
-                            this._notifyDeviceJoin({ deviceName: deviceName, roomId: normalizedRoom });
+                            console.log('[PeerJS Mobile]: Connected to PC successfully!');
+                            this.connections.push(conn);
+                            this._notifyDeviceJoin({ deviceName: deviceName, roomId: this.activeRoomId });
                             conn.send({
                                 type: 'DEVICE_JOINED',
-                                roomId: normalizedRoom,
+                                roomId: this.activeRoomId,
                                 deviceName: deviceName
                             });
                         });
@@ -157,32 +147,25 @@
                             this._handleIncomingMessage(data);
                         });
                     });
-
-                    this.peer.on('error', (err) => {
-                        console.warn('[PeerJS Mobile Notice]:', err);
-                    });
-                } catch (e) {
-                    console.warn('[PeerJS Mobile Init Notice]:', e);
                 }
+
+                this.peer.on('error', (err) => {
+                    setTimeout(() => {
+                        if (!this.peer || this.peer.destroyed) {
+                            this._setupPeerServer(isHost, deviceName);
+                        }
+                    }, 3000);
+                });
+
+            } catch (e) {
+                console.warn('[PeerJS Setup Warning]:', e);
             }
-
-            // Also broadcast locally
-            this._sendLocalBroadcast({
-                type: 'DEVICE_JOINED',
-                roomId: normalizedRoom,
-                deviceName: deviceName
-            });
-
-            this._notifyStatus({ state: 'connected', roomId: normalizedRoom });
-            return true;
         }
 
         /**
          * Send OCR result from Mobile to PC
          */
         async sendOCRResult(text, meta = {}) {
-            if (!this.activeRoomId) return false;
-
             const payload = {
                 type: 'OCR_RESULT',
                 roomId: this.activeRoomId,
@@ -193,17 +176,17 @@
                 sender: this.isHost ? 'pc' : 'mobile'
             };
 
-            // 1. Send via PeerJS WebRTC P2P Direct
-            if (this.peerConn && this.peerConn.open) {
-                try {
-                    this.peerConn.send(payload);
-                    console.log('[Sync] Sent OCR payload directly over WebRTC DataChannel!');
-                } catch (e) {
-                    console.warn('[PeerJS Send Error]:', e);
+            // 1. Send to all connected WebRTC peers
+            this.connections.forEach(conn => {
+                if (conn && conn.open) {
+                    try {
+                        conn.send(payload);
+                        console.log('[Sync] Sent OCR payload over P2P DataChannel!');
+                    } catch (err) {}
                 }
-            }
+            });
 
-            // 2. Send via LocalStorage / BroadcastChannel for same-device fallback
+            // 2. Send via Local BroadcastChannel & LocalStorage fallback
             this._sendLocalBroadcast(payload);
 
             return true;
@@ -214,9 +197,11 @@
             if (!el) return;
             el.innerHTML = '';
 
+            const qrUrl = url || this.getMobileUrl();
+
             if (window.QRCode) {
                 new QRCode(el, {
-                    text: url,
+                    text: qrUrl,
                     width: size,
                     height: size,
                     colorDark: "#0f172a",
@@ -225,17 +210,17 @@
                 });
             } else {
                 const img = document.createElement('img');
-                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}&color=0-242-254&bgcolor=15-23-42`;
+                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(qrUrl)}&color=0-242-254&bgcolor=15-23-42`;
                 img.alt = "QR Code";
                 img.style.borderRadius = "10px";
                 el.appendChild(img);
             }
         }
 
-        getMobileUrl(roomId) {
+        getMobileUrl(roomId = null) {
             const origin = window.location.origin;
             const path = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
-            return `${origin}${path}camera.html?room=${roomId}`;
+            return roomId ? `${origin}${path}camera.html?room=${roomId}` : `${origin}${path}camera.html`;
         }
 
         onData(cb) { this.callbacks.onData.push(cb); }
@@ -259,7 +244,7 @@
         }
 
         _handleIncomingMessage(data) {
-            if (!data || !data.roomId || data.roomId !== this.activeRoomId) return;
+            if (!data) return;
             if (data.type === 'OCR_RESULT') {
                 this._notifyData(data);
             } else if (data.type === 'DEVICE_JOINED') {
