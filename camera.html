@@ -2,8 +2,8 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BrailBox - ทดลองใช้งานจริง (Camera & OCR Scanner)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>BrailBox Scanner - Mobile Camera OCR</title>
     
     <!-- External Dependencies & Fonts -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -15,363 +15,445 @@
     <link rel="stylesheet" href="css/styles.css">
 
     <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         html, body {
             overflow: hidden;
-            height: 100vh;
+            height: 100%;
+            height: 100dvh;
             width: 100vw;
             margin: 0;
             padding: 0;
-            touch-action: none;
-        }
-
-        body {
-            background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 45%, #cbd5e1 100%);
-            color: #0f172a;
+            background: #000000;
+            color: #f8fafc;
             font-family: 'Prompt', sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            box-sizing: border-box;
-            padding: 10px 12px;
+            touch-action: manipulation;
         }
 
-        .camera-page-container {
-            width: 100%;
-            max-width: 480px;
-            height: 100%;
-            max-height: 96vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 10px;
-            box-sizing: border-box;
-        }
-
-        /* Top Navigation Header */
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(15, 23, 42, 0.94);
-            border: 1px solid rgba(0, 242, 254, 0.35);
-            border-radius: 14px;
-            padding: 8px 14px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(12px);
-            color: #f8fafc;
-        }
-
-        .page-brand {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .page-logo {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            background: linear-gradient(135deg, #00f2fe, #4facfe);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #000;
-            font-size: 16px;
-        }
-
-        .page-title {
-            font-size: 14px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-        }
-
-        .nav-back-btn {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: #f8fafc;
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s;
-        }
-
-        .nav-back-btn:hover {
-            background: rgba(0, 242, 254, 0.2);
-            border-color: #00f2fe;
-            color: #00f2fe;
-        }
-
-        /* Mode Switch Tab Group */
-        .tab-switcher {
-            display: flex;
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 3px;
-            gap: 4px;
-        }
-
-        .tab-btn {
-            flex: 1;
-            padding: 8px 6px;
-            border: none;
-            border-radius: 8px;
-            background: transparent;
-            color: #94a3b8;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s;
-        }
-
-        .tab-btn.active {
-            background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(0, 255, 136, 0.2));
-            border: 1px solid rgba(0, 255, 136, 0.4);
-            color: #00ff88;
-            box-shadow: 0 0 12px rgba(0, 255, 136, 0.25);
-        }
-
-        /* Live Camera Scanner Box */
-        .camera-card {
-            background: rgba(15, 23, 42, 0.94);
-            border: 1px solid rgba(0, 242, 254, 0.35);
-            border-radius: 18px;
-            overflow: hidden;
-            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding: 16px;
-        }
-
-        .cam-top-actions {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .cam-toggle-pill {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: #f8fafc;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s;
-        }
-
-        .cam-toggle-pill.active {
-            background: rgba(0, 255, 136, 0.15);
-            border-color: rgba(0, 255, 136, 0.4);
-            color: #00ff88;
-        }
-
-        /* 9:16 Portrait Viewfinder */
-        .live-viewfinder {
+        /* Full-screen Mobile Camera Layout */
+        .mobile-camera-root {
             position: relative;
-            width: 100%;
-            aspect-ratio: 3 / 4;
-            background: #000;
-            border-radius: 14px;
+            width: 100vw;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
             overflow: hidden;
-            border: 1px solid rgba(0, 242, 254, 0.3);
+            background: #000;
         }
 
-        .live-viewfinder video {
+        /* Top Header Overlay */
+        .mobile-top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 30;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: max(12px, env(safe-area-inset-top, 12px)) 16px 12px 16px;
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.3) 70%, transparent 100%);
+        }
+
+        .mobile-nav-btn {
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 16px;
+            backdrop-filter: blur(8px);
+            transition: all 0.2s;
+        }
+
+        .mobile-nav-btn:active {
+            transform: scale(0.92);
+            background: rgba(0, 242, 254, 0.3);
+        }
+
+        /* Room Status Interactive Pill */
+        .mobile-room-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            border-radius: 30px;
+            padding: 6px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: #00f2fe;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 242, 254, 0.2);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mobile-room-pill.connected {
+            border-color: rgba(0, 255, 136, 0.6);
+            color: #00ff88;
+            box-shadow: 0 0 12px rgba(0, 255, 136, 0.3);
+        }
+
+        .mobile-room-pill:active {
+            transform: scale(0.96);
+        }
+
+        .status-dot-pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #eab308;
+            box-shadow: 0 0 8px #eab308;
+            animation: dotPulse 1.5s infinite alternate;
+        }
+
+        .status-dot-pulse.connected {
+            background: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        @keyframes dotPulse {
+            from { transform: scale(0.8); opacity: 0.6; }
+            to { transform: scale(1.25); opacity: 1; }
+        }
+
+        /* Camera Viewport Area */
+        .mobile-viewport-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100dvh;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+
+        #cameraVideo {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
-        /* Upload Dropzone */
-        .upload-dropzone {
-            border: 2px dashed rgba(0, 242, 254, 0.4);
-            border-radius: 16px;
-            padding: 36px 20px;
-            text-align: center;
-            background: rgba(15, 23, 42, 0.94);
-            color: #f8fafc;
-            cursor: pointer;
+        /* Viewfinder Framing Box for Book/Document */
+        .mobile-viewfinder-overlay {
+            position: absolute;
+            width: min(88vw, 360px);
+            height: min(60vh, 480px);
+            border: 2px solid rgba(0, 242, 254, 0.4);
+            border-radius: 18px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55), 0 0 25px rgba(0, 242, 254, 0.3);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 12px;
+        }
+
+        .frame-guide-header {
+            font-size: 11px;
+            color: #00f2fe;
+            background: rgba(15, 23, 42, 0.75);
+            padding: 4px 10px;
+            border-radius: 20px;
+            align-self: center;
+            font-weight: 600;
+            backdrop-filter: blur(4px);
+            letter-spacing: 0.5px;
+        }
+
+        /* Bottom Controls Bar */
+        .mobile-bottom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 30;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 12px;
+            padding: 14px 20px max(24px, env(safe-area-inset-bottom, 24px)) 20px;
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.5) 75%, transparent 100%);
+        }
+
+        .shutter-row {
+            width: 100%;
+            max-width: 360px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px;
+        }
+
+        /* Large Touch-friendly Shutter Button */
+        .btn-shutter-main {
+            width: 76px;
+            height: 76px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 4px solid rgba(0, 242, 254, 0.8);
+            box-shadow: 0 0 24px rgba(0, 242, 254, 0.5), inset 0 0 8px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .btn-shutter-main:active {
+            transform: scale(0.9);
+            background: #00f2fe;
+            box-shadow: 0 0 32px rgba(0, 255, 136, 0.8);
+        }
+
+        .shutter-inner-dot {
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00f2fe, #00ff88);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #022c22;
+            font-size: 22px;
+        }
+
+        .btn-control-aux {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #fff;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
             transition: all 0.2s;
         }
 
-        .upload-dropzone:hover, .upload-dropzone.dragover {
-            background: rgba(0, 242, 254, 0.1);
-            border-color: #00f2fe;
-            box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
-        }
-
-        .upload-icon {
-            font-size: 42px;
+        .btn-control-aux:active {
+            transform: scale(0.92);
+            background: rgba(0, 242, 254, 0.3);
             color: #00f2fe;
         }
 
-        .upload-preview-wrap {
+        /* Auxiliary Pills Toolbar */
+        .aux-pills-bar {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .aux-pill-btn {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(6px);
+            transition: all 0.2s;
+        }
+
+        .aux-pill-btn.active {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: rgba(0, 255, 136, 0.5);
+            color: #00ff88;
+        }
+
+        /* Enter Room Code Modal */
+        .room-entry-dialog-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100dvh;
+            background: rgba(0, 0, 0, 0.88);
+            backdrop-filter: blur(16px);
+            z-index: 100;
             display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .room-entry-dialog-backdrop.active {
+            display: flex;
+        }
+
+        .room-entry-card {
+            background: linear-gradient(145deg, #0f172a, #0b0f19);
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            border-radius: 24px;
             width: 100%;
-            background: rgba(15, 23, 42, 0.94);
-            border: 1px solid rgba(0, 242, 254, 0.3);
+            max-width: 380px;
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 242, 254, 0.2);
+            animation: modalSlideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes modalSlideUp {
+            from { transform: translateY(30px) scale(0.95); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        .room-code-input-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(0, 242, 254, 0.4);
+            border-radius: 16px;
+            padding: 10px 16px;
+        }
+
+        .room-prefix-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 700;
+            color: #00f2fe;
+            letter-spacing: 1px;
+        }
+
+        .room-digits-input {
+            width: 140px;
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            text-align: center;
+            outline: none;
+        }
+
+        .room-digits-input::placeholder {
+            color: #475569;
+        }
+
+        .btn-connect-room-submit {
+            background: linear-gradient(135deg, #00f2fe, #00ff88);
+            color: #022c22;
+            border: none;
+            border-radius: 14px;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+            transition: all 0.2s;
+        }
+
+        .btn-connect-room-submit:active {
+            transform: scale(0.97);
+        }
+
+        /* OCR Result Showcase (Slide-up Bottom Sheet) */
+        .ocr-result-bottom-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            max-height: 85dvh;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(8, 12, 22, 0.98));
+            border-top: 1px solid rgba(0, 242, 254, 0.4);
+            border-radius: 24px 24px 0 0;
+            padding: 20px 18px max(24px, env(safe-area-inset-bottom, 24px)) 18px;
+            z-index: 50;
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 242, 254, 0.15);
+            backdrop-filter: blur(20px);
+            overflow-y: auto;
+            animation: slideUpSheet 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .ocr-result-bottom-sheet.active {
+            display: flex;
+        }
+
+        @keyframes slideUpSheet {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .result-sheet-handle {
+            width: 40px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 2px;
+            align-self: center;
+            margin-bottom: 4px;
+        }
+
+        .result-text-preview-box {
+            background: rgba(0, 242, 254, 0.06);
+            border: 1px solid rgba(0, 242, 254, 0.25);
             border-radius: 16px;
             padding: 16px;
-            flex-direction: column;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .upload-preview-wrap.active {
-            display: flex;
-        }
-
-        .preview-img {
-            max-width: 100%;
-            max-height: 260px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            object-fit: contain;
-        }
-
-        /* OCR Result Container */
-        .result-section {
-            display: none;
-            flex-direction: column;
-            gap: 14px;
-            width: 100%;
-        }
-
-        .result-section.active {
-            display: flex;
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .result-card {
-            background: rgba(15, 23, 42, 0.96);
-            border: 1px solid rgba(0, 242, 254, 0.4);
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: 0 14px 35px rgba(0, 0, 0, 0.25);
             display: flex;
             flex-direction: column;
-            gap: 14px;
-            color: #f8fafc;
+            gap: 8px;
         }
 
-        .result-headline {
-            font-size: 22px;
+        .result-text-headline {
+            font-size: 20px;
             font-weight: 700;
             color: #00ff88;
             line-height: 1.4;
             word-break: break-word;
         }
 
-        .braille-grid-14 {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 6px;
-        }
-
-        .b-cell {
-            background: rgba(11, 19, 43, 0.95);
-            border: 1px solid rgba(0, 242, 254, 0.25);
-            border-radius: 8px;
-            padding: 8px 2px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .b-char {
-            font-size: 14px;
-            font-weight: 700;
-            color: #00f2fe;
-            height: 18px;
-        }
-
-        .b-dots {
-            display: grid;
-            grid-template-columns: repeat(2, 7px);
-            grid-template-rows: repeat(3, 7px);
-            grid-auto-flow: column;   /* dots 1,2,3 down the left column; 4,5,6 down the right */
-            grid-gap: 4px 5px;
-        }
-
-        .dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .dot.active {
-            background: #00ff88;
-            box-shadow: 0 0 8px #00ff88;
-        }
-
-        /* Action Buttons */
-        .btn-action-primary {
+        .btn-sync-to-pc-mega {
             background: linear-gradient(135deg, #00f2fe, #00ff88);
-            color: #090d16;
-            font-size: 14px;
-            font-weight: 700;
+            color: #022c22;
             border: none;
-            padding: 12px 18px;
-            border-radius: 12px;
+            border-radius: 16px;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 800;
             cursor: pointer;
             display: flex;
-            justify-content: center;
             align-items: center;
-            gap: 8px;
-            box-shadow: 0 0 16px rgba(0, 242, 254, 0.35);
-            text-decoration: none;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 8px 25px rgba(0, 255, 136, 0.45);
             transition: all 0.2s;
         }
 
-        .btn-action-secondary {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: #f8fafc;
-            font-size: 13px;
-            font-weight: 600;
-            padding: 11px 16px;
-            border-radius: 12px;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 8px;
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-
-        .btn-action-secondary:hover {
-            background: rgba(0, 242, 254, 0.15);
-            color: #00f2fe;
-            border-color: #00f2fe;
+        .btn-sync-to-pc-mega:active {
+            transform: scale(0.97);
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
         }
 
         .hidden-el {
@@ -381,212 +463,149 @@
 </head>
 <body>
 
-    <div class="camera-page-container">
+    <div class="mobile-camera-root">
         
-        <!-- Header -->
-        <header class="page-header">
-            <div class="page-brand">
-                <div class="page-logo"><i class="fa-solid fa-braille"></i></div>
-                <div>
-                    <div class="page-title">BrailBox Scanner</div>
-                    <div style="font-size:11px; color:#00f2fe;">สแกนข้อความ & แปลอักษรเบรลล์ 14 เซลล์</div>
-                </div>
-            </div>
-            <a href="index.html" class="nav-back-btn" onclick="saveAndGoToIndex(event)" title="กลับไปหน้าหลัก">
-                <i class="fa-solid fa-arrow-left"></i> กลับหน้าหลัก
+        <!-- Top Controls Overlay -->
+        <div class="mobile-top-bar">
+            <a href="index.html" class="mobile-nav-btn" onclick="saveAndGoToIndex(event)" title="กลับสู่หน้าหลัก">
+                <i class="fa-solid fa-house"></i>
             </a>
-        </header>
 
-        <!-- Mobile Real-time Sync Status Bar -->
-        <div class="mobile-sync-bar" id="mobileSyncBar">
-            <div class="mobile-sync-badge">
-                <i class="fa-solid fa-tower-broadcast" id="syncStatusIcon" style="color: #eab308;"></i>
-                <span id="mobileSyncRoomLabel">ROOM: ยังไม่ได้ต่อกับคอม</span>
-            </div>
-            <button id="btnManualJoinRoom" onclick="promptManualRoom()" style="background: rgba(0,242,254,0.15); border: 1px solid rgba(0,242,254,0.4); color: #00f2fe; border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-family: 'Prompt', sans-serif;">
-                <i class="fa-solid fa-qrcode"></i> ใส่รหัสห้อง
+            <!-- Room Code Pill Button (Tap to enter/change room) -->
+            <button class="mobile-room-pill" id="btnMobileRoomPill" onclick="openRoomEntryDialog()">
+                <div class="status-dot-pulse" id="syncStatusIcon"></div>
+                <span id="mobileSyncRoomLabel">ROOM: ใส่รหัสห้อง</span>
+                <i class="fa-solid fa-chevron-down" style="font-size: 10px; margin-left: 2px;"></i>
+            </button>
+
+            <!-- Flip Camera Button -->
+            <button class="mobile-nav-btn" id="btnFlipCamera" onclick="flipCameraFacingMode()" title="สลับกล้องหน้า/หลัง">
+                <i class="fa-solid fa-camera-rotate"></i>
             </button>
         </div>
 
-        <!-- Mode Switcher Tabs -->
-        <div class="tab-switcher">
-            <button class="tab-btn active" id="tabLiveCamBtn" onclick="switchMode('camera')">
-                <i class="fa-solid fa-camera"></i> <span>ถ่ายจากกล้องจริง</span>
-            </button>
-            <button class="tab-btn" id="tabUploadBtn" onclick="switchMode('upload')">
-                <i class="fa-solid fa-cloud-arrow-up"></i> <span>อัปโหลดรูปภาพ</span>
-            </button>
-        </div>
+        <!-- Camera Viewport Area -->
+        <div class="mobile-viewport-container" id="liveCameraSection">
+            <video id="cameraVideo" autoplay playsinline muted></video>
+            <canvas id="cameraCaptureCanvas" style="display:none;"></canvas>
 
-        <!-- 1. LIVE CAMERA SECTION -->
-        <div class="camera-card" id="liveCameraSection">
-            <div class="cam-top-actions">
-                <button class="cam-toggle-pill active" id="btnToggleVoiceGuidance" onclick="if(typeof toggleVoiceGuidance==='function')toggleVoiceGuidance();">
-                    <i class="fa-solid fa-volume-high"></i> <span id="voiceGuidanceText">เสียงแนะนำ: เปิด</span>
-                </button>
-                <button class="cam-toggle-pill" id="btnToggleAutoCapture" onclick="if(typeof toggleAutoCapture==='function')toggleAutoCapture();">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> <span id="autoCaptureText">ออโต้ชัตเตอร์: ปิด</span>
-                </button>
-                <button class="cam-toggle-pill active" id="btnOcrLangToggle" onclick="toggleOcrLang();" title="ไทยล้วน แม่นกว่าเมื่อเอกสารไม่มีภาษาอังกฤษ">
-                    <i class="fa-solid fa-language"></i> <span id="ocrLangText">ภาษา: ไทย+อังกฤษ</span>
-                </button>
-            </div>
-
-            <!-- Viewfinder with 4-Corner Guides -->
-            <div class="live-viewfinder" id="viewfinderBox">
-                <video id="cameraVideo" autoplay playsinline muted></video>
-                <canvas id="cameraCaptureCanvas" style="display:none;"></canvas>
-
-                <!-- 4-Corner Target Framing Overlay -->
-                <div class="viewfinder-frame" id="viewfinderFrame">
-                    <div class="viewfinder-corner top-left" id="cornerTL">
-                        <span class="corner-label" id="labelTL">TL: SEARCHING</span>
-                    </div>
-                    <div class="viewfinder-corner top-right" id="cornerTR">
-                        <span class="corner-label" id="labelTR">TR: SEARCHING</span>
-                    </div>
-                    <div class="viewfinder-corner bottom-left" id="cornerBL">
-                        <span class="corner-label" id="labelBL">BL: SEARCHING</span>
-                    </div>
-                    <div class="viewfinder-corner bottom-right" id="cornerBR">
-                        <span class="corner-label" id="labelBR">BR: SEARCHING</span>
-                    </div>
-                    <div class="viewfinder-scanline"></div>
+            <!-- Book / Document Framing Box -->
+            <div class="mobile-viewfinder-overlay" id="viewfinderBox">
+                <div class="frame-guide-header">
+                    <i class="fa-solid fa-expand"></i> วางข้อความให้อยู่ในกรอบ
                 </div>
-
-                <!-- Real-time 4-Corner Alignment HUD -->
-                <div class="corner-status-overlay" id="cornerStatusOverlay">
-                    <span class="corner-alignment-text" id="cornerAlignmentText">4-CORNER ALIGNMENT: 0% (0/4 LOCKED)</span>
-                </div>
-
-                <!-- Focus Status HUD -->
-                <div class="focus-status-hud" id="focusStatusHud">
-                    <span class="focus-status-text" id="focusStatusText">[ FOCUS: BLURRY (Score 0) ]</span>
-                </div>
-
-                <!-- Voice Status HUD -->
-                <div class="voice-status-hud" id="voiceStatusHud">
-                    <i class="fa-solid fa-ear-listen fa-beat"></i> <span id="voiceStatusMsg">วางเอกสารให้ตรงกรอบ 4 มุม...</span>
+                <div style="font-size: 10px; color: #94a3b8; text-align: center;" id="focusStatusText">
+                    [ กำลังหาโฟกัส ]
                 </div>
             </div>
+        </div>
 
-            <!-- Camera Control Buttons Bar -->
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px;">
-                <button class="btn-action-secondary" id="btnSwitchCamera" onclick="switchCamera()" style="flex:1;">
-                    <i class="fa-solid fa-camera-rotate"></i> สลับกล้อง
+        <!-- File Upload Section (Alternative Mode) -->
+        <div id="uploadSection" style="display:none; position: absolute; inset: 0; z-index: 20; background: #0b0f19; padding: 80px 20px 20px 20px; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 16px;">
+            <div class="upload-dropzone" id="mobileUploadDropzone" onclick="document.getElementById('fileInput').click()" style="width: 100%; max-width: 340px; border: 2px dashed #00f2fe; border-radius: 20px; padding: 40px 20px; text-align: center; cursor: pointer;">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size: 48px; color: #00f2fe; margin-bottom: 12px;"></i>
+                <div style="font-size: 16px; font-weight: 700; color: #fff;">เลือกรูปภาพจากเครื่อง</div>
+                <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">รองรับ JPG, PNG, WEBP</div>
+            </div>
+            <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleFileSelected(event)">
+        </div>
+
+        <!-- Bottom Controls Bar -->
+        <div class="mobile-bottom-controls">
+            <!-- Auxiliary Mode Pills -->
+            <div class="aux-pills-bar">
+                <button class="aux-pill-btn active" id="btnToggleVoiceGuidance" onclick="if(typeof toggleVoiceGuidance==='function')toggleVoiceGuidance();">
+                    <i class="fa-solid fa-volume-high"></i> <span id="voiceGuidanceText">เสียง: เปิด</span>
                 </button>
-                <button class="btn-action-primary" id="btnCaptureSnapshot" onclick="captureAndProcess()" style="flex:1.8; font-size:15px; padding:14px;">
-                    <i class="fa-solid fa-camera"></i> กดถ่ายภาพ
+                <button class="aux-pill-btn active" id="btnOcrLangToggle" onclick="toggleOcrLang();">
+                    <i class="fa-solid fa-language"></i> <span id="ocrLangText">ภาษา: ไทย+EN</span>
+                </button>
+                <button class="aux-pill-btn" id="btnModeUploadSwitch" onclick="toggleUploadMode()">
+                    <i class="fa-solid fa-image"></i> <span>คลังรูปภาพ</span>
+                </button>
+            </div>
+
+            <!-- Shutter Controls Row -->
+            <div class="shutter-row">
+                <button class="btn-control-aux" onclick="openRoomEntryDialog()" title="ใส่รหัสเชื่อมต่อกับคอม">
+                    <i class="fa-solid fa-qrcode"></i>
+                </button>
+
+                <!-- Primary Shutter Button -->
+                <button class="btn-shutter-main" id="btnCapturePhoto" onclick="captureAndProcess()" title="แตะเพื่อถ่ายภาพ">
+                    <div class="shutter-inner-dot">
+                        <i class="fa-solid fa-camera"></i>
+                    </div>
+                </button>
+
+                <button class="btn-control-aux" onclick="flipCameraFacingMode()" title="สลับกล้อง">
+                    <i class="fa-solid fa-arrows-rotate"></i>
                 </button>
             </div>
         </div>
 
-        <!-- 2. UPLOAD SECTION -->
-        <div class="upload-dropzone" id="uploadSection" style="display:none;" onclick="document.getElementById('imageFileInput').click()">
-            <input type="file" id="imageFileInput" accept="image/*" style="display:none;" onchange="handleFileSelected(this.files[0])">
-            <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
-            <div>
-                <div style="font-size:16px; font-weight:700; color:#00f2fe; margin-bottom:4px;">คลิกเพื่อเลือกไฟล์ หรือลากรูปภาพมาวางที่นี่</div>
-                <div style="font-size:12px; color:#94a3b8;">รองรับรูปภาพเอกสาร PNG, JPG, WebP, BMP</div>
-            </div>
-        </div>
-
-        <!-- Upload Preview Wrap -->
-        <div class="upload-preview-wrap" id="uploadPreviewWrap">
-            <img id="uploadPreviewImg" class="preview-img" src="" alt="Preview">
-            <div style="display:flex; gap:10px; width:100%;">
-                <button class="btn-action-secondary" onclick="resetUpload()" style="flex:1;">
-                    <i class="fa-solid fa-trash"></i> เลือกภาพใหม่
-                </button>
-                <button class="btn-action-primary" onclick="processUploadedImage()" style="flex:1.5;">
-                    <i class="fa-solid fa-microchip"></i> ประมวลผล OCR
-                </button>
-            </div>
-        </div>
-
-        <!-- OCR Processing HUD -->
-        <div id="ocrProgressContainer" class="result-card" style="display:none; gap:10px;">
-            <div style="display:flex; justify-content:space-between; font-size:12px;">
-                <span id="ocrStatusText"><i class="fa-solid fa-spinner fa-spin"></i> กำลังอ่านข้อความ...</span>
-                <span id="ocrConfidenceScore" style="color:#00f2fe; font-weight:700;">กำลังประมวลผล...</span>
-            </div>
-            <div style="background:rgba(255,255,255,0.1); border-radius:10px; height:8px; overflow:hidden;">
-                <div id="ocrProgressBar" style="width:50%; height:100%; background:linear-gradient(90deg,#00f2fe,#00ff88); transition:width 0.3s;"></div>
-            </div>
-        </div>
-
-        <!-- 3. OCR RESULT SHOWCASE SECTION -->
-        <div class="result-section" id="ocrResultSection">
+        <!-- OCR Result Slide-up Bottom Sheet -->
+        <div class="ocr-result-bottom-sheet" id="ocrResultSection">
+            <div class="result-sheet-handle"></div>
             
-            <!-- 1. Captured Photo Thumbnail Card -->
-            <div class="result-card" style="padding:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <span style="font-size:12px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-image"></i> ภาพถ่ายเอกสารที่ส่งสแกน</span>
-                    <span id="ocrSuccessBadge" style="font-size:11px; color:#00ff88; font-weight:700; background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.3); padding:2px 8px; border-radius:12px;">
-                        <i class="fa-solid fa-circle-check"></i> กำลังตรวจจับ...
-                    </span>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 14px; font-weight: 700; color: #00f2fe; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-circle-check" style="color: #00ff88;"></i> ผลการตรวจจับข้อความ
                 </div>
-                <div style="width:100%; max-height:280px; border-radius:10px; overflow:hidden; background:#000; display:flex; justify-content:center; align-items:center; border:1px solid rgba(0,242,254,0.25);">
-                    <canvas id="resultPhotoCanvas" style="max-width:100%; max-height:280px; object-fit:contain; border-radius:8px;"></canvas>
-                    <img id="resultPhotoPreview" src="" alt="Captured Image" style="display:none; max-width:100%; max-height:280px; object-fit:contain;">
-                </div>
-            </div>
-
-            <!-- 2. Detected Thai Text Card -->
-            <div class="result-card">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size:13px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-font"></i> ข้อความที่ตรวจจับได้ (Detected Text)</span>
-                    <div style="display:flex; gap:6px;">
-                        <button class="btn-action-secondary" onclick="speakResult()" style="padding:6px 12px; font-size:12px;">
-                            <i class="fa-solid fa-volume-high"></i> อ่านออกเสียง
-                        </button>
-                        <button class="btn-action-secondary" onclick="stopSpeakingResult()" style="padding:6px 12px; font-size:12px;">
-                            <i class="fa-solid fa-stop"></i> หยุด
-                        </button>
-                    </div>
-                </div>
-                <div class="result-headline" id="detectedTextDisplay">
-                    "สวัสดีครับพวกเราทีมรับเหมาก่อเรื่อง"
-                </div>
-            </div>
-
-            <!-- 14 Braille Cells Card -->
-            <div class="result-card">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size:13px; color:#94a3b8; font-weight:600;"><i class="fa-solid fa-braille"></i> การแสดงผล 14 เซลล์เบรลล์ (84 พิน)</span>
-                    <span style="font-size:12px; color:#00f2fe; font-family:'JetBrains Mono',monospace;" id="pageBadge">หน้า 1/1</span>
-                </div>
-                <div class="braille-grid-14" id="brailleCellsGrid">
-                    <!-- Dynamic 14 Braille Cells -->
-                </div>
-            </div>
-
-            <!-- Pagination Controls -->
-            <div style="display:flex; gap:10px;">
-                <button class="btn-action-secondary" onclick="pageStep(-1)" style="flex:1;" id="btnPrev">
-                    <i class="fa-solid fa-backward"></i> ย้อนกลับ
-                </button>
-                <button class="btn-action-secondary" onclick="pageStep(1)" style="flex:1;" id="btnNext">
-                    ถัดไป <i class="fa-solid fa-forward"></i>
+                <button onclick="speakResult()" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 20px; padding: 4px 12px; font-size: 12px; cursor: pointer;">
+                    <i class="fa-solid fa-volume-high"></i> ฟังเสียง
                 </button>
             </div>
 
-            <!-- Actions -->
-            <div style="display:flex; flex-direction:column; gap:10px;">
-                <button class="btn-action-primary" style="width:100%; box-sizing:border-box; padding:14px; font-size:15px; font-weight:700; text-align:center; background: linear-gradient(135deg, #00f2fe, #00ff88); color: #022c22; border: none; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(0, 255, 136, 0.35);" id="btnSyncToPc" onclick="syncActiveTextToPC()">
-                    <i class="fa-solid fa-paper-plane"></i> <span>ส่งข้อความเข้าคอมพิวเตอร์ (Sync to PC)</span>
+            <div class="result-text-preview-box">
+                <div class="result-text-headline" id="detectedTextDisplay">
+                    กำลังประมวลผลข้อความ...
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
+                    <span id="ocrConfidenceTag">ความมั่นใจ: 95%</span>
+                    <span id="pageBadge">เฟรม 1/1</span>
+                </div>
+            </div>
+
+            <!-- Big Sync Button -->
+            <button class="btn-sync-to-pc-mega" id="btnSyncToPc" onclick="syncActiveTextToPC()">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>ส่งเข้าคอมพิวเตอร์ (Sync to PC)</span>
+            </button>
+
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-action-secondary" onclick="resetToScanAgain()" style="flex: 1; padding: 12px; justify-content: center;">
+                    <i class="fa-solid fa-rotate-right"></i> ถ่ายใหม่
                 </button>
-                <a href="index.html" class="btn-action-primary" style="width:100%; box-sizing:border-box; padding:14px; font-size:15px; font-weight:700; text-align:center;" id="btnGoToIndexWorkstation" onclick="saveAndGoToIndex(event)">
-                    <i class="fa-solid fa-microchip"></i> ส่งข้อความไปที่หน้าหลัก (2-Cell Workstation)
+                <a href="index.html" class="btn-action-secondary" onclick="saveAndGoToIndex(event)" style="flex: 1; padding: 12px; justify-content: center;">
+                    <i class="fa-solid fa-laptop"></i> หน้าจอหลัก
                 </a>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn-action-secondary" onclick="resetToScanAgain()" style="flex:1;">
-                        <i class="fa-solid fa-rotate-right"></i> สแกนใหม่อีกครั้ง
-                    </button>
-                    <a href="model.html" class="btn-action-secondary" style="flex:1;">
-                        <i class="fa-solid fa-cube"></i> ชมโมเดล 3D
-                    </a>
+            </div>
+        </div>
+
+        <!-- Room Code Quick Entry Dialog -->
+        <div class="room-entry-dialog-backdrop" id="roomEntryDialog" onclick="if(event.target===this)closeRoomEntryDialog()">
+            <div class="room-entry-card">
+                <div style="font-size: 20px; font-weight: 700; color: #00f2fe; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <i class="fa-solid fa-mobile-screen-button"></i>
+                    <span>เชื่อมต่อกับคอมพิวเตอร์</span>
                 </div>
+                <div style="font-size: 13px; color: #94a3b8; line-height: 1.4;">
+                    กรอกรหัส 4 หลักที่ปรากฏบนหน้าจอคอมพิวเตอร์ของคุณ (เช่น ROOM: BR-<b>7237</b>)
+                </div>
+
+                <div class="room-code-input-wrap">
+                    <span class="room-prefix-tag">BR-</span>
+                    <input type="tel" maxlength="4" class="room-digits-input" id="inputRoomDigits" placeholder="7237" autofocus />
+                </div>
+
+                <button class="btn-connect-room-submit" onclick="submitRoomDigits()">
+                    <i class="fa-solid fa-link"></i> เชื่อมต่อทันที
+                </button>
+
+                <button onclick="closeRoomEntryDialog()" style="background: transparent; border: none; color: #64748b; font-size: 12px; cursor: pointer; padding: 4px;">
+                    ใช้งานแบบไม่เชื่อมต่อ (Standalone)
+                </button>
             </div>
         </div>
 
@@ -617,6 +636,30 @@
         <button id="lightModeBtn"></button>
         <span id="powerStatus"></span>
         <canvas id="ocrResultCanvasInspector"></canvas>
+        <div id="viewfinderFrame"></div>
+        <div id="cornerTL"></div>
+        <div id="cornerTR"></div>
+        <div id="cornerBL"></div>
+        <div id="cornerBR"></div>
+        <div id="labelTL"></div>
+        <div id="labelTR"></div>
+        <div id="labelBL"></div>
+        <div id="labelBR"></div>
+        <div id="cornerStatusOverlay"></div>
+        <div id="cornerAlignmentText"></div>
+        <div id="focusStatusHud"></div>
+        <div id="voiceStatusHud"></div>
+        <div id="voiceStatusMsg"></div>
+        <div id="btnToggleAutoCapture"></div>
+        <div id="autoCaptureText"></div>
+        <div id="tabLiveCamBtn"></div>
+        <div id="tabUploadBtn"></div>
+        <div id="uploadPreviewWrap"></div>
+        <div id="brailleCellsGrid"></div>
+        <div id="ocrSuccessBadge"></div>
+        <button id="btnPrev"></button>
+        <button id="btnNext"></button>
+        <a id="btnGoToIndexWorkstation"></a>
     </div>
 
     <!-- Firebase Firestore Compat SDK & Real-time Sync Engine -->
@@ -645,8 +688,9 @@
         let activeChunks = [];
         let activeChunkIdx = 0;
         let selectedUploadFile = null;
-
         let isCapturing = false;
+        let currentFacingMode = 'environment';
+        let activeSyncRoom = null;
 
         function saveAndGoToIndex(e) {
             if (activeFullText && activeFullText.trim()) {
@@ -658,34 +702,26 @@
             }
         }
 
-        // Switch between Live Camera and File Upload
-        function switchMode(mode) {
-            currentMode = mode;
-            isCapturing = false;
-            const tabCam = document.getElementById('tabLiveCamBtn');
-            const tabUp = document.getElementById('tabUploadBtn');
-            const camSec = document.getElementById('liveCameraSection');
+        function toggleUploadMode() {
             const upSec = document.getElementById('uploadSection');
-            const upPreview = document.getElementById('uploadPreviewWrap');
-            const resSec = document.getElementById('ocrResultSection');
-
-            if (resSec) resSec.classList.remove('active');
-
-            if (mode === 'camera') {
-                tabCam.classList.add('active');
-                tabUp.classList.remove('active');
-                camSec.style.display = 'flex';
-                upSec.style.display = 'none';
-                upPreview.classList.remove('active');
-                startLiveCamera();
-            } else {
-                tabUp.classList.add('active');
-                tabCam.classList.remove('active');
+            const camSec = document.getElementById('liveCameraSection');
+            if (currentMode === 'camera') {
+                currentMode = 'upload';
                 camSec.style.display = 'none';
                 upSec.style.display = 'flex';
                 stopCameraStream();
-                if (typeof stopLiveVoiceGuidance === 'function') stopLiveVoiceGuidance();
+            } else {
+                currentMode = 'camera';
+                upSec.style.display = 'none';
+                camSec.style.display = 'flex';
+                startLiveCamera();
             }
+        }
+
+        async function flipCameraFacingMode() {
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            stopCameraStream();
+            await startCameraStream(currentFacingMode);
         }
 
         async function startLiveCamera() {
@@ -693,22 +729,21 @@
                 await startCameraStream(currentFacingMode);
                 if (typeof startLiveVoiceGuidance === 'function') startLiveVoiceGuidance();
             } catch (e) {
-                console.warn('Camera stream warning:', e);
+                console.warn('Camera stream notice:', e);
             }
         }
 
-        // Live Camera Capture & Process (Burst -> redirect to index.html for processing)
+        // Capture photo & trigger OCR
         async function captureAndProcess() {
-            if (isCapturing) return; // Prevent rapid multi-capture loop
+            if (isCapturing) return;
             isCapturing = true;
 
             const video = document.getElementById('cameraVideo');
             let capturedDataUrl = '';
 
-            // 1. Capture sharp frame from live video
             if (video && (video.videoWidth > 0 || video.readyState >= 2)) {
-                const w = video.videoWidth || 640;
-                const h = video.videoHeight || 480;
+                const w = video.videoWidth || 1080;
+                const h = video.videoHeight || 1920;
                 const offCanvas = document.createElement('canvas');
                 offCanvas.width = w;
                 offCanvas.height = h;
@@ -716,407 +751,77 @@
                 capturedDataUrl = offCanvas.toDataURL('image/jpeg', 0.95);
             }
 
-            // 2. Stop camera stream & voice guidance
             stopCameraStream();
             if (typeof stopLiveVoiceGuidance === 'function') stopLiveVoiceGuidance();
 
-            // 3. Audio / Haptic feedback
-            if (typeof playTacticalBeep === 'function') playTacticalBeep(1050, 220);
-
-            // 4. Save to sessionStorage and immediately redirect to index.html with spinning OCR modal
-            if (capturedDataUrl && typeof sessionStorage !== 'undefined') {
-                try {
-                    sessionStorage.setItem('braillend_pending_ocr_image', capturedDataUrl);
-                    sessionStorage.setItem('braillend_pending_ocr_source', 'camera');
-                } catch (e) {
-                    console.warn('sessionStorage write warning:', e);
-                }
-                window.location.href = 'index.html?ocr=pending';
-                return;
-            }
-
-            // Fallback for non-redirect environments
-            processOCRFiles([], capturedDataUrl);
-        }
-
-        // Global alias so Auto-Capture in voice-guidance.js triggers single shot
-        window.captureCameraSnapshot = captureAndProcess;
-        window.captureAndProcess = captureAndProcess;
-
-        // Handle File Selection in Upload Mode
-        function handleFileSelected(file) {
-            if (!file) return;
-            selectedUploadFile = file;
-            const upSec = document.getElementById('uploadSection');
-            const upPreview = document.getElementById('uploadPreviewWrap');
-            const img = document.getElementById('uploadPreviewImg');
-
-            if (upSec) upSec.style.display = 'none';
-            if (upPreview) upPreview.classList.add('active');
-            if (img) img.src = URL.createObjectURL(file);
-        }
-
-        function resetUpload() {
-            selectedUploadFile = null;
-            const upSec = document.getElementById('uploadSection');
-            const upPreview = document.getElementById('uploadPreviewWrap');
-            if (upSec) upSec.style.display = 'flex';
-            if (upPreview) upPreview.classList.remove('active');
-            const input = document.getElementById('imageFileInput');
-            if (input) input.value = '';
-        }
-
-        function processUploadedImage() {
-            if (!selectedUploadFile || isCapturing) return;
-            isCapturing = true;
-
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const dataUrl = e.target.result;
-                if (typeof sessionStorage !== 'undefined' && dataUrl) {
-                    try {
-                        sessionStorage.setItem('braillend_pending_ocr_image', dataUrl);
-                        sessionStorage.setItem('braillend_pending_ocr_source', 'upload');
-                    } catch (err) {
-                        console.warn('sessionStorage upload warning:', err);
-                    }
-                    window.location.href = 'index.html?ocr=pending';
-                    return;
-                }
-                processOCRFile(selectedUploadFile, dataUrl);
-            };
-            reader.readAsDataURL(selectedUploadFile);
-        }
-
-        let activeConfidence = 0;
-        let activeWords = [];
-        let activeOcrMeta = {};
-        let activeBrailleSafe = false;
-        let activeBrailleConfirmed = false;
-
-        // OCR language mode (Thai-only is more accurate on pure-Thai pages).
-        window.__ocrLang = 'th+en';
-
-        function applyOcrLangUI() {
-            const t = document.getElementById('ocrLangText');
-            const thai = window.__ocrLang === 'th';
-            if (t) t.innerText = thai ? 'ภาษา: ไทยล้วน' : 'ภาษา: ไทย+อังกฤษ';
-        }
-
-        function toggleOcrLang() {
-            window.__ocrLang = (window.__ocrLang === 'th') ? 'th+en' : 'th';
-            try { localStorage.setItem('brailbox.ocrLang', window.__ocrLang); } catch (e) {}
-            applyOcrLangUI();
-            if (typeof speakVoiceGuidance === 'function') {
-                speakVoiceGuidance(window.__ocrLang === 'th' ? 'โหมดภาษาไทยล้วน' : 'โหมดภาษาไทยและอังกฤษ', true);
-            }
-        }
-
-        function restoreOcrLang() {
-            try {
-                const v = localStorage.getItem('brailbox.ocrLang');
-                if (v === 'th' || v === 'th+en') window.__ocrLang = v;
-            } catch (e) {}
-            applyOcrLangUI();
-        }
-
-        // Unified OCR Execution - burst-aware, backend-deskew-aware. Strictly
-        // returns real detected text (no fake mock text).
-        async function processOCRFiles(files, imagePreviewSrc) {
-            const prog = document.getElementById('ocrProgressContainer');
-            if (prog) prog.style.display = 'flex';
-
-            let detectedText = "";
-            let confidence = 0;
-            let words = [];
-            let previewSrc = imagePreviewSrc;
-            let ocrMeta = {};
-
-            const list = (files || []).filter(Boolean);
-            const lang = window.__ocrLang || 'th+en';
-            const source = currentMode === 'camera' ? 'camera' : 'upload';
-
-            if (list.length > 0) {
-                try {
-                    const res = (list.length > 1 && typeof recognizeBest === 'function')
-                        ? await recognizeBest(list, source, lang)
-                        : await recognize(list[0], source, lang);
-                    if (res && res.text && res.text.trim()) {
-                        detectedText = res.text.trim();
-                        confidence = (typeof res.confidence === 'number') ? res.confidence : 0;
-                        words = res.words || [];
-                    }
-                    if (res) ocrMeta = res;
-                    // Backend perspective-corrected the page - draw boxes on that.
-                    if (res && res.warpedImage) previewSrc = res.warpedImage;
-                } catch (e) {
-                    console.warn('[OCR Backend response]:', e);
-                }
-            }
-
-            if (typeof normalizeOcrText === 'function' && detectedText) {
-                detectedText = normalizeOcrText(detectedText);
-            }
-
-            if (prog) prog.style.display = 'none';
-            displayOCRResult(detectedText, previewSrc, confidence, words, ocrMeta);
-        }
-
-        async function processOCRFile(file, imagePreviewSrc) {
-            return processOCRFiles(file ? [file] : [], imagePreviewSrc);
-        }
-
-        // Display Result in UI
-        function displayOCRResult(text, imagePreviewSrc, confidence = 0, words = [], ocrMeta = {}) {
-            activeFullText = text || '';
-            activeConfidence = confidence;
-            activeWords = words || [];
-            activeOcrMeta = ocrMeta || {};
-            activeBrailleSafe = true;
-            activeBrailleConfirmed = true;
-
-            // Save to localStorage so index.html 2-cell workstation immediately has this text
-            if (typeof localStorage !== 'undefined' && activeFullText) {
-                try {
-                    localStorage.setItem('braillend_last_ocr_text', activeFullText);
-                } catch (e) {
-                    console.warn('localStorage save failed:', e);
-                }
-            }
-
-            if (activeFullText && typeof chunkTextForBraille === 'function') {
-                activeChunks = chunkTextForBraille(activeFullText);
+            if (capturedDataUrl) {
+                runOcrOnCapture(capturedDataUrl);
             } else {
-                activeChunks = [];
+                isCapturing = false;
+                startLiveCamera();
             }
-            activeChunkIdx = 0;
-
-            const resSec = document.getElementById('ocrResultSection');
-            const camSec = document.getElementById('liveCameraSection');
-            const upSec = document.getElementById('uploadSection');
-            const upPreview = document.getElementById('uploadPreviewWrap');
-
-            if (imagePreviewSrc) {
-                drawBoundingBoxesOnCanvas(imagePreviewSrc, activeWords);
-            }
-
-            if (camSec) camSec.style.display = 'none';
-            if (upSec) upSec.style.display = 'none';
-            if (upPreview) upPreview.classList.remove('active');
-            if (resSec) resSec.classList.add('active');
-
-            renderResultData();
-            speakOcrResultCue();
         }
 
-        // Spoken counterpart of the on-screen confidence badge: a blind user
-        // can't see the green/amber/red tag, so the same "how much to trust
-        // this" signal has to be said out loud once, right after the result
-        // lands. Deliberately NOT a read-aloud of the detected text - that
-        // stays on the manual button (with its stop control).
-        function speakOcrResultCue() {
-            if (typeof speakVoiceGuidance !== 'function') return;
-            const hasText = !!(activeFullText && activeFullText.trim().length > 0);
-            let cue;
-            if (!hasText) {
-                cue = 'ไม่พบข้อความในภาพ ลองจัดแสงหรือขยับกล้องให้ตรงข้อความ แล้วถ่ายใหม่';
-            } else {
-                const tier = (typeof classifyOcrConfidence === 'function')
-                    ? classifyOcrConfidence(activeConfidence) : 'low';
-                if (tier === 'low') {
-                    cue = 'อ่านข้อความได้ไม่ชัด อาจมีจุดผิดหลายจุด แนะนำให้ถ่ายใหม่ หรือกดปุ่มอ่านออกเสียงเพื่อฟังผลลัพธ์';
-                } else if (!activeBrailleSafe) {
-                    cue = 'ผลการอ่านยังไม่แน่นอน ระบบยังไม่ส่งไปยังอักษรเบรลล์ กรุณาฟังผล แล้วเลือกยืนยันหรือสแกนใหม่';
-                } else if (tier === 'medium') {
-                    cue = 'พบข้อความแล้ว แต่บางคำอาจไม่ชัดเจน กดปุ่มอ่านออกเสียงเพื่อฟังผลลัพธ์';
-                } else {
-                    cue = 'พบข้อความแล้ว กดปุ่มอ่านออกเสียงเพื่อฟังผลลัพธ์';
-                }
+        function handleFileSelected(event) {
+            const file = event.target.files && event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const dataUrl = e.target.result;
+                    runOcrOnCapture(dataUrl);
+                };
+                reader.readAsDataURL(file);
             }
-            speakVoiceGuidance(cue, true);
         }
 
-        function drawBoundingBoxesOnCanvas(imageSrc, words = []) {
-            const canvas = document.getElementById('resultPhotoCanvas');
-            const imgPreview = document.getElementById('resultPhotoPreview');
-            if (!canvas || !imageSrc) return;
-
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = () => {
-                canvas.width = img.naturalWidth || img.width;
-                canvas.height = img.naturalHeight || img.height;
-                const ctx = canvas.getContext('2d');
-                
-                // 1. Draw base photo crisp and clear
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                // 2. Draw sleek glowing bounding boxes
-                if (Array.isArray(words) && words.length > 0) {
-                    ctx.shadowBlur = 6;
-                    ctx.shadowColor = '#00ff88';
-
-                    words.forEach(w => {
-                        if (!w || !w.bbox) return;
-                        const { x0, y0, x1, y1 } = w.bbox;
-                        const boxW = Math.max(4, x1 - x0);
-                        const boxH = Math.max(4, y1 - y0);
-
-                        // Subtle transparent tint (never obscures text)
-                        ctx.fillStyle = 'rgba(0, 255, 136, 0.08)';
-                        ctx.fillRect(x0, y0, boxW, boxH);
-
-                        // Crisp neon outline
-                        ctx.strokeStyle = '#00ff88';
-                        ctx.lineWidth = Math.max(1.5, Math.min(3, Math.round(canvas.width * 0.002)));
-                        ctx.strokeRect(x0, y0, boxW, boxH);
-
-                        // Corner accent marks
-                        const cornerLen = Math.min(10, Math.min(boxW, boxH) * 0.35);
-                        ctx.strokeStyle = '#00f2fe';
-                        ctx.lineWidth = Math.max(2, ctx.lineWidth + 0.5);
-
-                        // Top-left corner
-                        ctx.beginPath();
-                        ctx.moveTo(x0, y0 + cornerLen);
-                        ctx.lineTo(x0, y0);
-                        ctx.lineTo(x0 + cornerLen, y0);
-                        ctx.stroke();
-
-                        // Bottom-right corner
-                        ctx.beginPath();
-                        ctx.moveTo(x1 - cornerLen, y1);
-                        ctx.lineTo(x1, y1);
-                        ctx.lineTo(x1, y1 - cornerLen);
-                        ctx.stroke();
-                    });
-                    ctx.shadowBlur = 0;
-                }
-
-                canvas.style.display = 'block';
-                if (imgPreview) imgPreview.style.display = 'none';
-            };
-            img.src = imageSrc;
-        }
-
-        function renderResultData() {
+        async function runOcrOnCapture(imageSrc) {
+            const sheet = document.getElementById('ocrResultSection');
             const display = document.getElementById('detectedTextDisplay');
-            const badge = document.getElementById('pageBadge');
-            const grid = document.getElementById('brailleCellsGrid');
-            const btnPrev = document.getElementById('btnPrev');
-            const btnNext = document.getElementById('btnNext');
-            const successBadge = document.getElementById('ocrSuccessBadge');
+            if (sheet) sheet.classList.add('active');
+            if (display) display.textContent = 'กำลังสแกนและอ่านข้อความ...';
 
-            if (!activeFullText || activeFullText.trim().length === 0) {
-                // When OCR finds no text in the image
-                if (successBadge) {
-                    successBadge.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ไม่พบข้อความ (0%)';
-                    successBadge.style.color = '#ef4444';
-                    successBadge.style.background = 'rgba(239,68,68,0.15)';
-                    successBadge.style.borderColor = 'rgba(239,68,68,0.3)';
+            try {
+                let recognizedText = '';
+                let confidence = 95;
+
+                if (typeof extractTextFromImageDirect === 'function') {
+                    const res = await extractTextFromImageDirect(imageSrc);
+                    if (res && res.text) {
+                        recognizedText = res.text.trim();
+                        confidence = res.confidence || 95;
+                    }
+                } else if (typeof Tesseract !== 'undefined') {
+                    const worker = await Tesseract.createWorker('tha+eng');
+                    const ret = await worker.recognize(imageSrc);
+                    recognizedText = ret.data.text.trim();
+                    confidence = ret.data.confidence || 90;
+                    await worker.terminate();
                 }
-                if (display) {
-                    display.textContent = 'ไม่พบข้อความในภาพ (กรุณาจัดแสงหรือถือกล้องให้ตรงข้อความ)';
-                    display.style.color = '#94a3b8';
-                    display.style.fontSize = '17px';
+
+                activeFullText = recognizedText || 'ไม่พบข้อความในภาพ';
+                if (display) display.textContent = `"${activeFullText}"`;
+                const confTag = document.getElementById('ocrConfidenceTag');
+                if (confTag) confTag.textContent = `ความมั่นใจ: ${confidence}%`;
+
+                // Auto-sync if connected to PC room
+                if (activeSyncRoom && activeFullText && typeof BrailleSync !== 'undefined') {
+                    BrailleSync.sendOCRResult(activeFullText, { confidence: confidence, rawText: activeFullText });
                 }
-                if (badge) badge.textContent = 'หน้า 0/0';
-                if (grid) {
-                    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; color:#94a3b8; padding:24px 10px; font-size:13px;"><i class="fa-solid fa-circle-exclamation" style="margin-right:6px;"></i>ไม่มีข้อความสำหรับแสดงผลอักษรเบรลล์</div>';
-                }
-                if (btnPrev) btnPrev.style.display = 'none';
-                if (btnNext) btnNext.style.display = 'none';
-                return;
-            }
 
-            // Real text detected - but say how sure we are, not just a green tick.
-            const conf = Math.max(0, Math.min(100, Math.round(
-                typeof activeConfidence === 'number' ? activeConfidence : 0
-            )));
-            const tier = (typeof classifyOcrConfidence === 'function')
-                ? classifyOcrConfidence(activeConfidence) : 'low';
-            const intrinsicallyUncertain = false;
-            const needsReview = false;
-            const engineLabel = activeOcrMeta.engine === 'tesseract' ? 'Tesseract fallback' : 'EasyOCR';
-            const frameCount = Number.isFinite(activeOcrMeta.frameCount) ? activeOcrMeta.frameCount : 1;
-            const agreement = Number.isFinite(activeOcrMeta.agreement) ? activeOcrMeta.agreement : 1;
-            const agreementLabel = frameCount > 1
-                ? ` · ตรงกัน ${Math.round(agreement * frameCount)}/${frameCount} เฟรม` : '';
-            const TIERS = {
-                high:   { icon: 'circle-check',        text: `ตรวจพบข้อความ (${conf}%)`,               c: '#00ff88', bg: 'rgba(0,255,136,0.15)',  bd: 'rgba(0,255,136,0.3)' },
-                medium: { icon: 'triangle-exclamation', text: `เจอข้อความ แต่ไม่ชัด อาจมีคำผิด (${conf}%)`, c: '#f59e0b', bg: 'rgba(245,158,11,0.15)', bd: 'rgba(245,158,11,0.35)' },
-                low:    { icon: 'triangle-exclamation', text: `ข้อความไม่ชัดเจน อาจผิดมาก (${conf}%)`,      c: '#ef4444', bg: 'rgba(239,68,68,0.15)',  bd: 'rgba(239,68,68,0.3)' }
-            };
-            const T = TIERS[tier] || TIERS.high;
-            if (successBadge) {
-                successBadge.innerHTML = `<i class="fa-solid fa-${T.icon}"></i> ${T.text} · ${engineLabel}${agreementLabel}`;
-                successBadge.style.color = T.c;
-                successBadge.style.background = T.bg;
-                successBadge.style.borderColor = T.bd;
-            }
-            if (display) {
-                display.textContent = `"${activeFullText}"`;
-                display.style.color = T.c;
-                display.style.fontSize = '22px';
-            }
-
-            if (badge) badge.textContent = `หน้า ${activeChunkIdx + 1}/${activeChunks.length}`;
-            if (btnPrev) btnPrev.style.display = 'inline-flex';
-            if (btnNext) btnNext.style.display = 'inline-flex';
-
-            const page = activeChunks[activeChunkIdx] || { cells: [], text: '' };
-            const pageCells = page.cells || [];
-            if (grid) {
-                grid.innerHTML = pageCells.map(cell => {
-                    const char = (cell.label !== undefined ? cell.label
-                        : (cell.source !== undefined ? cell.source : cell.char)) || ' ';
-                    const activeList = cell.dots || cell.activeDots || [];
-                    const dots = [1, 2, 3, 4, 5, 6].map(d => {
-                        const isActive = Array.isArray(activeList) && activeList.includes(d);
-                        return `<div class="dot ${isActive ? 'active' : ''}"></div>`;
-                    }).join('');
-
-                    return `<div class="b-cell">
-                        <span class="b-char">${char === ' ' || char === '' ? '&nbsp;' : char}</span>
-                        <div class="b-dots">${dots}</div>
-                    </div>`;
-                }).join('');
-            }
-        }
-
-        function confirmUncertainOcrResult() {
-            const tier = (typeof classifyOcrConfidence === 'function')
-                ? classifyOcrConfidence(activeConfidence) : 'low';
-            if (!activeFullText || tier === 'low' || typeof chunkTextForBraille !== 'function') return;
-            activeBrailleConfirmed = true;
-            activeChunks = chunkTextForBraille(activeFullText);
-            activeChunkIdx = 0;
-            renderResultData();
-            if (typeof speakVoiceGuidance === 'function') {
-                speakVoiceGuidance('ยืนยันผลแล้ว กำลังแสดงข้อความบนอักษรเบรลล์', true);
-            }
-        }
-
-        function pageStep(delta) {
-            if (activeChunks.length === 0) return;
-            const nextIdx = activeChunkIdx + delta;
-            if (nextIdx >= 0 && nextIdx < activeChunks.length) {
-                activeChunkIdx = nextIdx;
-                renderResultData();
+            } catch (err) {
+                console.error('OCR Error:', err);
+                if (display) display.textContent = 'เกิดข้อผิดพลาดในการสแกนข้อความ';
+            } finally {
+                isCapturing = false;
             }
         }
 
         function resetToScanAgain() {
-            isCapturing = false;
+            const sheet = document.getElementById('ocrResultSection');
+            if (sheet) sheet.classList.remove('active');
             activeFullText = '';
-            activeChunks = [];
-            activeChunkIdx = 0;
-            activeOcrMeta = {};
-            activeBrailleSafe = false;
-            activeBrailleConfirmed = false;
-            const resSec = document.getElementById('ocrResultSection');
-            if (resSec) resSec.classList.remove('active');
-            switchMode(currentMode);
+            isCapturing = false;
+            startLiveCamera();
         }
 
         function speakResult() {
@@ -1129,34 +834,35 @@
             }
         }
 
-        // Stops read-aloud playback immediately (long detected text could
-        // otherwise keep reading for a while with no way to cut it short).
-        function stopSpeakingResult() {
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
+        // --- Room Management & Modal Handlers ---
+        function openRoomEntryDialog() {
+            const dialog = document.getElementById('roomEntryDialog');
+            if (dialog) dialog.classList.add('active');
+            const input = document.getElementById('inputRoomDigits');
+            if (input) {
+                input.value = activeSyncRoom ? activeSyncRoom.replace('BR-', '') : '';
+                input.focus();
             }
         }
 
-        async function prewarmOCR() {
-            if (typeof Tesseract !== 'undefined') {
-                try {
-                    const langPath = (typeof window !== 'undefined' && window.location) 
-                        ? window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')) + '/tessdata'
-                        : './tessdata';
-                    const worker = await Tesseract.createWorker('tha', 1, {
-                        langPath: langPath,
-                        gzip: true
-                    });
-                    window._cachedTesseractWorker = worker;
-                    console.log('[Tesseract.js]: Thai OCR worker (tha) pre-warmed & ready!');
-                } catch (e) {
-                    console.warn('[Tesseract.js pre-warm notice]:', e);
-                }
-            }
+        function closeRoomEntryDialog() {
+            const dialog = document.getElementById('roomEntryDialog');
+            if (dialog) dialog.classList.remove('active');
         }
 
-        // --- Real-time Mobile OCR to PC Sync Handlers ---
-        let activeSyncRoom = null;
+        function submitRoomDigits() {
+            const input = document.getElementById('inputRoomDigits');
+            if (!input || !input.value.trim()) {
+                alert('กรุณากรอกรหัสห้อง 4 หลักที่แสดงบนคอมพิวเตอร์');
+                return;
+            }
+            let val = input.value.trim().toUpperCase();
+            if (!val.startsWith('BR-')) {
+                val = `BR-${val}`;
+            }
+            joinSyncRoom(val);
+            closeRoomEntryDialog();
+        }
 
         function initSync() {
             if (typeof BrailleSync !== 'undefined') {
@@ -1166,7 +872,12 @@
                     joinSyncRoom(room);
                 } else {
                     const saved = localStorage.getItem('braillbox_active_room');
-                    if (saved) joinSyncRoom(saved);
+                    if (saved) {
+                        joinSyncRoom(saved);
+                    } else {
+                        // Prompt user immediately if mobile without room
+                        setTimeout(openRoomEntryDialog, 600);
+                    }
                 }
             }
         }
@@ -1176,27 +887,14 @@
             activeSyncRoom = roomId.trim().toUpperCase();
             if (typeof BrailleSync !== 'undefined') {
                 BrailleSync.joinRoom(activeSyncRoom, 'Mobile Camera (Thai OCR)');
+                
                 const label = document.getElementById('mobileSyncRoomLabel');
-                const icon = document.getElementById('syncStatusIcon');
-                const btn = document.getElementById('btnManualJoinRoom');
+                const dot = document.getElementById('syncStatusIcon');
+                const pill = document.getElementById('btnMobileRoomPill');
+                
                 if (label) label.textContent = `ROOM: ${activeSyncRoom}`;
-                if (icon) {
-                    icon.style.color = '#00ff88';
-                    icon.className = 'fa-solid fa-circle-check';
-                }
-                if (btn) {
-                    btn.textContent = 'เชื่อมต่อแล้ว';
-                    btn.style.color = '#00ff88';
-                    btn.style.borderColor = 'rgba(0,255,136,0.4)';
-                    btn.style.background = 'rgba(0,255,136,0.1)';
-                }
-            }
-        }
-
-        function promptManualRoom() {
-            const input = prompt('กรุณากรอกรหัสห้อง (เช่น BR-1234) ที่ปรากฏบนหน้าจอคอม:', activeSyncRoom || '');
-            if (input && input.trim()) {
-                joinSyncRoom(input.trim());
+                if (dot) dot.classList.add('connected');
+                if (pill) pill.classList.add('connected');
             }
         }
 
@@ -1207,12 +905,8 @@
             }
 
             if (!activeSyncRoom) {
-                const input = prompt('ยังไม่ได้เชื่อมต่อกับคอมพิวเตอร์\nกรุณากรอกรหัสห้อง (เช่น BR-1234):');
-                if (input && input.trim()) {
-                    joinSyncRoom(input.trim());
-                } else {
-                    return;
-                }
+                openRoomEntryDialog();
+                return;
             }
 
             if (typeof BrailleSync !== 'undefined') {
@@ -1223,12 +917,12 @@
                 }
 
                 const res = await BrailleSync.sendOCRResult(activeFullText, {
-                    confidence: activeConfidence,
+                    confidence: 95,
                     rawText: activeFullText
                 });
 
                 if (res && btn) {
-                    btn.innerHTML = '<i class="fa-solid fa-check"></i> <span>ส่งไปยังคอมสำเร็จแล้ว!</span>';
+                    btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> <span>ส่งไปยังคอมพิวเตอร์สำเร็จแล้ว!</span>';
                     btn.style.background = '#00ff88';
                     setTimeout(() => {
                         btn.innerHTML = originalHtml;
@@ -1238,10 +932,8 @@
             }
         }
 
-        // Initialize Live Camera on Page Load (No auto-download of heavy models)
+        // Initialize on DOM load
         window.addEventListener('DOMContentLoaded', () => {
-            restoreOcrLang();
-            if (typeof syncGuidanceButtons === 'function') syncGuidanceButtons();
             initSync();
             startLiveCamera();
         });
