@@ -70,7 +70,7 @@
             position: absolute;
             z-index: 5;
             width: min(88vw, 360px);
-            height: min(58vh, 460px);
+            height: min(56vh, 440px);
             border: 2px solid rgba(0, 242, 254, 0.6);
             border-radius: 20px;
             box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.52), 0 0 25px rgba(0, 242, 254, 0.25);
@@ -78,11 +78,11 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            padding: 12px;
+            padding: 14px;
         }
 
         .viewfinder-guide-tag {
-            background: rgba(15, 23, 42, 0.85);
+            background: rgba(15, 23, 42, 0.88);
             border: 1px solid rgba(0, 242, 254, 0.4);
             color: #00f2fe;
             font-size: 12px;
@@ -509,11 +509,11 @@
         <div class="bottom-nav-bar">
             <div class="shutter-prompt-text">
                 <i class="fa-solid fa-circle-dot" style="color: #00ff88;"></i>
-                <span>แตะปุ่มวงกลมเพื่อถ่ายภาพและส่งข้อความ</span>
+                <span>แตะปุ่มวงกลมเพื่อถ่ายภาพ หรือเลือกรูปจากเครื่อง</span>
             </div>
 
             <div class="shutter-control-row">
-                <!-- Gallery Upload File Button -->
+                <!-- Gallery Upload File Button (Supported on all phones) -->
                 <button class="aux-control-btn" onclick="document.getElementById('fileInput').click()" title="เลือกรูปภาพจากเครื่อง">
                     <i class="fa-solid fa-images"></i>
                 </button>
@@ -651,25 +651,23 @@
         <a id="btnGoToIndexWorkstation"></a>
     </div>
 
-    <!-- Firebase Firestore Compat SDK & Real-time Sync Engine -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="js/firebase-sync.js?v=4.0.0"></script>
+    <!-- PeerJS WebRTC Cloud Sync (Zero Setup P2P Cross-Device Sync) -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="js/firebase-sync.js?v=4.1.0"></script>
 
-    <!-- In-Browser OCR Engine (Tesseract.js Thai + English) -->
+    <!-- In-Browser OCR Engine (Tesseract.js v5) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <!-- JavaScript Modules -->
-    <script src="js/textProcessor.js?v=4.0.0"></script>
-    <script src="js/camera.js?v=4.0.0"></script>
-    <script src="js/ocr.js?v=4.0.0"></script>
-    <script src="js/demoMode.js?v=4.0.0"></script>
-    <script src="js/thai-braille-tables.js?v=4.0.0"></script>
-    <script src="js/thai-wordlist.js?v=4.0.0"></script>
-    <script src="js/thai-braille.js?v=4.0.0"></script>
-    <script src="js/braille-engine.js?v=4.0.0"></script>
-    <script src="js/voice-guidance.js?v=4.0.0"></script>
-    <script src="js/ocr-engine.js?v=4.0.0"></script>
+    <script src="js/textProcessor.js?v=4.1.0"></script>
+    <script src="js/camera.js?v=4.1.0"></script>
+    <script src="js/ocr.js?v=4.1.0"></script>
+    <script src="js/demoMode.js?v=4.1.0"></script>
+    <script src="js/thai-braille-tables.js?v=4.1.0"></script>
+    <script src="js/thai-wordlist.js?v=4.1.0"></script>
+    <script src="js/thai-braille.js?v=4.1.0"></script>
+    <script src="js/braille-engine.js?v=4.1.0"></script>
+    <script src="js/voice-guidance.js?v=4.1.0"></script>
 
     <script>
         let currentFacingMode = 'environment';
@@ -682,9 +680,7 @@
             if (activeFullText && activeFullText.trim()) {
                 try {
                     localStorage.setItem('braillend_last_ocr_text', activeFullText.trim());
-                } catch (err) {
-                    console.warn('localStorage save warning:', err);
-                }
+                } catch (err) {}
             }
         }
 
@@ -710,13 +706,13 @@
                 video.srcObject = stream;
                 await video.play();
             } catch (err) {
-                console.warn('Flexible stream fallback:', err);
+                console.warn('[Camera Stream Warning]: Falling back to standard video stream', err);
                 try {
                     const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                     video.srcObject = fallbackStream;
                     await video.play();
                 } catch (e2) {
-                    console.error('Camera permission denied:', e2);
+                    console.error('[Camera Access Error]:', e2);
                 }
             }
         }
@@ -760,11 +756,13 @@
             if (capturedDataUrl) {
                 runOcrOnCapture(capturedDataUrl);
             } else {
+                // If stream is not available, trigger gallery picker
+                document.getElementById('fileInput').click();
                 isCapturing = false;
-                startLiveCamera();
             }
         }
 
+        // Handle File / Gallery selection
         function handleFileSelected(event) {
             const file = event.target.files && event.target.files[0];
             if (file) {
@@ -777,37 +775,37 @@
             }
         }
 
+        // Run OCR with live progress status
         async function runOcrOnCapture(imageSrc) {
             const sheet = document.getElementById('ocrResultSection');
             const display = document.getElementById('detectedTextDisplay');
             if (sheet) sheet.classList.add('active');
-            if (display) display.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังอ่านข้อความภาษาไทย...';
+            if (display) display.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังอ่านข้อความภาษาไทย (0%)...';
 
             try {
                 let recognizedText = '';
                 let confidence = 95;
 
-                if (typeof extractTextFromImageDirect === 'function') {
-                    const res = await extractTextFromImageDirect(imageSrc);
-                    if (res && res.text) {
-                        recognizedText = res.text.trim();
-                        confidence = res.confidence || 95;
-                    }
-                } else if (typeof Tesseract !== 'undefined') {
-                    const worker = await Tesseract.createWorker('tha+eng');
-                    const ret = await worker.recognize(imageSrc);
-                    recognizedText = ret.data.text.trim();
-                    confidence = ret.data.confidence || 90;
-                    await worker.terminate();
+                if (typeof Tesseract !== 'undefined') {
+                    const ret = await Tesseract.recognize(imageSrc, 'tha+eng', {
+                        logger: m => {
+                            if (m && m.status && display) {
+                                const pct = m.progress ? Math.round(m.progress * 100) : 0;
+                                display.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${m.status === 'recognizing text' ? 'กำลังสแกนข้อความ' : 'กำลังเตรียมโมเดล'} (${pct}%)`;
+                            }
+                        }
+                    });
+                    recognizedText = ret.data.text ? ret.data.text.trim() : '';
+                    confidence = ret.data.confidence ? Math.round(ret.data.confidence) : 90;
                 }
 
-                activeFullText = recognizedText || 'ไม่พบข้อความในภาพ กรุณาถ่ายใหม่อีกครั้ง';
+                activeFullText = recognizedText || 'ไม่พบข้อความในภาพ (ลองถ่ายในที่สว่าง)';
                 if (display) display.textContent = `"${activeFullText}"`;
                 const confTag = document.getElementById('ocrConfidenceTag');
                 if (confTag) confTag.textContent = `ความมั่นใจ: ${confidence}%`;
 
                 // Auto speech if active
-                if (isVoiceActive && activeFullText) {
+                if (isVoiceActive && activeFullText && activeFullText !== 'ไม่พบข้อความในภาพ (ลองถ่ายในที่สว่าง)') {
                     speakResult();
                 }
 
@@ -817,8 +815,8 @@
                 }
 
             } catch (err) {
-                console.error('OCR Error:', err);
-                if (display) display.textContent = 'เกิดข้อผิดพลาดในการสแกนข้อความ';
+                console.error('[OCR Execution Error]:', err);
+                if (display) display.textContent = 'เกิดข้อผิดพลาดในการอ่านข้อความ';
             } finally {
                 isCapturing = false;
             }
@@ -883,7 +881,6 @@
                     if (saved) {
                         joinSyncRoom(saved);
                     } else {
-                        // Prompt dialog if mobile without room
                         setTimeout(openRoomEntryDialog, 500);
                     }
                 }
