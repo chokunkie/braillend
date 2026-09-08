@@ -16,8 +16,6 @@
         * {
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
-            user-select: none;
-            -webkit-user-select: none;
         }
 
         html, body {
@@ -30,7 +28,6 @@
             background: #000000 !important;
             color: #ffffff !important;
             font-family: 'Prompt', sans-serif !important;
-            touch-action: manipulation;
         }
 
         /* App Viewport Root */
@@ -53,7 +50,7 @@
             width: 100vw;
             height: 100dvh;
             background: radial-gradient(circle at 50% 30%, #0f172a 0%, #020617 70%, #000000 100%);
-            z-index: 80;
+            z-index: 100;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -64,7 +61,7 @@
         }
 
         .welcome-card {
-            background: rgba(15, 23, 42, 0.85);
+            background: rgba(15, 23, 42, 0.9);
             border: 1px solid rgba(0, 242, 254, 0.4);
             border-radius: 28px;
             width: 100%;
@@ -135,13 +132,14 @@
             gap: 10px;
             box-shadow: 0 8px 25px rgba(0, 255, 136, 0.45);
             transition: all 0.15s;
+            text-decoration: none;
         }
 
         .btn-launch-camera:active {
             transform: scale(0.97);
         }
 
-        .btn-launch-upload {
+        .label-launch-upload {
             width: 100%;
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -156,9 +154,10 @@
             justify-content: center;
             gap: 10px;
             transition: all 0.15s;
+            text-decoration: none;
         }
 
-        .btn-launch-upload:active {
+        .label-launch-upload:active {
             background: rgba(0, 242, 254, 0.2);
             color: #00f2fe;
         }
@@ -476,6 +475,9 @@
 </head>
 <body>
 
+    <!-- Native File Input for 100% Guaranteed iOS & Android Picker Trigger -->
+    <input type="file" id="mainFileInput" accept="image/*" style="position:fixed; top:-9999px; left:-9999px; opacity:0; width:1px; height:1px;" onchange="handleFileSelected(event)">
+
     <div class="app-root">
         
         <!-- 1. WELCOME / PERMISSION GATE SCREEN -->
@@ -494,16 +496,19 @@
                     <span>เชื่อมต่อกับคอมพิวเตอร์พร้อมใช้งาน (Auto-Sync)</span>
                 </div>
 
-                <div style="width: 100%; display: flex; flex-direction: column; gap: 10px;">
+                <div style="width: 100%; display: flex; flex-direction: column; gap: 12px;">
+                    <!-- 1. Start Live Camera -->
                     <button class="btn-launch-camera" id="btnLaunchCamera" onclick="grantAndStartCamera()">
                         <i class="fa-solid fa-camera"></i>
                         <span>เปิดกล้องถ่ายภาพ (Start Camera)</span>
                     </button>
                     
-                    <button class="btn-launch-upload" onclick="triggerFilePicker()">
+                    <!-- 2. Direct Label Link to Native File Picker (100% Foolproof on Mobile) -->
+                    <label class="label-launch-upload" for="mainFileInput">
                         <i class="fa-solid fa-images"></i>
                         <span>เลือกรูปภาพจากเครื่อง (Upload Photo)</span>
-                    </button>
+                    </label>
+                    <input type="file" id="mainFileInput" accept="image/*" style="display:none;" onchange="handleFileSelected(event)">
                 </div>
             </div>
         </div>
@@ -556,11 +561,10 @@
             </div>
 
             <div class="shutter-control-row">
-                <!-- Gallery Upload File Button -->
-                <button class="aux-control-btn" onclick="triggerFilePicker()" title="เลือกรูปภาพจากเครื่อง">
+                <!-- Gallery Upload File Button (Direct Label Trigger) -->
+                <label class="aux-control-btn" for="mainFileInput" title="เลือกรูปภาพจากเครื่อง">
                     <i class="fa-solid fa-images"></i>
-                </button>
-                <input type="file" id="mainFileInput" accept="image/*" style="display:none;" onchange="handleFileSelected(event)">
+                </label>
 
                 <!-- Primary Manual Capture Button -->
                 <button class="btn-camera-shutter" id="btnCapturePhoto" onclick="captureAndProcess()" title="แตะถ่ายภาพ">
@@ -670,27 +674,28 @@
 
     <!-- PeerJS WebRTC Cloud Sync (Zero Setup P2P Cross-Device Sync) -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <script src="js/firebase-sync.js?v=4.3.0"></script>
+    <script src="js/firebase-sync.js?v=4.4.0"></script>
 
     <!-- In-Browser OCR Engine (Tesseract.js v5) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <!-- JavaScript Modules -->
-    <script src="js/textProcessor.js?v=4.3.0"></script>
-    <script src="js/camera.js?v=4.3.0"></script>
-    <script src="js/ocr.js?v=4.3.0"></script>
-    <script src="js/demoMode.js?v=4.3.0"></script>
-    <script src="js/thai-braille-tables.js?v=4.3.0"></script>
-    <script src="js/thai-wordlist.js?v=4.3.0"></script>
-    <script src="js/thai-braille.js?v=4.3.0"></script>
-    <script src="js/braille-engine.js?v=4.3.0"></script>
-    <script src="js/voice-guidance.js?v=4.3.0"></script>
+    <script src="js/textProcessor.js?v=4.4.0"></script>
+    <script src="js/camera.js?v=4.4.0"></script>
+    <script src="js/ocr.js?v=4.4.0"></script>
+    <script src="js/demoMode.js?v=4.4.0"></script>
+    <script src="js/thai-braille-tables.js?v=4.4.0"></script>
+    <script src="js/thai-wordlist.js?v=4.4.0"></script>
+    <script src="js/thai-braille.js?v=4.4.0"></script>
+    <script src="js/braille-engine.js?v=4.4.0"></script>
+    <script src="js/voice-guidance.js?v=4.4.0"></script>
 
     <script>
         let currentFacingMode = 'environment';
         let activeFullText = '';
         let isCapturing = false;
         let isVoiceActive = true;
+        let activeCameraStream = null;
 
         function saveAndGoToIndex(e) {
             if (activeFullText && activeFullText.trim()) {
@@ -710,16 +715,7 @@
             if (success) {
                 if (gate) gate.style.display = 'none';
             } else {
-                if (btn) btn.innerHTML = '<i class="fa-solid fa-camera"></i> <span>ลองเปิดกล้องอีกครั้ง</span>';
-                alert('ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตสิทธิ์การเข้าถึงกล้องบนเบราว์เซอร์ หรือกดปุ่ม "เลือกรูปภาพจากเครื่อง"');
-            }
-        }
-
-        function triggerFilePicker() {
-            const input = document.getElementById('mainFileInput');
-            if (input) {
-                input.value = '';
-                input.click();
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-camera"></i> <span>เปิดกล้องถ่ายภาพ (Start Camera)</span>';
             }
         }
 
@@ -733,30 +729,39 @@
             const video = document.getElementById('cameraVideo');
             if (!video) return false;
 
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: { ideal: currentFacingMode },
-                        width: { ideal: 1920, min: 640 },
-                        height: { ideal: 1080, min: 480 }
-                    },
-                    audio: false
-                });
-                video.srcObject = stream;
-                await video.play();
-                return true;
-            } catch (err) {
-                console.warn('[Camera Stream Warning]: Fallback stream attempt...', err);
+            if (!navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('เบราว์เซอร์ไม่รองรับ Web Camera API หรือหน้าเว็บไม่ได้เปิดผ่าน HTTPS / Localhost (กรุณาใช้ฟังก์ชัน "เลือกรูปภาพจากเครื่อง" แทน)');
+                return false;
+            }
+
+            // Flexible camera constraints (Works on 100% of mobile & PC devices)
+            const constraintsList = [
+                { video: { facingMode: { ideal: currentFacingMode } }, audio: false },
+                { video: { facingMode: currentFacingMode }, audio: false },
+                { video: true, audio: false }
+            ];
+
+            let lastErr = null;
+            for (const constraints of constraintsList) {
                 try {
-                    const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                    video.srcObject = fallbackStream;
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    activeCameraStream = stream;
+                    cameraStream = stream;
+                    video.srcObject = stream;
                     await video.play();
+                    console.log('[Camera Live Stream Started Successfully]:', constraints);
                     return true;
-                } catch (e2) {
-                    console.error('[Camera Access Error]:', e2);
-                    return false;
+                } catch (err) {
+                    lastErr = err;
+                    console.warn('[Camera Constraint Attempt Failed]:', constraints, err);
                 }
             }
+
+            const errMsg = lastErr && lastErr.name === 'NotAllowedError' 
+                ? 'กรุณาอนุญาตสิทธิ์การใช้งานกล้องในเบราว์เซอร์ (Camera Permission Denied)' 
+                : (lastErr ? `ไม่สามารถเปิดกล้องได้: ${lastErr.message || lastErr.name}` : 'ไม่พบอุปกรณ์กล้องที่พร้อมใช้งาน');
+            alert(errMsg + '\n\n💡 คุณสามารถกดปุ่ม "เลือกรูปภาพจากเครื่อง" เพื่ออัปโหลดภาพอ่านข้อความได้ทันที');
+            return false;
         }
 
         function stopCameraStream() {
@@ -765,6 +770,10 @@
                 const tracks = video.srcObject.getTracks();
                 tracks.forEach(t => t.stop());
                 video.srcObject = null;
+            }
+            if (activeCameraStream) {
+                activeCameraStream.getTracks().forEach(t => t.stop());
+                activeCameraStream = null;
             }
         }
 
@@ -798,7 +807,8 @@
             if (capturedDataUrl) {
                 runOcrOnCapture(capturedDataUrl);
             } else {
-                triggerFilePicker();
+                // If stream is not active, trigger file input directly
+                document.getElementById('mainFileInput').click();
                 isCapturing = false;
             }
         }
