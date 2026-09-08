@@ -45,6 +45,7 @@ Version: 3.1.0 (Modular Codebase Standard)
 ├── css/
 │   └── styles.css                       # Cyberpunk-Tactical Stylesheet (Dark & Light Mode)
 ├── js/
+│   ├── firebase-sync.js             # [Added] Real-time Multi-Device Sync Engine (Firebase Firestore & QR Pairing)
 │   ├── app.js                           # Entry Point & Workstation Lifecycle Dispatcher
 │   ├── esp32-serial.js                  # Web Serial API Driver, Auto-Connect, 12-Bit UART
 │   ├── two-cell-display.js              # 2-Cell Digital Twin, Full-Text Ribbon Paging, Dual Navigation

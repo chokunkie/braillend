@@ -582,6 +582,10 @@
         </div>
 
         <div class="header-right">
+            <button class="btn-header-act" id="btnTactileSync" onclick="openMobileSyncModal()" title="สแกน QR เพื่อส่งข้อความจากมือถือ">
+                <i class="fa-solid fa-qrcode" style="color:#00f2fe;"></i>
+                <span>มือถือ Sync</span>
+            </button>
             <button class="btn-header-act" id="btnEsp32Connect" onclick="toggleEsp32Port()" title="เชื่อมต่อบอร์ด ESP32 Hardware">
                 <i class="fa-solid fa-microchip"></i>
                 <span id="esp32StatusText">เชื่อมต่อ ESP32</span>
@@ -722,6 +726,15 @@
     </main>
 
     <!-- Scripts -->
+    <!-- Firebase Firestore & QR Code Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-sync.js"></script>
+    <script src="js/thai-braille-tables.js"></script>
+    <script src="js/thai-wordlist.js"></script>
+    <script src="js/thai-braille.js"></script>
+    <script src="js/braille-engine.js"></script>
     <script src="js/esp32-serial.js"></script>
     <script src="js/tactile-shapes.js"></script>
 
@@ -932,11 +945,188 @@
             }, 180);
         }
 
+
+        // --- Real-time Mobile Sync for Tactile Page ---
+        let currentSyncRoom = null;
+        let lastReceivedSyncText = '';
+
+        async function initTactileSync() {
+            if (typeof BrailleSync === 'undefined') return;
+            await BrailleSync.init();
+
+            const saved = localStorage.getItem('braillbox_active_room');
+            if (saved) {
+                currentSyncRoom = saved;
+                await BrailleSync.createRoom(saved);
+            } else {
+                currentSyncRoom = await BrailleSync.createRoom();
+            }
+
+            updateSyncUI();
+
+            BrailleSync.onData((payload) => {
+                if (payload && payload.text) {
+                    lastReceivedSyncText = payload.text;
+                    const txtBox = document.getElementById('pcSyncIncomingText');
+                    if (txtBox) {
+                        txtBox.textContent = `"${payload.text}" (ความมั่นใจ: ${payload.confidence || 100}%)`;
+                        txtBox.style.color = '#00ff88';
+                    }
+                    applySyncToTactilePins(payload.text);
+                }
+            });
+
+            BrailleSync.onDeviceJoin((info) => {
+                const statusDot = document.getElementById('pcSyncStatusDot');
+                const statusLabel = document.getElementById('pcSyncStatusLabel');
+                if (statusDot) statusDot.classList.add('connected');
+                if (statusLabel) {
+                    statusLabel.textContent = `🟢 มือถือเชื่อมต่อแล้ว (${info.deviceName || 'Mobile Camera'})`;
+                    statusLabel.style.color = '#00ff88';
+                }
+            });
+        }
+
+        function updateSyncUI() {
+            const roomText = document.getElementById('pcSyncRoomText');
+            if (roomText && currentSyncRoom) {
+                roomText.textContent = `ROOM: ${currentSyncRoom}`;
+            }
+
+            if (currentSyncRoom && typeof BrailleSync !== 'undefined') {
+                const mobileUrl = BrailleSync.getMobileUrl(currentSyncRoom);
+                BrailleSync.renderQRCode('pcSyncQrContainer', mobileUrl, 180);
+            }
+        }
+
+        function openMobileSyncModal() {
+            const modal = document.getElementById('mobileSyncModal');
+            if (modal) modal.classList.add('active');
+            updateSyncUI();
+        }
+
+        function closeMobileSyncModal() {
+            const modal = document.getElementById('mobileSyncModal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function copySyncRoomCode() {
+            if (!currentSyncRoom) return;
+            navigator.clipboard.writeText(currentSyncRoom).then(() => {
+                alert(`คัดลอกรหัสห้อง ${currentSyncRoom} เรียบร้อยแล้ว`);
+            }).catch(() => {});
+        }
+
+        async function generateNewSyncRoom() {
+            if (typeof BrailleSync !== 'undefined') {
+                currentSyncRoom = await BrailleSync.createRoom();
+                updateSyncUI();
+                const statusDot = document.getElementById('pcSyncStatusDot');
+                const statusLabel = document.getElementById('pcSyncStatusLabel');
+                if (statusDot) statusDot.classList.remove('connected');
+                if (statusLabel) {
+                    statusLabel.textContent = 'รอการเชื่อมต่อจากมือถือ...';
+                    statusLabel.style.color = '#eab308';
+                }
+            }
+        }
+
+        function applySyncToTactilePins(textOverride) {
+            const textToApply = textOverride || lastReceivedSyncText;
+            if (!textToApply) {
+                alert('ยังไม่มีข้อความที่ได้รับจากมือถือ');
+                return;
+            }
+
+            // Convert text to braille cells
+            if (typeof chunkTextForBraille === 'function') {
+                const chunks = chunkTextForBraille(textToApply);
+                if (chunks.length > 0 && chunks[0].cells && chunks[0].cells.length > 0) {
+                    stopWaveOnly();
+                    document.querySelectorAll('.shape-card-item').forEach(c => c.classList.remove('active'));
+                    activeDots.clear();
+
+                    // Map first 2 cells to 12 pins
+                    const c1 = chunks[0].cells[0];
+                    const c2 = chunks[0].cells.length > 1 ? chunks[0].cells[1] : null;
+
+                    const dots1 = c1 ? (c1.dots || c1.activeDots || []) : [];
+                    dots1.forEach(d => activeDots.add(d));
+
+                    if (c2) {
+                        const dots2 = c2.dots || c2.activeDots || [];
+                        dots2.forEach(d => activeDots.add(d + 6));
+                    }
+
+                    updateBoardUI();
+                }
+            }
+            closeMobileSyncModal();
+        }
+
+        window.openMobileSyncModal = openMobileSyncModal;
+        window.closeMobileSyncModal = closeMobileSyncModal;
+        window.copySyncRoomCode = copySyncRoomCode;
+        window.generateNewSyncRoom = generateNewSyncRoom;
+        window.applySyncToTactilePins = applySyncToTactilePins;
+
         window.addEventListener('DOMContentLoaded', () => {
+            initTactileSync();
             renderShapeCards();
             updateBoardUI();
             initSerial();
         });
     </script>
+    <!-- Real-time Mobile QR Sync Modal -->
+    <div class="sync-modal-backdrop" id="mobileSyncModal" onclick="if(event.target===this)closeMobileSyncModal()">
+        <div class="sync-modal-card">
+            <div class="sync-modal-header">
+                <div class="sync-modal-title">
+                    <i class="fa-solid fa-mobile-screen-button"></i>
+                    <span>เชื่อมต่อมือถือ (Mobile OCR Live Sync)</span>
+                </div>
+                <button class="btn-close-sync-modal" onclick="closeMobileSyncModal()" title="ปิดหน้าต่าง">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="sync-qr-wrapper">
+                <div class="sync-qr-canvas-box" id="pcSyncQrContainer"></div>
+                <div class="sync-room-pill">
+                    <span id="pcSyncRoomText">ROOM: BR-XXXX</span>
+                    <button class="btn-copy-room" onclick="copySyncRoomCode()" title="คัดลอกรหัสห้อง">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
+                </div>
+                <div style="font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5;">
+                    📱 ใช้มือถือเปิดกล้องสแกน QR Code นี้ เพื่อเริ่มถ่ายภาพ OCR ข้อความ แล้วระบบจะส่งผลมาแสดงบนพิน 12 ขาแบบ Real-time
+                </div>
+            </div>
+
+            <div class="sync-status-indicator">
+                <div class="sync-status-dot" id="pcSyncStatusDot"></div>
+                <span id="pcSyncStatusLabel">รอการเชื่อมต่อจากมือถือ...</span>
+            </div>
+
+            <div class="sync-incoming-card">
+                <div class="sync-incoming-title">
+                    <i class="fa-solid fa-satellite-dish"></i>
+                    <span>ข้อความ OCR ล่าสุดที่ได้รับ</span>
+                </div>
+                <div class="sync-incoming-text" id="pcSyncIncomingText">
+                    (ยังไม่มีข้อความเข้ามา)
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-ctrl" onclick="generateNewSyncRoom()" style="flex: 1; justify-content: center; padding: 10px; font-size: 13px;">
+                    <i class="fa-solid fa-rotate"></i> สุ่มห้องใหม่
+                </button>
+                <button class="btn-ctrl btn-primary" onclick="applySyncToTactilePins()" style="flex: 1.5; justify-content: center; padding: 10px; font-size: 13px;">
+                    <i class="fa-solid fa-play"></i> แสดงผลบนพิน
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

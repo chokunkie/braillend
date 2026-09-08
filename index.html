@@ -165,21 +165,21 @@
                     <i class="fa-solid fa-cloud-arrow-up"></i>
                     <span>อัปโหลดรูปภาพ OCR</span>
                 </button>
-                <button class="sidebar-item" id="menu3D" onclick="window.location.href='model.html';">
-                    <i class="fa-solid fa-cube"></i>
-                    <span>โมเดลจำลอง 3 มิติ</span>
-                </button>
                 <button class="sidebar-item" id="menuTactile" onclick="window.location.href='tactile.html';">
                     <i class="fa-solid fa-shapes"></i>
-                    <span>สัญลักษณ์ & โซลินอยด์ 12 จุด</span>
+                    <span>สร้างรูปทรง & ควบคุมพิน 12 ขา</span>
+                </button>
+                <button class="sidebar-item" id="menuMobileSync" onclick="openMobileSyncModal()">
+                    <i class="fa-solid fa-qrcode" style="color:#00f2fe;"></i>
+                    <span>เชื่อมต่อมือถือ (Mobile Sync)</span>
                 </button>
             </div>
         </aside>
 
         <!-- Central Workstation Area -->
         <main class="workstation-main">
-            <!-- Mobile Floating Side Hamburger Button (ปุ่มขีดสามขีดลอยอยู่ข้างๆ) -->
-            <button class="btn-side-hamburger" id="btnToggleMobileSidebar" onclick="toggleMobileSidebar()" title="เปิดเมนูแถบข้าง">
+            <!-- Mobile Floating Side Hamburger Button -->
+            <button class="btn-side-hamburger" id="btnToggleMobileSidebar" onclick="toggleMobileSidebar()" title="เปิด/ปิดเมนูข้าง">
                 <i class="fa-solid fa-bars" id="hamburgerIcon"></i>
             </button>
 
@@ -190,7 +190,12 @@
                         <span class="ribbon-title">
                             <i class="fa-solid fa-align-left" style="color:#00f2fe;"></i> แถบข้อความเต็ม (Full-Text Ribbon)
                         </span>
-                        <span class="cell-badge c1" id="frameCounterBadge">เฟรม 1/1</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="btn-ctrl" onclick="openMobileSyncModal()" style="padding: 4px 10px; font-size: 11px; background: rgba(0,242,254,0.12); border-color: rgba(0,242,254,0.3); color: #00f2fe;" title="เปิด QR Code เพื่อสแกนส่งภาพจากมือถือ">
+                                <i class="fa-solid fa-qrcode"></i> <span>เชื่อมต่อมือถือ</span>
+                            </button>
+                            <span class="cell-badge c1" id="frameCounterBadge">เฟรม 1/1</span>
+                        </div>
                     </div>
                     <div class="ribbon-track-wrapper" id="textRibbonTrack">
                         <!-- Dynamic cells injected by two-cell-display.js -->
@@ -695,6 +700,12 @@
         <span id="powerStatus"></span>
     </div>
 
+    <!-- Firebase Firestore & QR Code Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-sync.js"></script>
+
     <!-- Modular JavaScript Applications -->
     <script src="js/textProcessor.js"></script>
     <script src="js/camera.js"></script>
@@ -712,6 +723,58 @@
     <script src="js/tactile-shapes.js?v=3.2.2"></script>
     <script src="js/two-cell-display.js?v=3.2.2"></script>
     <script src="js/app.js?v=3.2.2"></script>
+
+    <!-- Real-time Mobile QR Sync Modal -->
+    <div class="sync-modal-backdrop" id="mobileSyncModal" onclick="if(event.target===this)closeMobileSyncModal()">
+        <div class="sync-modal-card">
+            <div class="sync-modal-header">
+                <div class="sync-modal-title">
+                    <i class="fa-solid fa-mobile-screen-button"></i>
+                    <span>เชื่อมต่อมือถือ (Mobile OCR Live Sync)</span>
+                </div>
+                <button class="btn-close-sync-modal" onclick="closeMobileSyncModal()" title="ปิดหน้าต่าง">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="sync-qr-wrapper">
+                <div class="sync-qr-canvas-box" id="pcSyncQrContainer"></div>
+                <div class="sync-room-pill">
+                    <span id="pcSyncRoomText">ROOM: BR-XXXX</span>
+                    <button class="btn-copy-room" onclick="copySyncRoomCode()" title="คัดลอกรหัสห้อง">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
+                </div>
+                <div style="font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5;">
+                    📱 ใช้มือถือเปิดกล้องสแกน QR Code นี้ เพื่อเริ่มถ่ายภาพ OCR ข้อความภาษาไทย แล้วระบบจะส่งผลลัพธ์มาจำลองบนหน้านี้แบบ Real-time
+                </div>
+            </div>
+
+            <div class="sync-status-indicator">
+                <div class="sync-status-dot" id="pcSyncStatusDot"></div>
+                <span id="pcSyncStatusLabel">รอการเชื่อมต่อจากมือถือ...</span>
+            </div>
+
+            <div class="sync-incoming-card">
+                <div class="sync-incoming-title">
+                    <i class="fa-solid fa-satellite-dish"></i>
+                    <span>ข้อความ OCR ล่าสุดที่ได้รับ</span>
+                </div>
+                <div class="sync-incoming-text" id="pcSyncIncomingText">
+                    (ยังไม่มีข้อความเข้ามา - ให้มือถือถ่ายภาพเพื่อส่ง)
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-ctrl" onclick="generateNewSyncRoom()" style="flex: 1; justify-content: center; padding: 10px; font-size: 13px;">
+                    <i class="fa-solid fa-rotate"></i> สุ่มห้องใหม่
+                </button>
+                <button class="btn-ctrl btn-primary" onclick="applySyncTextToWorkstation()" style="flex: 1.5; justify-content: center; padding: 10px; font-size: 13px;">
+                    <i class="fa-solid fa-play"></i> แสดงผลบนเบรลล์
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const STUDIO_THEMES = [
@@ -781,6 +844,135 @@
             }
         }
         window.setWorkstationTab = setWorkstationTab;
+
+        // --- Real-time Mobile Sync Modal & Listener ---
+        let currentSyncRoom = null;
+        let lastReceivedSyncText = '';
+
+        async function initPCSync() {
+            if (typeof BrailleSync === 'undefined') return;
+            await BrailleSync.init();
+
+            // Load saved room or create new one
+            const saved = localStorage.getItem('braillbox_active_room');
+            if (saved) {
+                currentSyncRoom = saved;
+                await BrailleSync.createRoom(saved);
+            } else {
+                currentSyncRoom = await BrailleSync.createRoom();
+            }
+
+            // Update UI elements
+            updateSyncUI();
+
+            // Handle incoming data
+            BrailleSync.onData((payload) => {
+                if (payload && payload.text) {
+                    lastReceivedSyncText = payload.text;
+                    const txtBox = document.getElementById('pcSyncIncomingText');
+                    if (txtBox) {
+                        txtBox.textContent = `"${payload.text}" (ความมั่นใจ: ${payload.confidence || 100}%)`;
+                        txtBox.style.color = '#00ff88';
+                    }
+
+                    // Apply directly to workstation
+                    applySyncTextToWorkstation(payload.text);
+                }
+            });
+
+            // Handle device connected
+            BrailleSync.onDeviceJoin((info) => {
+                const statusDot = document.getElementById('pcSyncStatusDot');
+                const statusLabel = document.getElementById('pcSyncStatusLabel');
+                if (statusDot) statusDot.classList.add('connected');
+                if (statusLabel) {
+                    statusLabel.textContent = `🟢 มือถือเชื่อมต่อแล้ว (${info.deviceName || 'Mobile Camera'})`;
+                    statusLabel.style.color = '#00ff88';
+                }
+            });
+        }
+
+        function updateSyncUI() {
+            const roomText = document.getElementById('pcSyncRoomText');
+            if (roomText && currentSyncRoom) {
+                roomText.textContent = `ROOM: ${currentSyncRoom}`;
+            }
+
+            if (currentSyncRoom && typeof BrailleSync !== 'undefined') {
+                const mobileUrl = BrailleSync.getMobileUrl(currentSyncRoom);
+                BrailleSync.renderQRCode('pcSyncQrContainer', mobileUrl, 180);
+            }
+        }
+
+        function openMobileSyncModal() {
+            const modal = document.getElementById('mobileSyncModal');
+            if (modal) modal.classList.add('active');
+            updateSyncUI();
+        }
+
+        function closeMobileSyncModal() {
+            const modal = document.getElementById('mobileSyncModal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function copySyncRoomCode() {
+            if (!currentSyncRoom) return;
+            navigator.clipboard.writeText(currentSyncRoom).then(() => {
+                alert(`คัดลอกรหัสห้อง ${currentSyncRoom} เรียบร้อยแล้ว`);
+            }).catch(() => {});
+        }
+
+        async function generateNewSyncRoom() {
+            if (typeof BrailleSync !== 'undefined') {
+                currentSyncRoom = await BrailleSync.createRoom();
+                updateSyncUI();
+                const statusDot = document.getElementById('pcSyncStatusDot');
+                const statusLabel = document.getElementById('pcSyncStatusLabel');
+                if (statusDot) statusDot.classList.remove('connected');
+                if (statusLabel) {
+                    statusLabel.textContent = 'รอการเชื่อมต่อจากมือถือ...';
+                    statusLabel.style.color = '#eab308';
+                }
+            }
+        }
+
+        function applySyncTextToWorkstation(textOverride) {
+            const textToApply = textOverride || lastReceivedSyncText;
+            if (!textToApply) {
+                alert('ยังไม่มีข้อความที่ได้รับจากมือถือ');
+                return;
+            }
+
+            const input = document.getElementById('mainTextInput');
+            if (input) {
+                input.value = textToApply;
+            }
+
+            // Trigger text processing across 2-cell display & 3D model
+            if (typeof processInputText === 'function') {
+                processInputText(textToApply);
+            } else if (typeof renderTwoCellDisplay === 'function') {
+                renderTwoCellDisplay(textToApply);
+            }
+
+            // Provide sound/voice feedback if available
+            if (typeof speakVoiceGuidance === 'function') {
+                speakVoiceGuidance(`ได้รับข้อความจากมือถือ: ${textToApply}`, true);
+            }
+
+            // Auto close modal if open
+            closeMobileSyncModal();
+        }
+
+        window.openMobileSyncModal = openMobileSyncModal;
+        window.closeMobileSyncModal = closeMobileSyncModal;
+        window.copySyncRoomCode = copySyncRoomCode;
+        window.generateNewSyncRoom = generateNewSyncRoom;
+        window.applySyncTextToWorkstation = applySyncTextToWorkstation;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initPCSync();
+        });
     </script>
 </body>
 </html>

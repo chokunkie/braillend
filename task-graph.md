@@ -268,3 +268,20 @@ graph TD
 
 
 
+
+### Phase 24: Real-Time Mobile OCR to PC Display Sync (Firebase Firestore + QR Pairing)
+- [x] **Task 24.1**: Create `js/firebase-sync.js` modular sync service
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/js/firebase-sync.js`
+    - *Logic/Target*: Create `BrailleSyncManager` singleton handling Firebase Firestore rooms, QR code rendering, and multi-tab fallback.
+    - *Why*: Enables mobile camera scan & OCR to stream text to PC browser without server hosting requirement on Vercel.
+    - *Verification*: **[AUTONOMOUS]** Unit tested with `node tests/test_sync_pure.js` (All unit tests PASS).
+- [x] **Task 24.2**: Integrate Mobile Transmitter in `camera.html`
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/camera.html`
+    - *Logic/Target*: Add room pairing status bar, auto-join via `?room=BR-XXXX` URL parameter, and sync button `btnSyncToPc`.
+    - *Why*: Allows instant pairing via QR scan and streaming of captured OCR text.
+    - *Verification*: **[AUTONOMOUS]** Verified parameter parsing and sync button UI.
+- [x] **Task 24.3**: Integrate PC Receiver Modal & Pairing across PC Views
+    - *File*: `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/index.html`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/tactile.html`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/model.html`, `file:///c:/Users/kt856/Downloads/Compressed/beaill/braillend/css/styles.css`
+    - *Logic/Target*: Add Mobile Sync Modal with QR code, Room ID copy button, real-time Firestore listener, and automatic update to 2-cell display / 3D model.
+    - *Why*: Allows seamless experience where PC receives live text from phone and drives hardware simulation.
+    - *Verification*: **[AUTONOMOUS]** Verified modal trigger and listener binding.

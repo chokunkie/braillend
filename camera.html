@@ -389,13 +389,24 @@
                 <div class="page-logo"><i class="fa-solid fa-braille"></i></div>
                 <div>
                     <div class="page-title">BrailBox Scanner</div>
-                    <div style="font-size:11px; color:#00f2fe;">ทดลองใช้งานจริง • แปลงอักษรเบรลล์ 14 เซลล์</div>
+                    <div style="font-size:11px; color:#00f2fe;">สแกนข้อความ & แปลอักษรเบรลล์ 14 เซลล์</div>
                 </div>
             </div>
-            <a href="index.html" class="nav-back-btn" onclick="saveAndGoToIndex(event)" title="กลับไปยังหน้าหลัก (พิมพ์ข้อความ & 2 เซลล์)">
-                <i class="fa-solid fa-arrow-left"></i> กลับสู่หน้าหลัก
+            <a href="index.html" class="nav-back-btn" onclick="saveAndGoToIndex(event)" title="กลับไปหน้าหลัก">
+                <i class="fa-solid fa-arrow-left"></i> กลับหน้าหลัก
             </a>
         </header>
+
+        <!-- Mobile Real-time Sync Status Bar -->
+        <div class="mobile-sync-bar" id="mobileSyncBar">
+            <div class="mobile-sync-badge">
+                <i class="fa-solid fa-tower-broadcast" id="syncStatusIcon" style="color: #eab308;"></i>
+                <span id="mobileSyncRoomLabel">ROOM: ยังไม่ได้ต่อกับคอม</span>
+            </div>
+            <button id="btnManualJoinRoom" onclick="promptManualRoom()" style="background: rgba(0,242,254,0.15); border: 1px solid rgba(0,242,254,0.4); color: #00f2fe; border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-family: 'Prompt', sans-serif;">
+                <i class="fa-solid fa-qrcode"></i> ใส่รหัสห้อง
+            </button>
+        </div>
 
         <!-- Mode Switcher Tabs -->
         <div class="tab-switcher">
@@ -562,6 +573,9 @@
 
             <!-- Actions -->
             <div style="display:flex; flex-direction:column; gap:10px;">
+                <button class="btn-action-primary" style="width:100%; box-sizing:border-box; padding:14px; font-size:15px; font-weight:700; text-align:center; background: linear-gradient(135deg, #00f2fe, #00ff88); color: #022c22; border: none; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(0, 255, 136, 0.35);" id="btnSyncToPc" onclick="syncActiveTextToPC()">
+                    <i class="fa-solid fa-paper-plane"></i> <span>ส่งข้อความเข้าคอมพิวเตอร์ (Sync to PC)</span>
+                </button>
                 <a href="index.html" class="btn-action-primary" style="width:100%; box-sizing:border-box; padding:14px; font-size:15px; font-weight:700; text-align:center;" id="btnGoToIndexWorkstation" onclick="saveAndGoToIndex(event)">
                     <i class="fa-solid fa-microchip"></i> ส่งข้อความไปที่หน้าหลัก (2-Cell Workstation)
                 </a>
@@ -604,6 +618,11 @@
         <span id="powerStatus"></span>
         <canvas id="ocrResultCanvasInspector"></canvas>
     </div>
+
+    <!-- Firebase Firestore Compat SDK & Real-time Sync Engine -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-sync.js"></script>
 
     <!-- In-Browser OCR Engine (Tesseract.js Thai + English) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -1136,10 +1155,94 @@
             }
         }
 
+        // --- Real-time Mobile OCR to PC Sync Handlers ---
+        let activeSyncRoom = null;
+
+        function initSync() {
+            if (typeof BrailleSync !== 'undefined') {
+                BrailleSync.init();
+                const room = BrailleSync.getRoomFromUrl();
+                if (room) {
+                    joinSyncRoom(room);
+                } else {
+                    const saved = localStorage.getItem('braillbox_active_room');
+                    if (saved) joinSyncRoom(saved);
+                }
+            }
+        }
+
+        function joinSyncRoom(roomId) {
+            if (!roomId) return;
+            activeSyncRoom = roomId.trim().toUpperCase();
+            if (typeof BrailleSync !== 'undefined') {
+                BrailleSync.joinRoom(activeSyncRoom, 'Mobile Camera (Thai OCR)');
+                const label = document.getElementById('mobileSyncRoomLabel');
+                const icon = document.getElementById('syncStatusIcon');
+                const btn = document.getElementById('btnManualJoinRoom');
+                if (label) label.textContent = `ROOM: ${activeSyncRoom}`;
+                if (icon) {
+                    icon.style.color = '#00ff88';
+                    icon.className = 'fa-solid fa-circle-check';
+                }
+                if (btn) {
+                    btn.textContent = 'เชื่อมต่อแล้ว';
+                    btn.style.color = '#00ff88';
+                    btn.style.borderColor = 'rgba(0,255,136,0.4)';
+                    btn.style.background = 'rgba(0,255,136,0.1)';
+                }
+            }
+        }
+
+        function promptManualRoom() {
+            const input = prompt('กรุณากรอกรหัสห้อง (เช่น BR-1234) ที่ปรากฏบนหน้าจอคอม:', activeSyncRoom || '');
+            if (input && input.trim()) {
+                joinSyncRoom(input.trim());
+            }
+        }
+
+        async function syncActiveTextToPC() {
+            if (!activeFullText || !activeFullText.trim()) {
+                alert('ยังไม่มีข้อความจากการถ่ายภาพ/OCR');
+                return;
+            }
+
+            if (!activeSyncRoom) {
+                const input = prompt('ยังไม่ได้เชื่อมต่อกับคอมพิวเตอร์\nกรุณากรอกรหัสห้อง (เช่น BR-1234):');
+                if (input && input.trim()) {
+                    joinSyncRoom(input.trim());
+                } else {
+                    return;
+                }
+            }
+
+            if (typeof BrailleSync !== 'undefined') {
+                const btn = document.getElementById('btnSyncToPc');
+                const originalHtml = btn ? btn.innerHTML : '';
+                if (btn) {
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>กำลังส่งไปยังคอมพิวเตอร์...</span>';
+                }
+
+                const res = await BrailleSync.sendOCRResult(activeFullText, {
+                    confidence: activeConfidence,
+                    rawText: activeFullText
+                });
+
+                if (res && btn) {
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> <span>ส่งไปยังคอมสำเร็จแล้ว!</span>';
+                    btn.style.background = '#00ff88';
+                    setTimeout(() => {
+                        btn.innerHTML = originalHtml;
+                        btn.style.background = 'linear-gradient(135deg, #00f2fe, #00ff88)';
+                    }, 2500);
+                }
+            }
+        }
+
         // Initialize Live Camera on Page Load (No auto-download of heavy models)
         window.addEventListener('DOMContentLoaded', () => {
             restoreOcrLang();
             if (typeof syncGuidanceButtons === 'function') syncGuidanceButtons();
+            initSync();
             startLiveCamera();
         });
     </script>
