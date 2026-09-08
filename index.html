@@ -367,6 +367,7 @@
                         <div style="font-size:14px; font-weight:600; color:#f8fafc;">คลิกเพื่อเลือกไฟล์รูปภาพ หรือลากรูปมาวางที่นี่</div>
                         <div style="font-size:11px; color:#64748b; margin-top:4px;">รองรับไฟล์ PNG, JPG, JPEG, WebP</div>
                     </div>
+                    <input type="file" id="imageFileInput" accept="image/*" style="display:none;" onchange="if(this.files&&this.files[0])handleImageFileSelect(this.files[0]);">
 
                     <div id="modalUploadStatus" style="display:none; margin-top:6px; font-size:12px; color:#00ff88; text-align:center;">
                         <i class="fa-solid fa-spinner fa-spin"></i> กำลังประมวลผล OCR...

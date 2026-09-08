@@ -107,17 +107,15 @@ async function recognize(imageFile, documentSource = 'upload', lang = 'th+en') {
             };
         }
 
-        // A rejected image is a valid OCR outcome, not a reason to run a
-        // second engine that may hallucinate text. Only a server-side outage
-        // (5xx) is eligible for the browser fallback.
-        if (response.status < 500) {
+        if (response.status === 422 || response.status === 400) {
+            // Validation error from real backend
             return emptyOcrResult({
                 langUsed: lang === 'th' ? 'th' : 'th+en',
                 failureReason: `backend-${response.status}`,
                 warnings: ['backend-rejected-image']
             });
         }
-        backendFailure = new Error(`OCR backend returned HTTP ${response.status}`);
+        backendFailure = new Error(`OCR backend returned HTTP ${response.status} (Running Static/Vercel Client Fallback)`);
     } catch (backendErr) {
         backendFailure = backendErr;
     }
